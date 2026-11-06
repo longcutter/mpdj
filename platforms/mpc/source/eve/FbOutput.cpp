@@ -77,8 +77,8 @@ void FbOutput::open()
                 pages = 1;
             if (pages > 3)
                 pages = 3;
-            if (int want = envInt("MPDJ_FB_PAGES", 0); want >= 1 && want < pages)
-                pages = want; // 1 = draw straight to the visible page, no flips
+            if (int want = envInt("MPDJ_FB_PAGES", 1); want >= 1 && want < pages)
+                pages = want; // default 1: draw straight to the visible page (a flip waits ~3-11 ms for vblank)
             // Whatever page is on screen now (the last run may have left it on 1 or 2).
             shownPage = var.yres ? (int)(var.yoffset / var.yres) : 0;
             fbSize = fix.smem_len;

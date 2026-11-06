@@ -144,10 +144,51 @@ void Chip::imageProps(uint32_t& endAddr, uint32_t& w, uint32_t& h)
     h = imgH;
 }
 
+void Chip::markDirty(uint32_t addr, uint32_t size)
+{
+    if (allDirty)
+        return;
+    uint32_t end = addr + size > kRamGSize ? kRamGSize : addr + size;
+    if (!dirty.empty() && addr <= dirty.back().second && end >= dirty.back().first)
+    {
+        // overlaps or touches the last range: grow it
+        dirty.back().first = addr < dirty.back().first ? addr : dirty.back().first;
+        dirty.back().second = end > dirty.back().second ? end : dirty.back().second;
+        return;
+    }
+    if (dirty.size() >= 512)
+    {
+        allDirty = true;
+        dirty.clear();
+        return;
+    }
+    dirty.emplace_back(addr, end);
+}
+
+void Chip::syncTo(Chip& dst)
+{
+    if (allDirty)
+        dst.memWrite(0, ramG, kRamGSize);
+    else
+        for (auto& r : dirty)
+            dst.memWrite(r.first, ramG + r.first, r.second - r.first);
+    dirty.clear();
+    allDirty = false;
+    dst.dirty.clear();
+    dst.allDirty = true; // dst never syncs onward; stop it tracking
+    memcpy(dst.fonts, fonts, sizeof fonts);
+    dst.frontWords = frontWords;
+    memcpy(dst.front, front, frontWords * sizeof(uint32_t));
+    memcpy(dst.frontHandles, frontHandles, sizeof frontHandles);
+}
+
 void Chip::memWrite(uint32_t addr, const uint8_t* data, uint32_t size)
 {
     if (addr < kRamGSize)
+    {
         renderer.invalidate(addr, size);
+        markDirty(addr, size);
+    }
     for (uint32_t i = 0; i < size; i++)
     {
         uint32_t a = addr + i;

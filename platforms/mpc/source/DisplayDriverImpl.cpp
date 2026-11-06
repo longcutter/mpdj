@@ -21,6 +21,39 @@ DisplayDriverImpl::DisplayDriverImpl()
 void DisplayDriverImpl::init()
 {
     fb.open();
+    threaded = !getenv("MPDJ_RENDER_INLINE");
+    if (threaded)
+        renderThread = std::thread([this] { renderLoop(); });
+}
+
+DisplayDriverImpl::~DisplayDriverImpl()
+{
+    if (renderThread.joinable())
+    {
+        {
+            std::lock_guard<std::mutex> lock(renderMutex);
+            quitRender = true;
+        }
+        renderCv.notify_all();
+        renderThread.join();
+    }
+}
+
+void DisplayDriverImpl::renderLoop()
+{
+    std::unique_lock<std::mutex> lock(renderMutex);
+    for (;;)
+    {
+        renderCv.wait(lock, [this] { return jobReady || quitRender; });
+        if (quitRender)
+            return;
+        jobReady = false;
+        rendering = true;
+        lock.unlock();
+        renderOne();
+        lock.lock();
+        rendering = false;
+    }
 }
 
 void DisplayDriverImpl::onSwap(void* self, const uint32_t* dl, int words)
@@ -43,13 +76,35 @@ void DisplayDriverImpl::service(uint32_t nowMs)
 {
     if (!frameDirty || !powered || nowMs - lastRenderMs < 16)
         return;
+    if (threaded)
+    {
+        // Hand over the newest frame only when the render thread is free; until
+        // then frameDirty stays set and later swaps simply replace this one.
+        {
+            std::lock_guard<std::mutex> lock(renderMutex);
+            if (jobReady || rendering)
+                return;
+            eveChip.syncTo(renderChip);
+            jobReady = true;
+        }
+        renderCv.notify_one();
+    }
+    else
+    {
+        eveChip.syncTo(renderChip);
+        renderOne();
+    }
     frameDirty = false;
     lastRenderMs = nowMs;
+}
 
+// Draws renderChip's front list and shows it. Runs on the render thread.
+void DisplayDriverImpl::renderOne()
+{
     uint32_t t0 = microsNow();
     fb.beginFrame();
-    eveChip.renderer.render(
-      eveChip.front, (int)eveChip.frontWords, &fb.target(), eveChip.frontHandles);
+    renderChip.renderer.render(
+      renderChip.front, (int)renderChip.frontWords, &fb.target(), renderChip.frontHandles);
     uint32_t t1 = microsNow();
     fb.present();
     uint32_t t2 = microsNow();
@@ -61,7 +116,11 @@ void DisplayDriverImpl::service(uint32_t nowMs)
     writeUsTotal += fb.writeUs;
     flipUsTotal += fb.flipUs;
     frames++;
+    reportStats(t2 / 1000);
+}
 
+void DisplayDriverImpl::reportStats(uint32_t nowMs)
+{
     if (getenv("MPDJ_DISPLAY_STATS") && nowMs - lastReportMs >= 5000)
     {
         uint32_t n = frames ? frames : 1;

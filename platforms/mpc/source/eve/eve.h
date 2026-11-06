@@ -204,7 +204,16 @@ class Chip
 
     Renderer renderer;
 
+    // Render-thread support: copy everything a render needs (RAM_G written since
+    // the last sync, fonts, the front list and its handle state) into `dst`, a
+    // chip used only for rendering. Its glyph cache is invalidated as needed.
+    void syncTo(Chip& dst);
+
   private:
+    void markDirty(uint32_t addr, uint32_t size);
+    std::vector<std::pair<uint32_t, uint32_t>> dirty; // RAM_G [start, end) since last sync
+    bool allDirty = true;
+
     bool runCommand(size_t& pos); // false if the command is incomplete
     void dlWrite(uint32_t w);
     void emitText(int x, int y, int font, uint16_t options, const char* s, int len);

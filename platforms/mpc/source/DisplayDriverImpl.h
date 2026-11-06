@@ -6,12 +6,16 @@
 #include "eve/FbOutput.h"
 #include "eve/eve.h"
 
+#include <condition_variable>
+#include <mutex>
 #include <stdint.h>
+#include <thread>
 
 class DisplayDriverImpl : public DisplayDriver
 {
   public:
     DisplayDriverImpl();
+    ~DisplayDriverImpl();
     void init();
     void service(uint32_t nowMs); // renders the latest swapped frame, at most ~60 per second
 
@@ -49,8 +53,18 @@ class DisplayDriverImpl : public DisplayDriver
 
   private:
     static void onSwap(void* self, const uint32_t* dl, int words);
+    void renderLoop();
+    void renderOne();
+    void reportStats(uint32_t nowMs);
 
     eve::Chip eveChip;
+    // Frames are drawn and shown on their own thread from a copy of the chip
+    // (renderChip), so a slow frame never holds up the main loop and controls.
+    eve::Chip renderChip;
+    std::thread renderThread;
+    std::mutex renderMutex;
+    std::condition_variable renderCv;
+    bool jobReady = false, rendering = false, quitRender = false, threaded = false;
     FbOutput fb;
     bool frameDirty = false;
     bool powered = true;
