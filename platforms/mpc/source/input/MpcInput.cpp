@@ -99,6 +99,9 @@ void MpcInput::open(SwitchGroupImpl* b, SwitchGroupImpl* p, EncoderImpl* e, cons
     encoder = e;
     fb = f;
     trace = envFlag("MPDJ_INPUT_TRACE");
+    qlinkDivider = atoi(envStr("MPDJ_QLINK_DIV", "4"));
+    if (qlinkDivider < 1)
+        qlinkDivider = 1;
     memset(padHeld, -1, sizeof padHeld);
     memset(buttonHeld, -1, sizeof buttonHeld);
     openMidi();
@@ -311,11 +314,31 @@ void MpcInput::tapButton(int trackerButton, int times)
     }
 }
 
+// Q-Links are smooth high-resolution encoders that send several messages per
+// small twist: count them up and step once per qlinkDivider messages. The
+// count resets when the direction changes, so reversing responds at once.
+int MpcInput::divideQLink(int knob, int steps)
+{
+    int& acc = qlinkAcc[knob];
+    if ((acc > 0 && steps < 0) || (acc < 0 && steps > 0))
+        acc = 0;
+    acc += steps;
+    int out = acc / qlinkDivider;
+    acc -= out * qlinkDivider;
+    return out;
+}
+
 void MpcInput::onRelative(uint8_t cc, uint8_t value)
 {
     int steps = relSteps(value);
     if (!steps)
         return;
+    if (cc >= kCcQLink1 && cc < kCcQLink1 + 4)
+    {
+        steps = divideQLink(cc - kCcQLink1, steps);
+        if (!steps)
+            return;
+    }
     switch (cc)
     {
         case kCcMainEncoder:

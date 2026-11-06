@@ -9,6 +9,7 @@
 //   MPDJ_INPUT_TRACE=1          print every MIDI message and touch
 //   MPDJ_MIDI_DEV=/dev/snd/midiC0D0, MPDJ_MIDI_SUBDEV=1
 //   MPDJ_TOUCH_DEV=/dev/input/event0
+//   MPDJ_QLINK_DIV=4            Q-Link messages per step (higher = slower)
 //   MPDJ_TOUCH_SWAP_XY=1, MPDJ_TOUCH_INVERT_X=1, MPDJ_TOUCH_INVERT_Y=1
 //                               fix-ups if taps land in the wrong place
 #pragma once
@@ -36,6 +37,9 @@ class MpcInput
     void onPad(uint8_t note, bool down);
     void onRelative(uint8_t cc, uint8_t value);
     void tapButton(int trackerButton, int times);
+    int divideQLink(int knob, int steps);
+    int qlinkAcc[4] = {};
+    int qlinkDivider = 4; // MPDJ_QLINK_DIV
 
     int midiFd = -1;
     uint8_t runningStatus = 0, data[2] = {}, dataCount = 0;
