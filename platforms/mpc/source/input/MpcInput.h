@@ -1,5 +1,5 @@
 // MPC One+ controls -> Tracker inputs. The agreed control map is the project
-// doc claude/mpdj-control-map.tsv (build step 1 is implemented here).
+// doc claude/mpdj-control-map.tsv (build steps 1 and 1b are implemented here).
 //
 // The controller (pads, buttons, Q-Links, main encoder) speaks MIDI on the
 // Private raw MIDI port hw:0,0,1; the touchscreen is /dev/input/event0.
@@ -10,8 +10,8 @@
 //   MPDJ_INPUT_TRACE=1          print every MIDI message and touch
 //   MPDJ_MIDI_DEV=/dev/snd/midiC0D0, MPDJ_MIDI_SUBDEV=1
 //   MPDJ_TOUCH_DEV=/dev/input/event0
-//   MPDJ_QLINK_DIV=4            Q-Link messages per step (higher = slower);
-//                               Q-Links 3-4 use twice this
+//   MPDJ_QLINK_DIV=4            Q-Link speed scale (4 = the built-in speeds,
+//                               higher = slower)
 //   MPDJ_TOUCH_SWAP_XY=1, MPDJ_TOUCH_INVERT_X=1, MPDJ_TOUCH_INVERT_Y=1
 //                               fix-ups if taps land in the wrong place
 #pragma once
@@ -48,6 +48,7 @@ class MpcInput
     uint32_t tapTimes[kTaps] = {};
     int tapCount = 0;
     int divideQLink(int knob, int steps);
+    void stepEditParam(int steps);
     int qlinkAcc[4] = {};
     int qlinkDivider = 4; // MPDJ_QLINK_DIV
 

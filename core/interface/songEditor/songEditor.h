@@ -51,6 +51,10 @@ class cSongEditor : public ModuleBase
 
     void showTempoValue();
     void refreshTempoField();
+
+    // MPDJ: when set, the Song screen's tempo field, its tap tempo and "default
+    // tempo" leave the tempo alone (toggled with SHIFT+TAP TEMPO on the MPC).
+    bool tempoLocked = false;
     void refreshAddSlotLabel(bool isButtonPressed);
 
     localList_t patternsList;

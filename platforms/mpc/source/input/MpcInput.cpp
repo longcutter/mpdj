@@ -4,6 +4,7 @@
 #include "eve/FbOutput.h"
 #include "core/interfaceDefs.h"
 #include "core/interface.h"
+#include "display.h"
 #include "core/interfacePopups.h"
 #include "fileManager.h"
 #include "mtSequencer.h"
@@ -47,14 +48,14 @@ enum class Act : uint8_t
     Main,        // Pattern <-> Song
     SampleEdit,  // Sample Playback <-> Sample Editor
     Browse,      // Sample Loader; SHIFT = File
-    NextSeq,     // SHIFT = Performance (XYFX); alone: nothing yet
+    NextSeq,     // next pattern (queued while playing); SHIFT = Performance (XYFX)
     Play,        // play from the playhead (Pattern screen: from the cursor row)
     PlayStart,   // play from the pattern start (restarts if playing)
     Stop,        // stop
     Minus,       // remove step (Tracker Backspace = Shift+Delete)
     Copy,        // copy; SHIFT+COPY (DELETE label) = remove the selected steps
     Undo,        // undo; SHIFT = redo (Pattern screen)
-    TapTempo,    // tap tempo
+    TapTempo,    // tap tempo; SHIFT = lock / unlock the tempo
     EncoderPush, // Pattern screen: paste (Tracker Shift+Copy)
 };
 
@@ -358,6 +359,10 @@ void MpcInput::onButton(uint8_t note, bool down)
                 releaseCoreShift();
                 hold = interfaceButtonPerformance;
             }
+            else if (playing)
+                sequencer.sequencialSwitch_changeNextPattern(1); // at the end of this one
+            else if (onPattern)
+                patternEditor.changeActualPattern(1);
             break;
 
         case Act::Play:
@@ -402,7 +407,15 @@ void MpcInput::onButton(uint8_t note, bool down)
             patternEditor.showLength();
             break;
 
-        case Act::TapTempo: tapTempo(); break;
+        case Act::TapTempo:
+            if (mpcShift)
+            {
+                songEditor.tempoLocked = !songEditor.tempoLocked;
+                mtPopups.show(0, songEditor.tempoLocked ? "Tempo locked" : "Tempo unlocked");
+            }
+            else
+                tapTempo();
+            break;
 
         case Act::EncoderPush:
             if (onPattern)
@@ -431,6 +444,11 @@ void MpcInput::tapTempo()
     tapTimes[tapCount++] = now;
     if (tapCount < 2 || !sequencer.isSetInternalClock())
         return;
+    if (songEditor.tempoLocked)
+    {
+        mtPopups.show(0, "Tempo locked (SHIFT+TAP TEMPO)");
+        return;
+    }
 
     float ms = (float)(tapTimes[tapCount - 1] - tapTimes[0]) / (tapCount - 1);
     if (ms <= 0)
@@ -488,12 +506,20 @@ void MpcInput::tapButton(int trackerButton, int times)
 }
 
 // Q-Links are smooth high-resolution encoders that send several messages per
-// small twist: count them up and step once per N messages (Q-Links 1-2: the
-// divider, 3-4: twice that, for finer moves). The count resets when the
-// direction changes, so reversing responds at once.
+// small twist: count them up and step once per N messages (kQLinkDiv, scaled
+// by MPDJ_QLINK_DIV / 4). The count resets when the direction changes, so
+// reversing responds at once.
+namespace
+{
+// Q-Link 1 tracks, 2 rows, 3 cell within the track, 4 value (Mike, step 1b)
+constexpr int kQLinkDiv[4] = { 11, 8, 11, 6 };
+} // namespace
+
 int MpcInput::divideQLink(int knob, int steps)
 {
-    int div = knob >= 2 ? qlinkDivider * 2 : qlinkDivider;
+    int div = (kQLinkDiv[knob] * qlinkDivider + 2) / 4;
+    if (div < 1)
+        div = 1;
     int& acc = qlinkAcc[knob];
     if ((acc > 0 && steps < 0) || (acc < 0 && steps > 0))
         acc = 0;
@@ -503,8 +529,32 @@ int MpcInput::divideQLink(int knob, int steps)
     return out;
 }
 
-// Q-Link mode 1 (navigate): 1 = left/right, 2 = up/down, 3 and 4 = the same at
-// half speed. The main encoder is the jog wheel.
+// Pattern screen: select Note / Instrument / FX1 / FX2 (or Volume / Micromove
+// in the Mic/Vol view) in the current track. Same state changes as the
+// Tracker's Note/Instr/FX buttons, without their side effects (view-mode
+// changes, the Mic/Vol toggle on a second Note press, popups while held).
+void MpcInput::stepEditParam(int steps)
+{
+    cPatternEditor& pe = patternEditor;
+    int p = (int)pe.editParam + steps;
+    p = p < 0 ? 0 : p > (int)cPatternEditor::EditFx2 ? (int)cPatternEditor::EditFx2 : p;
+    if (p == (int)pe.editParam)
+        return;
+    pe.previousEditParam = pe.editParam;
+    pe.editParam = (uint8_t)p;
+    pe.trackerPattern.selectedParam = (uint8_t)p;
+    display.refreshControl(pe.patternControl);
+    pe.showActualParamOnBar();
+    pe.focusOnPattern();
+}
+
+// Q-Link mode 1 (navigate). Q-Links 1-2 move around the sheet, 3-4 work on
+// the selected cell:
+//   1 = tracks left/right (the Tracker's Left/Right move a whole track)
+//   2 = rows up/down (clockwise = down the pattern)
+//   3 = Note > Instrument > FX1 > FX2 within the track (Pattern screen);
+//       elsewhere left/right like Q-Link 1
+//   4 = the selected cell's value (same as the main encoder)
 void MpcInput::onRelative(uint8_t cc, uint8_t value)
 {
     int steps = relSteps(value);
@@ -521,10 +571,19 @@ void MpcInput::onRelative(uint8_t cc, uint8_t value)
     steps = divideQLink(knob, steps);
     if (!steps)
         return;
-    if (knob == 0 || knob == 2) // horizontal
-        tapButton(steps > 0 ? interfaceButtonRight : interfaceButtonLeft, abs(steps));
-    else // vertical, clockwise = down the pattern
-        tapButton(steps > 0 ? interfaceButtonDown : interfaceButtonUp, abs(steps));
+    switch (knob)
+    {
+        case 0: tapButton(steps > 0 ? interfaceButtonRight : interfaceButtonLeft, abs(steps)); break;
+        case 1: tapButton(steps > 0 ? interfaceButtonDown : interfaceButtonUp, abs(steps)); break;
+        case 2:
+            if (mtInterface.isPatternScreenActive() && patternEditor.fillState == 0 &&
+                patternEditor.selectedPlace < 0)
+                stepEditParam(steps);
+            else
+                tapButton(steps > 0 ? interfaceButtonRight : interfaceButtonLeft, abs(steps));
+            break;
+        case 3: encoder->turn(steps); break;
+    }
 }
 
 // ---------------------------------------------------------------- touchscreen
