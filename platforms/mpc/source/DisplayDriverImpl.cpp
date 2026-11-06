@@ -50,14 +50,25 @@ void DisplayDriverImpl::service(uint32_t nowMs)
     fb.beginFrame();
     eveChip.renderer.render(
       eveChip.front, (int)eveChip.frontWords, &fb.target(), eveChip.frontHandles);
+    uint32_t t1 = microsNow();
     fb.present();
-    renderUsTotal += microsNow() - t0;
+    uint32_t t2 = microsNow();
+    renderUsTotal += t2 - t0;
+    drawUsTotal += t1 - t0;
+    presentUsTotal += t2 - t1;
+    tilesTotal += (uint32_t)fb.lastTilesWritten();
     frames++;
 
     if (getenv("MPDJ_DISPLAY_STATS") && nowMs - lastReportMs >= 5000)
     {
-        printf("display: %u frames, %u us/frame\n", frames, frames ? renderUsTotal / frames : 0);
-        frames = renderUsTotal = 0;
+        uint32_t n = frames ? frames : 1;
+        printf("display: %u frames, %u us/frame (draw %u, copy %u), %u tiles/frame\n",
+               frames,
+               renderUsTotal / n,
+               drawUsTotal / n,
+               presentUsTotal / n,
+               tilesTotal / n);
+        frames = renderUsTotal = drawUsTotal = presentUsTotal = tilesTotal = 0;
         lastReportMs = nowMs;
     }
 }

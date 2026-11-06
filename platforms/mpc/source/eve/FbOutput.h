@@ -36,8 +36,17 @@ class FbOutput
     int panelHeight() const { return yres; }
     void panelToScreen(int px, int py, int& x, int& y) const;
 
+    // Stats for the last present(): tiles that changed / tiles copied to the fb.
+    int lastTilesChanged() const { return tilesChanged; }
+    int lastTilesWritten() const { return tilesWritten; }
+
   private:
-    void writeRotated(uint8_t* dst);
+    static constexpr int kTile = 32;
+    void writeRotated(uint8_t* dst, int pageIdx);
+    void writeTile(uint8_t* dst, int lx0, int ly0, int lx1, int ly1);
+    void diffTiles();
+    void verifyPage();
+    uint32_t pack(uint32_t c) const;
     void dumpFrame();
 
     int fd = -1;
@@ -49,6 +58,11 @@ class FbOutput
 
     int logicalW = 1280, logicalH = 800;
     std::vector<uint32_t> buffer;
+    std::vector<uint32_t> prev;    // last presented frame, for the tile diff
+    std::vector<uint8_t> tileMask; // per tile: bit p = page p still shows an old copy
+    int tilesX = 0, tilesY = 0, tilesChanged = 0, tilesWritten = 0;
+    bool fullPresent = false, directPack = false, fakeFb = false, verify = false;
+    uint32_t alphaBits = 0;
     eve::Target tgt;
 
     const char* dumpDir = nullptr;
