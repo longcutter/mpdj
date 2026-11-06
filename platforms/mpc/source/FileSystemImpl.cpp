@@ -417,3 +417,200 @@ void FileSystemImpl::nesDir_close()
         closedir((DIR*)nesDir);
     nesDir = nullptr;
 }
+
+// ---------------------------------------------------------------- browser lists
+// POSIX versions of SdDir::createFilesList / createInstrumentsList
+// (platforms/imx/sdmmc/sd/SD.cpp). FatFs hides "." / ".." and AM_HID entries;
+// here every name starting with '.' counts as hidden. Unlike FatFs's directory
+// order, names are sorted before skip_count is applied, so paged lists stay in
+// one global order.
+namespace
+{
+bool hasExt(const char* name, const char* ext) // ext includes the dot
+{
+    size_t n = strlen(name), e = strlen(ext);
+    return n > e && strcasecmp(name + n - e, ext) == 0;
+}
+
+bool isMacMetaFile(const char* name)
+{
+    return name[0] == '.' && name[1] == '_';
+}
+
+bool passesFilter(const char* dirPath, const char* name, bool folder, FileSystem::enListFileFilter filter)
+{
+    if (isHiddenName(name))
+        return false;
+    if (folder && filter != FileSystem::enListFileFilter_folder &&
+        filter != FileSystem::enListFileFilter_all)
+        return false;
+
+    switch (filter)
+    {
+        case FileSystem::enListFileFilter_all: return true;
+        case FileSystem::enListFileFilter_folder: return folder && strcmp(name, "__MACOSX") != 0;
+        case FileSystem::enListFileFilter_wave:
+        case FileSystem::enListFileFilter_wave_inst:
+            if (strlen(name) < 5)
+                return false;
+            if (!hasExt(name, ".wav") &&
+                !(filter == FileSystem::enListFileFilter_wave_inst && hasExt(name, ".pti")))
+                return false;
+            return strlen(dirPath) + strlen(name) <= 253 && !isMacMetaFile(name);
+        case FileSystem::enListFileFilter_firmware: return false; // no firmware updates on the MPC
+        case FileSystem::enListFileFilter_mod: return hasExt(name, ".mod") || hasExt(name, ".it");
+        case FileSystem::enListFileFilter_game: return !isMacMetaFile(name) && hasExt(name, ".nes");
+    }
+    return false;
+}
+
+struct DirEntry
+{
+    std::string name;
+    bool folder;
+    off_t size;
+};
+
+// Sorted entries of `p`, hidden ones left out.
+std::vector<DirEntry> readSorted(const std::string& p)
+{
+    std::vector<DirEntry> out;
+    if (DIR* d = opendir(p.c_str()))
+    {
+        while (dirent* e = readdir(d))
+        {
+            if (isHiddenName(e->d_name))
+                continue;
+            struct stat st;
+            std::string child = p + "/" + e->d_name;
+            if (stat(child.c_str(), &st) != 0)
+                continue;
+            out.push_back({ e->d_name, S_ISDIR(st.st_mode), st.st_size });
+        }
+        closedir(d);
+    }
+    std::sort(out.begin(), out.end(), [](const DirEntry& a, const DirEntry& b) {
+        return compareStrings(a.name.c_str(), b.name.c_str());
+    });
+    return out;
+}
+
+char* newString(const std::string& s)
+{
+    char* c = new char[s.size() + 1];
+    memcpy(c, s.c_str(), s.size() + 1);
+    return c;
+}
+} // namespace
+
+int FileSystemImpl::createFilesList(const char* path,
+                                    uint8_t start_line,
+                                    char** list,
+                                    uint8_t list_length,
+                                    uint16_t max_used_memory,
+                                    enListFileFilter filter,
+                                    uint16_t skip_count,
+                                    uint16_t max_files_in_subdir,
+                                    enListFileFilter folderSizeFilter)
+{
+    for (uint8_t i = 0; i < list_length; i++) // free the previous list, as SdDir does
+    {
+        delete[] list[i];
+        list[i] = nullptr;
+    }
+
+    std::string p = full(path);
+    if (!isDir(p))
+        return kListError;
+
+    int n = start_line;
+    if (max_used_memory < 255)
+        return n;
+
+    int memoryUsed = 0;
+    for (const DirEntry& e : readSorted(p))
+    {
+        if (n >= list_length || memoryUsed > max_used_memory - 255)
+            break;
+        if (!passesFilter(path, e.name.c_str(), e.folder, filter))
+            continue;
+        if (skip_count > 0)
+        {
+            skip_count--;
+            continue;
+        }
+
+        if (!e.folder)
+        {
+            list[n++] = newString(e.name);
+            memoryUsed += (int)e.name.size() + 1;
+            continue;
+        }
+
+        // Folder: "/name", or split into "/name (1-N)", "/name (N+1-2N)"... pages
+        // when it holds more than max_files_in_subdir matching files.
+        std::string sub = p + "/" + e.name;
+        std::string subRel = std::string(path) + "/" + e.name;
+        int filesCount = 0;
+        for (const DirEntry& c : readSorted(sub))
+            if (passesFilter(subRel.c_str(), c.name.c_str(), c.folder, folderSizeFilter))
+                filesCount++;
+
+        if (max_files_in_subdir == 0 || filesCount <= max_files_in_subdir)
+        {
+            list[n++] = newString("/" + e.name);
+            memoryUsed += (int)e.name.size() + 2;
+            continue;
+        }
+        for (int offset = 0; filesCount > 0 && n < list_length; offset += max_files_in_subdir)
+        {
+            char range[32];
+            snprintf(range, sizeof range, " (%d-%d)", offset + 1, offset + max_files_in_subdir);
+            std::string s = "/" + e.name + range;
+            list[n++] = newString(s);
+            memoryUsed += (int)s.size() + 1;
+            filesCount -= max_files_in_subdir;
+        }
+    }
+    return n;
+}
+
+int FileSystemImpl::createInstrumentsList(const char* path,
+                                          char** list,
+                                          uint8_t list_length,
+                                          uint32_t* sizeOut)
+{
+    // Project instrument files are named "NN name.pti" (NN = 1-48): list[NN-1] = "name".
+    std::string p = full(path);
+    if (!isDir(p))
+        return kListError;
+
+    int n = 0;
+    for (const DirEntry& e : readSorted(p))
+    {
+        if (n >= list_length)
+            break;
+        const char* name = e.name.c_str();
+        if (e.folder || strlen(name) < 5 || !hasExt(name, ".pti"))
+            continue;
+
+        const char* q = name;
+        if (*q < '0' || *q > '9')
+            continue;
+        int idx = *q++ - '0';
+        if (*q >= '0' && *q <= '9')
+            idx = idx * 10 + (*q++ - '0');
+        if (*q != ' ')
+            continue;
+        q++;
+        if (idx < 1 || idx > 48 || idx - 1 >= list_length || list[idx - 1] != nullptr)
+            continue;
+
+        size_t len = strlen(q) - 4;
+        list[idx - 1] = newString(std::string(q, len));
+        if (sizeOut)
+            *sizeOut += (uint32_t)e.size;
+        n++;
+    }
+    return n;
+}

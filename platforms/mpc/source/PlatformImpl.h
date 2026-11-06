@@ -6,6 +6,7 @@
 #include "ConfigManager.h"
 #include "DisplayDriverImpl.h"
 #include "FileSystemImpl.h"
+#include "audio/MpcAudio.h"
 #include "input/MpcInput.h"
 #include "Platform.h"
 
@@ -134,8 +135,12 @@ class CodecImpl : public Sgtl5000
     void setHeadphoneSource(HeadphoneSource) override {}
     void setLineInLevel(int) override {}
     void setMicGain(int) override {}
-    void setHeadphoneMuted(bool) override {}
-    void setMasterVolume(float v) override { masterVolume = v; }
+    void setHeadphoneMuted(bool m) override { MpcAudio::setHeadphoneMuted(m); }
+    void setMasterVolume(float v) override
+    {
+        masterVolume = v;
+        MpcAudio::setVolume(v);
+    }
     void setAutoVolumeEnabled(bool) override {}
     void configureAutoVolume(AutoVolumeParams*) override {}
     void setEnhanceBassEnabled(bool) override {}

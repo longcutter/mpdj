@@ -378,6 +378,13 @@ void MpcInput::openTouch()
     rawMaxX = ax.maximum;
     rawMinY = ay.minimum;
     rawMaxY = ay.maximum;
+    if (rawMaxX <= rawMinX || rawMaxY <= rawMinY)
+    {
+        // Not an evdev device (a FIFO of input_event structs for scripted tests):
+        // assume the ILI2117's range.
+        rawMinX = rawMinY = 0;
+        rawMaxX = rawMaxY = 2048;
+    }
     char name[64] = "?";
     ioctl(touchFd, EVIOCGNAME(sizeof name), name);
     printf("input: touch %s \"%s\" x %d..%d y %d..%d\n", dev, name, rawMinX, rawMaxX, rawMinY, rawMaxY);

@@ -1,8 +1,8 @@
 // Entry point for the MPC One+ build of Polyend Tracker CE.
 #include "PlatformImpl.h"
 #include "Tracker.h"
+#include "audio/MpcAudio.h"
 
-#include <mutex>
 #include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -11,19 +11,6 @@
 PlatformImpl platform;
 volatile bool g_running = true;
 static Tracker* trackerInstance = nullptr;
-
-// ---------------------------------------------------------------- audio glue
-// On the Tracker these mask the audio interrupt. Here the audio thread holds
-// this lock while it renders, so masking = taking the lock.
-static std::recursive_mutex audioLock;
-static bool audioOutputEnabled = true;
-
-void disableAudioInterrupt() { audioLock.lock(); }
-void enableAudioInterrupt() { audioLock.unlock(); }
-
-void muteAudioOutByKey() { audioOutputEnabled = false; }
-void unmuteAudioOutByKey() { audioOutputEnabled = true; }
-uint8_t isAudioOutMuted() { return !audioOutputEnabled; }
 
 // CMSIS arm_sin_q15 replacement: input 0..32767 maps to 0..2*pi.
 int16_t sin_q15(int16_t value)
@@ -50,6 +37,7 @@ int main()
         startDisplay(&platform); // same point in boot as the Tracker+ hardware init
     trackerInstance->init(&platform);
     printf("Tracker initialized, version %s\n", Tracker::getVersion());
+    MpcAudio::start(trackerInstance); // audio callback also clocks the sequencer
 
     uint32_t frames = 0, lastReport = platform.getTimer()->millis();
     while (g_running)
@@ -67,6 +55,7 @@ int main()
         }
         usleep(500);
     }
+    MpcAudio::stop();
     printf("Bye.\n");
     return 0;
 }

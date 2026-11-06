@@ -1905,7 +1905,8 @@ int16_t cSampleImporter::getSelectionEnd(uint8_t whichSelect)
 
 bool cSampleImporter::checkIfValidSelection(uint8_t positionToCheck)
 {
-    if (explorerNames != nullptr && !(*explorerNames[positionToCheck] == '/'))
+    if (explorerNames != nullptr && explorerNames[positionToCheck] != nullptr &&
+        !(*explorerNames[positionToCheck] == '/'))
     {
         return true;
     }

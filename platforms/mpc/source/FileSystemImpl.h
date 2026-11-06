@@ -1,9 +1,8 @@
 // POSIX file system for the MPC One+. The Tracker's "SD card" is a folder:
 // MPDJ_ROOT, default "/media/MPC SDC/MPDJ" (the MPC's SD card).
 //
-// Milestone 2 scope: files, folders and listDirContents work. Still to come with
-// milestone 5: createFilesList / createInstrumentsList (file browser lists) and
-// the raw-sector async reads used for sample streaming.
+// Files, folders and the file-browser lists work. Raw-sector async reads (sample
+// streaming on the Tracker+) have no direct equivalent; see enableFastSeek below.
 #pragma once
 
 #include "Platform.h"
@@ -57,20 +56,20 @@ class FileSystemImpl : public FileSystem
     bool waitAsyncRead() override { return false; }
     bool isAsyncReadBusy() override { return false; }
 
-    int createInstrumentsList(const char*, char**, uint8_t, uint32_t*) override { return 0; }
+    int createInstrumentsList(const char* path,
+                              char** list,
+                              uint8_t list_length,
+                              uint32_t* sizeOut) override;
     int countContainedFiles(const char* path) override;
-    int createFilesList(const char*,
-                        uint8_t,
-                        char**,
-                        uint8_t,
-                        uint16_t,
-                        enListFileFilter,
-                        uint16_t,
-                        uint16_t,
-                        enListFileFilter) override
-    {
-        return 0;
-    }
+    int createFilesList(const char* path,
+                        uint8_t start_line,
+                        char** list,
+                        uint8_t list_length,
+                        uint16_t max_used_memory,
+                        enListFileFilter filter,
+                        uint16_t skip_count,
+                        uint16_t max_files_in_subdir,
+                        enListFileFilter folderSizeFilter) override;
     void listDirContents(const char* dirpath,
                          DirContentType type,
                          std::function<bool(const char*)> nameFilter,
