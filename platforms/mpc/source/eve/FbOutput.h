@@ -54,7 +54,7 @@ class FbOutput
     int fd = -1;
     uint8_t* fbMem = nullptr;
     size_t fbSize = 0;
-    int xres = 0, yres = 0, lineLength = 0, bpp = 0, pages = 1, page = 0;
+    int xres = 0, yres = 0, lineLength = 0, bpp = 0, pages = 1, page = 0, shownPage = 0;
     int rOff = 16, gOff = 8, bOff = 0;
     int rotate = 0;
 

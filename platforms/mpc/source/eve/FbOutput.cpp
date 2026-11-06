@@ -79,6 +79,8 @@ void FbOutput::open()
                 pages = 3;
             if (int want = envInt("MPDJ_FB_PAGES", 0); want >= 1 && want < pages)
                 pages = want; // 1 = draw straight to the visible page, no flips
+            // Whatever page is on screen now (the last run may have left it on 1 or 2).
+            shownPage = var.yres ? (int)(var.yoffset / var.yres) : 0;
             fbSize = fix.smem_len;
             fbMem = (uint8_t*)mmap(nullptr, fbSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
             if (fbMem == MAP_FAILED)
@@ -88,6 +90,8 @@ void FbOutput::open()
             }
             if ((size_t)lineLength * yres * pages > fbSize)
                 pages = 1;
+            if ((size_t)lineLength * yres * (shownPage + 1) > fbSize)
+                shownPage = 0;
             printf("fb: %s %dx%d %dbpp, %d page(s)\n", dev, xres, yres, bpp, pages);
         }
         else
@@ -304,7 +308,9 @@ void FbOutput::present()
         if (!fullPresent)
             diffTiles();
         uint64_t t1 = nowUs();
-        writeRotated(fbMem + (size_t)next * yres * lineLength, next);
+        // Single-page mode draws into the page that is already on screen.
+        int target = pages > 1 ? next : shownPage;
+        writeRotated(fbMem + (size_t)target * yres * lineLength, next);
         uint64_t t2 = nowUs();
         diffUs = (uint32_t)(t1 - t0);
         writeUs = (uint32_t)(t2 - t1);
