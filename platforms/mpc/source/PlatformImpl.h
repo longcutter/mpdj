@@ -4,7 +4,8 @@
 #pragma once
 
 #include "ConfigManager.h"
-#include "DisplayDriver.h"
+#include "DisplayDriverImpl.h"
+#include "FileSystemImpl.h"
 #include "Platform.h"
 
 #include <stdint.h>
@@ -55,91 +56,6 @@ class EncoderImpl : public Encoder
   private:
     int acceleration = 0;
     int resolution = 1;
-};
-
-// ---------------------------------------------------------------- STUB: display
-class DisplayDriverImpl : public DisplayDriver
-{
-  public:
-    void setPowerState(bool) override {}
-    void setBrightness(int) override {}
-    void setRotation(int) override {}
-    void getImgProps(uint32_t& addr, uint32_t& w, uint32_t& h) override { addr = w = h = 0; }
-    uint32_t getDisplayListOffset() override { return 0; }
-    void IncCMDOffset(uint16_t) override {}
-    void WriteData32(uint32_t) override {}
-    void beginCoProList() override {}
-    void beginCoProListNoCheck() override {}
-    void endCoProList() override {}
-    void awaitCoProEmpty() override {}
-    uint8_t isCoProEmpty() override { return 1; }
-    void writeDataRAMG(const uint8_t*, uint32_t, uint32_t) override {}
-    void writeFontRAMG(const uint8_t*, uint32_t, uint32_t) override {}
-    void readDataRAMG(uint8_t*, uint32_t, uint32_t) override {}
-    void readBackDataRAMG(uint8_t*, uint32_t, uint32_t) override {}
-    uint8_t sendString(const char*, uint32_t) override { return 0; }
-    void writeDataToCMD(const uint8_t*, uint32_t) override {}
-    void initStreamDma(uint16_t, uint16_t, uint16_t, uint8_t*, uint32_t) override {}
-    bool updateStreamDma(bool) override { return true; }
-    void stopStreamDma() override {}
-};
-
-// ---------------------------------------------------------------- STUB: file system
-class FileSystemImpl : public FileSystem
-{
-  public:
-    bool isSdCardInserted() override { return false; }
-    void setMountEventCallback(CardStateChangeCallback) override {}
-    bool remount() override { return false; }
-    bool exists(const char*) override { return false; }
-    bool rename(const char*, const char*) override { return false; }
-    bool mkdir(uint8_t, const char*, bool) override { return false; }
-    bool remove(const char*) override { return false; }
-    bool removeDirWithFiles(const char*) override { return false; }
-    bool removeOnlyDirFiles(const char*) override { return false; }
-    size_t getFileSize(const char*) override { return 0; }
-    size_t getFileSize(FileHandle) override { return 0; }
-    size_t getFileAvailable(FileHandle) override { return 0; }
-    std::tuple<bool, FileHandle> openFile(const char*, FileOpenMode, FileHandle*) override
-    {
-        return { false, nullptr };
-    }
-    int32_t readFile(void*, size_t, FileHandle) override { return -1; }
-    int32_t writeFile(const void*, size_t, FileHandle) override { return -1; }
-    bool seekFileCur(int, FileHandle) override { return false; }
-    bool seekFile(uint32_t, FileHandle) override { return false; }
-    void closeFile(FileHandle, bool) override {}
-    void endFile(FileHandle) override {}
-    bool isFileOpen(FileHandle) override { return false; }
-    bool enableFastSeek(FileHandle, uint32_t*, uint32_t, uint32_t*, uint32_t*) override
-    {
-        return false;
-    }
-    bool readSectorsAsync(uint8_t*, uint32_t, uint32_t) override { return false; }
-    bool pollAsyncRead(bool* ok) override
-    {
-        if (ok)
-            *ok = false;
-        return true;
-    }
-    bool waitAsyncRead() override { return false; }
-    bool isAsyncReadBusy() override { return false; }
-    int createInstrumentsList(const char*, char**, uint8_t, uint32_t*) override { return 0; }
-    int countContainedFiles(const char*) override { return 0; }
-    int createFilesList(const char*, uint8_t, char**, uint8_t, uint16_t, enListFileFilter,
-                        uint16_t, uint16_t, enListFileFilter) override
-    {
-        return 0;
-    }
-    void listDirContents(const char*, DirContentType, std::function<bool(const char*)>, char*,
-                         int, int, int& outNamesCount, char**) override
-    {
-        outNamesCount = 0;
-    }
-    int readNbFiles(const char*) override { return 0; }
-    bool nesDir_open(const char*) override { return false; }
-    bool nesDir_readItem(char*, uint8_t*, uint8_t*, uint32_t*) override { return false; }
-    void nesDir_close() override {}
 };
 
 // ---------------------------------------------------------------- config (file backed)
@@ -326,6 +242,8 @@ class PlatformImpl : public Platform
     SwitchGroupImpl buttons;
     SwitchGroupImpl pads;
     EncoderImpl encoder;
+    DisplayDriverImpl display;
+    FileSystemImpl fileSystem;
 
   private:
     CodecImpl codec;
@@ -333,12 +251,10 @@ class PlatformImpl : public Platform
     LedsImpl leds;
     BatteryImpl battery;
     TimerImpl timer;
-    DisplayDriverImpl display;
     UsbAudioImpl usbAudio;
     UartMidiImpl uartMidi;
     UsbMidiImpl usbMidi;
     ConfigManagerImpl config;
-    FileSystemImpl fileSystem;
     CrcCalculatorImpl crc;
     SystemInfo systemInfo;
     UsbImpl usb;

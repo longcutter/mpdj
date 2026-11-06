@@ -142,12 +142,15 @@ PlatformImpl::PlatformImpl() : buttons(kButtons), pads(kPads)
 void PlatformImpl::init()
 {
     config.init("tracker-config.bin");
+    fileSystem.init();
+    display.init();
 }
 
 void PlatformImpl::update()
 {
     buttons.update();
     pads.update();
+    display.service(timer.millis());
 }
 
 void PlatformImpl::setPowerMode(bool mode)

@@ -69,10 +69,17 @@ $(OBJ)/plat/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(DEFINES) $(INCLUDES) $(CFLAGS) -c -o $@ $<
 
+# Renderer test tool, built for the machine you're on (see tools/eve_replay.cpp).
+# For the MPC itself: make replay HOSTCXX="$(CXX)"
+HOSTCXX ?= c++
+replay:
+	@mkdir -p build-host
+	$(HOSTCXX) -O2 -std=c++17 -Isource tools/eve_replay.cpp source/eve/eve.cpp -o build-host/eve_replay -lm
+
 objs: $(OBJS)
 
 clean:
 	rm -rf $(BUILD)
 
 -include $(OBJS:.o=.d)
-.PHONY: all objs clean strip
+.PHONY: all objs clean strip replay
