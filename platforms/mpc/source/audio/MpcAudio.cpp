@@ -15,15 +15,29 @@
 
 // ---------------------------------------------------------------- audio "interrupt" lock
 // On the Tracker the audio engine runs in an interrupt, and the core masks that
-// interrupt (DISABLE_GLOBAL_INTERRUPTS, core/config/config.h) around shared
+// interrupt (DISABLE/ENABLE_GLOBAL_INTERRUPTS, AudioNoInterrupts) around shared
 // state. Here the audio thread holds this lock for a whole block, so masking =
 // taking the lock, and a block is atomic with respect to those sections, as an
-// interrupt would be. Recursive (sections nest), priority-inheriting (the main
-// thread must not stall the real-time audio thread behind other work).
+// interrupt would be.
+//
+// The mask on the MCU is an on/off flag (CPSID/CPSIE), not a counter, and the
+// core relies on that: a nested section's enable switches interrupts back on,
+// and some paths return without their enable (e.g. AudioPlayMemory::
+// envelopeNoteOff) because the caller's enable follows. So, on every thread but
+// the audio thread, disable = take the lock if this thread doesn't hold it,
+// enable = release it if it does. Inside the audio thread both are no-ops: the
+// block holds the lock throughout, as nothing could interrupt the audio ISR.
+// Priority-inheriting: a main-thread holder runs at the audio thread's
+// priority while the audio thread waits.
 namespace
 {
 pthread_mutex_t audioLock;
-thread_local int lockDepth = 0;
+thread_local bool lockHeld = false;
+thread_local bool isAudioThread = false;
+
+// Who took the lock last (return address), so a stuck lock can be traced:
+// resolve with llvm-addr2line on the unstripped binary.
+std::atomic<void*> lockHolder{ nullptr };
 
 struct LockInit
 {
@@ -31,25 +45,51 @@ struct LockInit
     {
         pthread_mutexattr_t a;
         pthread_mutexattr_init(&a);
-        pthread_mutexattr_settype(&a, PTHREAD_MUTEX_RECURSIVE);
         pthread_mutexattr_setprotocol(&a, PTHREAD_PRIO_INHERIT);
         pthread_mutex_init(&audioLock, &a);
         pthread_mutexattr_destroy(&a);
     }
 } lockInit;
+
+// The audio thread's lock for one block: waits at most 500 ms, then reports
+// the holder once and keeps waiting.
+void lockForBlock()
+{
+    timespec t;
+    clock_gettime(CLOCK_REALTIME, &t);
+    t.tv_nsec += 500000000;
+    if (t.tv_nsec >= 1000000000)
+    {
+        t.tv_nsec -= 1000000000;
+        t.tv_sec++;
+    }
+    if (pthread_mutex_timedlock(&audioLock, &t) != 0)
+    {
+        fprintf(stderr, "audio: lock held for >500 ms, last taken from %p\n", lockHolder.load());
+        pthread_mutex_lock(&audioLock);
+    }
+}
+
+void unlockForBlock()
+{
+    pthread_mutex_unlock(&audioLock);
+}
 } // namespace
 
-void disableAudioInterrupt()
+__attribute__((noinline)) void disableAudioInterrupt()
 {
+    if (isAudioThread || lockHeld)
+        return;
     pthread_mutex_lock(&audioLock);
-    lockDepth++;
+    lockHeld = true;
+    lockHolder = __builtin_return_address(0);
 }
 
 void enableAudioInterrupt()
 {
-    if (lockDepth == 0)
-        return; // CPSIE without a matching CPSID is harmless on the MCU; keep it so
-    lockDepth--;
+    if (isAudioThread || !lockHeld)
+        return;
+    lockHeld = false;
     pthread_mutex_unlock(&audioLock);
 }
 
@@ -166,10 +206,10 @@ void wavHeader(FILE* f, uint32_t dataBytes)
 // One 128-frame block: input -> engine (sequencer tick, voices, mix) -> outBuf.
 void renderBlock()
 {
-    disableAudioInterrupt();
+    lockForBlock();
     tracker->updateInputAudioBuffers(in.isOpen() ? inBuf : nullptr, nullptr, kBlock);
     tracker->updateAudioBuffers(blockL, blockR, kBlock);
-    enableAudioInterrupt();
+    unlockForBlock();
 
     // Gain ramps across the block so volume changes and mutes don't click.
     float target = (keyMuted || headphoneMuted) ? 0.0f : volumeGain.load();
@@ -198,6 +238,7 @@ void renderBlock()
 
 void* audioThread(void*)
 {
+    isAudioThread = true;
     uint64_t blocks = 0, xruns = 0, renderSum = 0, renderMax = 0, statBlocks = 0;
     uint64_t lastReport = nowUs();
     timespec next;

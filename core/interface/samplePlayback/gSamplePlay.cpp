@@ -72,6 +72,10 @@ void cSamplePlayback::initDisplayControls()
     prop2.h = 54;
     bgLabel = display.createControl<cBgLabel>(&prop2);
 
+    // start() sets editorInstrument, but it runs after this: on first use it is still null
+    // (harmless on the Tracker+, where address 0 is readable; a crash on Linux).
+    if (editorInstrument == nullptr)
+        editorInstrument = &mtProject.instrument[mtProject.values.lastUsedInstrument];
     playModeList.linesCount = 8;
     playModeList.start = editorInstrument->playMode;
     playModeList.length = playModeCount;

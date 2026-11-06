@@ -3,9 +3,16 @@
 #include "PlatformImpl.h"
 #include "eve/FbOutput.h"
 #include "core/interfaceDefs.h"
+#include "core/interface.h"
+#include "core/interfacePopups.h"
+#include "fileManager.h"
 #include "mtSequencer.h"
+#include "mtStructs.h"
+#include "patternEditor/patternEditor.h"
+#include "songEditor/songEditor.h"
 
 #include <errno.h>
+#include <math.h>
 #include <fcntl.h>
 #include <linux/input.h>
 #include <sound/asound.h>
@@ -32,40 +39,60 @@ bool envFlag(const char* name)
 }
 
 // ---------------------------------------------------------------- control map
-// MPC button note (channel 1) -> Tracker+ button. Edit here to remap.
+// MPC button note (channel 1) -> what it does. The agreed map lives in the
+// project doc claude/mpdj-control-map.tsv; keep the two in step.
+enum class Act : uint8_t
+{
+    Forward,     // press/release the Tracker+ button as-is
+    Main,        // Pattern <-> Song
+    SampleEdit,  // Sample Playback <-> Sample Editor
+    Browse,      // Sample Loader; SHIFT = File
+    NextSeq,     // SHIFT = Performance (XYFX); alone: nothing yet
+    Play,        // play from the playhead (Pattern screen: from the cursor row)
+    PlayStart,   // play from the pattern start (restarts if playing)
+    Stop,        // stop
+    Minus,       // remove step (Tracker Backspace = Shift+Delete)
+    Copy,        // copy; SHIFT+COPY (DELETE label) = remove the selected steps
+    Undo,        // undo; SHIFT = redo (Pattern screen)
+    TapTempo,    // tap tempo
+    EncoderPush, // Pattern screen: paste (Tracker Shift+Copy)
+};
+
 struct ButtonMap
 {
     uint8_t mpcNote;
-    int8_t trackerButton;
+    Act act;
+    int8_t trackerButton; // for Forward / Copy
     const char* name;
 };
 
 const ButtonMap kButtonMap[] = {
-    { 49, interfaceButtonShift, "SHIFT" },
-    { 82, interfaceButtonPlay, "PLAY" },
-    { 73, interfaceButtonRec, "REC" },
-    { 122, interfaceButtonCopy, "COPY" },
-    { 9, interfaceButtonDelete, "ERASE" },
-    { 54, interfaceButtonInsert, "+" },
-    { 52, interfaceButtonPattern, "MAIN" },
-    { 50, interfaceButtonFile, "BROWSE" },
-    { 116, interfaceButtonMaster, "TRACK MIX" },
-    { 43, interfaceButtonPerformance, "TRACK MUTE" },
-    { 42, interfaceButtonSong, "NEXT SEQ" },
-    { 123, interfaceButtonConfig, "MENU" },
-    { 2, interfaceButtonParams, "PROGRAM EDIT" },
-    { 6, interfaceButtonSampleEdit, "SAMPLE EDIT" },
-    { 125, interfaceButtonSampleRec, "SAMPLER" },
-    { 0, interfaceButtonSampleLoad, "Q-LINK" },
-    { 53, interfaceButtonSamplePlay, "TAP TEMPO" },
-    { 11, interfaceButtonNote, "NOTE REPEAT" },
-    { 39, interfaceButtonInstr, "FULL LEVEL" },
-    { 40, interfaceButtonVol, "16 LEVELS" },
-    { 41, interfaceButtonFx, "STEP SEQ" },
+    { 49, Act::Forward, interfaceButtonShift, "SHIFT" },
+    { 73, Act::Forward, interfaceButtonRec, "REC" },
+    { 9, Act::Forward, interfaceButtonDelete, "ERASE" },
+    { 54, Act::Forward, interfaceButtonInsert, "+" },
+    { 55, Act::Minus, -1, "-" },
+    { 122, Act::Copy, interfaceButtonCopy, "COPY" },
+    { 123, Act::Forward, interfaceButtonConfig, "MENU" },
+    { 2, Act::Forward, interfaceButtonParams, "PROGRAM EDIT" },  // again = Automation
+    { 116, Act::Forward, interfaceButtonMaster, "TRACK MIX" },   // again = next page
+    { 125, Act::Forward, interfaceButtonSampleRec, "SAMPLER" },
+    { 52, Act::Main, -1, "MAIN" },
+    { 6, Act::SampleEdit, -1, "SAMPLE EDIT" },
+    { 50, Act::Browse, -1, "BROWSE" },
+    { 42, Act::NextSeq, -1, "NEXT SEQ" },
+    { 82, Act::Play, -1, "PLAY" },
+    { 83, Act::PlayStart, -1, "PLAY START" },
+    { 81, Act::Stop, -1, "STOP" },
+    { 67, Act::Undo, -1, "UNDO" },
+    { 53, Act::TapTempo, -1, "TAP TEMPO" },
+    { 111, Act::EncoderPush, -1, "ENCODER PUSH" },
+    // Not mapped yet: Q-LINK (mode cycling, build step 2), TRACK MUTE, NOTE REPEAT,
+    // FULL LEVEL, 16 LEVELS, STEP SEQ, TC, OVER DUB, bank D (pad work, milestone 5)
 };
 
-constexpr uint8_t kNoteStop = 81;
 constexpr uint8_t kNoteBankA = 35, kNoteBankC = 37;
+constexpr uint8_t kNoteShift = 49;
 
 // MPC pad note (bank A layout) -> pad number 1..16 (1 = bottom left).
 int padNumber(uint8_t note)
@@ -236,6 +263,32 @@ void MpcInput::onMidi(uint8_t status, uint8_t d1, uint8_t d2)
     }
 }
 
+bool MpcInput::coreShift()
+{
+    return buttons->isButtonPressed(interfaceButtonShift);
+}
+
+// Some MPC combos use SHIFT to mean something the Tracker doesn't (SHIFT+BROWSE
+// = File): take Shift off the core before pressing, so screens don't see a
+// Shift combo. It stays off until SHIFT is pressed again.
+void MpcInput::releaseCoreShift()
+{
+    if (coreShift())
+        buttons->release(interfaceButtonShift);
+}
+
+// Press and release a Tracker button with Shift held (Shift+Delete, Shift+Copy...).
+void MpcInput::tapWithShift(int trackerButton)
+{
+    bool had = coreShift();
+    if (!had)
+        buttons->press(interfaceButtonShift);
+    buttons->press(trackerButton);
+    buttons->release(trackerButton);
+    if (!had)
+        buttons->release(interfaceButtonShift);
+}
+
 void MpcInput::onButton(uint8_t note, bool down)
 {
     if (down && note >= kNoteBankA && note <= kNoteBankC)
@@ -248,6 +301,8 @@ void MpcInput::onButton(uint8_t note, bool down)
 
     if (!down)
     {
+        if (note == kNoteShift)
+            mpcShift = false;
         if (buttonHeld[note] >= 0)
         {
             buttons->release(buttonHeld[note]);
@@ -256,27 +311,145 @@ void MpcInput::onButton(uint8_t note, bool down)
         return;
     }
 
-    int target = -1;
-    if (note == kNoteStop)
-    {
-        // The Tracker's Play button toggles; STOP only acts while playing.
-        if (sequencer.isPlay())
-            target = interfaceButtonPlay;
-    }
-    else
-        for (const ButtonMap& m : kButtonMap)
-            if (m.mpcNote == note)
-            {
-                target = m.trackerButton;
-                break;
-            }
-
+    const ButtonMap* m = nullptr;
+    for (const ButtonMap& e : kButtonMap)
+        if (e.mpcNote == note)
+        {
+            m = &e;
+            break;
+        }
     if (trace)
-        printf("input: button note %u -> tracker %d\n", note, target);
-    if (target < 0)
+        printf("input: button note %u%s %s\n", note, mpcShift ? " +SHIFT" : "", m ? m->name : "(unmapped)");
+    if (!m)
         return;
-    buttonHeld[note] = (int8_t)target;
-    buttons->press(target);
+
+    int hold = -1; // Tracker button to press now and release with the MPC button
+    bool playing = sequencer.isPlay();
+    bool onPattern = mtInterface.isPatternScreenActive();
+
+    switch (m->act)
+    {
+        case Act::Forward:
+            if (note == kNoteShift)
+                mpcShift = true;
+            hold = m->trackerButton;
+            break;
+
+        case Act::Main: hold = onPattern ? interfaceButtonSong : interfaceButtonPattern; break;
+
+        case Act::SampleEdit:
+            hold = mtInterface.isSamplePlayerScreenActive() ? interfaceButtonSampleEdit
+                                                         : interfaceButtonSamplePlay;
+            break;
+
+        case Act::Browse:
+            if (mpcShift)
+            {
+                releaseCoreShift();
+                hold = interfaceButtonFile;
+            }
+            else
+                hold = interfaceButtonSampleLoad;
+            break;
+
+        case Act::NextSeq:
+            if (mpcShift)
+            {
+                releaseCoreShift();
+                hold = interfaceButtonPerformance;
+            }
+            break;
+
+        case Act::Play:
+            if (playing)
+                break;
+            if (onPattern)
+                tapWithShift(interfaceButtonPlay); // Tracker Shift+Play = from the cursor
+            else
+                tapButton(interfaceButtonPlay, 1);
+            break;
+
+        case Act::PlayStart:
+            releaseCoreShift(); // Shift+Play would start from the cursor
+            if (playing)
+                tapButton(interfaceButtonPlay, 1); // stop, then start again
+            tapButton(interfaceButtonPlay, 1);
+            break;
+
+        case Act::Stop:
+            if (playing)
+                tapButton(interfaceButtonPlay, 1); // the Tracker's Play toggles
+            break;
+
+        case Act::Minus: tapWithShift(interfaceButtonDelete); break;
+
+        case Act::Copy:
+            if (mpcShift)
+                tapWithShift(interfaceButtonDelete); // DELETE label: remove selected steps
+            else
+                hold = m->trackerButton;
+            break;
+
+        case Act::Undo:
+            if (!onPattern)
+                break;
+            if (mpcShift)
+                newFileManager.redoPattern();
+            else
+                newFileManager.undoPattern();
+            patternEditor.refreshPattern();
+            patternEditor.showPattern();
+            patternEditor.showLength();
+            break;
+
+        case Act::TapTempo: tapTempo(); break;
+
+        case Act::EncoderPush:
+            if (onPattern)
+                tapWithShift(interfaceButtonCopy); // paste
+            break;
+    }
+
+    if (hold >= 0)
+    {
+        buttonHeld[note] = (int8_t)hold;
+        buttons->press(hold);
+    }
+}
+
+// Average the last few taps; a pause of 2 s starts over. Internal clock only.
+void MpcInput::tapTempo()
+{
+    uint32_t now = platform.getTimer()->millis();
+    if (tapCount > 0 && now - tapTimes[tapCount - 1] > 2000)
+        tapCount = 0;
+    if (tapCount == kTaps)
+    {
+        memmove(tapTimes, tapTimes + 1, sizeof(tapTimes[0]) * (kTaps - 1));
+        tapCount--;
+    }
+    tapTimes[tapCount++] = now;
+    if (tapCount < 2 || !sequencer.isSetInternalClock())
+        return;
+
+    float ms = (float)(tapTimes[tapCount - 1] - tapTimes[0]) / (tapCount - 1);
+    if (ms <= 0)
+        return;
+    float bpm = roundf(600000.0f / ms) / 10.0f;
+    if (bpm < Sequencer::MIN_TEMPO)
+        bpm = Sequencer::MIN_TEMPO;
+    if (bpm > Sequencer::MAX_TEMPO)
+        bpm = Sequencer::MAX_TEMPO;
+    mtProject.values.globalTempo = bpm;
+    newFileManager.setProjectStructChanged();
+    if (mtInterface.isSongScreenActive())
+        songEditor.showTempoValue();
+
+    static char text[32];
+    snprintf(text, sizeof text, "Tempo %.1f", bpm);
+    mtPopups.show(0, text);
+    if (trace)
+        printf("input: tap tempo %.1f BPM (%d taps)\n", bpm, tapCount);
 }
 
 void MpcInput::onPad(uint8_t note, bool down)
@@ -315,44 +488,43 @@ void MpcInput::tapButton(int trackerButton, int times)
 }
 
 // Q-Links are smooth high-resolution encoders that send several messages per
-// small twist: count them up and step once per qlinkDivider messages. The
-// count resets when the direction changes, so reversing responds at once.
+// small twist: count them up and step once per N messages (Q-Links 1-2: the
+// divider, 3-4: twice that, for finer moves). The count resets when the
+// direction changes, so reversing responds at once.
 int MpcInput::divideQLink(int knob, int steps)
 {
+    int div = knob >= 2 ? qlinkDivider * 2 : qlinkDivider;
     int& acc = qlinkAcc[knob];
     if ((acc > 0 && steps < 0) || (acc < 0 && steps > 0))
         acc = 0;
     acc += steps;
-    int out = acc / qlinkDivider;
-    acc -= out * qlinkDivider;
+    int out = acc / div;
+    acc -= out * div;
     return out;
 }
 
+// Q-Link mode 1 (navigate): 1 = left/right, 2 = up/down, 3 and 4 = the same at
+// half speed. The main encoder is the jog wheel.
 void MpcInput::onRelative(uint8_t cc, uint8_t value)
 {
     int steps = relSteps(value);
     if (!steps)
         return;
-    if (cc >= kCcQLink1 && cc < kCcQLink1 + 4)
+    if (cc == kCcMainEncoder)
     {
-        steps = divideQLink(cc - kCcQLink1, steps);
-        if (!steps)
-            return;
+        encoder->turn(steps);
+        return;
     }
-    switch (cc)
-    {
-        case kCcMainEncoder:
-        case kCcQLink1 + 2: // Q-Link 3: jog wheel too, next to the arrows
-            encoder->turn(steps);
-            break;
-        case kCcQLink1 + 0: // Q-Link 1: left / right
-            tapButton(steps > 0 ? interfaceButtonRight : interfaceButtonLeft, abs(steps));
-            break;
-        case kCcQLink1 + 1: // Q-Link 2: up / down (clockwise = down the pattern)
-            tapButton(steps > 0 ? interfaceButtonDown : interfaceButtonUp, abs(steps));
-            break;
-        default: break;
-    }
+    if (cc < kCcQLink1 || cc >= kCcQLink1 + 4)
+        return;
+    int knob = cc - kCcQLink1;
+    steps = divideQLink(knob, steps);
+    if (!steps)
+        return;
+    if (knob == 0 || knob == 2) // horizontal
+        tapButton(steps > 0 ? interfaceButtonRight : interfaceButtonLeft, abs(steps));
+    else // vertical, clockwise = down the pattern
+        tapButton(steps > 0 ? interfaceButtonDown : interfaceButtonUp, abs(steps));
 }
 
 // ---------------------------------------------------------------- touchscreen
