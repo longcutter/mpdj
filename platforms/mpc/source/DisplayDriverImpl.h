@@ -57,6 +57,7 @@ class DisplayDriverImpl : public DisplayDriver
     uint32_t lastRenderMs = 0;
     uint32_t frames = 0, renderUsTotal = 0, lastReportMs = 0;
     uint32_t drawUsTotal = 0, presentUsTotal = 0, tilesTotal = 0;
+    uint32_t diffUsTotal = 0, writeUsTotal = 0, flipUsTotal = 0;
 
     uint8_t* streamBuf = nullptr;
     uint32_t streamSize = 0, streamDest = 0;

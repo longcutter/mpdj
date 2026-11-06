@@ -57,18 +57,24 @@ void DisplayDriverImpl::service(uint32_t nowMs)
     drawUsTotal += t1 - t0;
     presentUsTotal += t2 - t1;
     tilesTotal += (uint32_t)fb.lastTilesWritten();
+    diffUsTotal += fb.diffUs;
+    writeUsTotal += fb.writeUs;
+    flipUsTotal += fb.flipUs;
     frames++;
 
     if (getenv("MPDJ_DISPLAY_STATS") && nowMs - lastReportMs >= 5000)
     {
         uint32_t n = frames ? frames : 1;
-        printf("display: %u frames, %u us/frame (draw %u, copy %u), %u tiles/frame\n",
+        printf("display: %u frames, %u us/frame (draw %u, diff %u, write %u, flip %u), %u tiles/frame\n",
                frames,
                renderUsTotal / n,
                drawUsTotal / n,
-               presentUsTotal / n,
+               diffUsTotal / n,
+               writeUsTotal / n,
+               flipUsTotal / n,
                tilesTotal / n);
         frames = renderUsTotal = drawUsTotal = presentUsTotal = tilesTotal = 0;
+        diffUsTotal = writeUsTotal = flipUsTotal = 0;
         lastReportMs = nowMs;
     }
 }

@@ -39,6 +39,8 @@ class FbOutput
     // Stats for the last present(): tiles that changed / tiles copied to the fb.
     int lastTilesChanged() const { return tilesChanged; }
     int lastTilesWritten() const { return tilesWritten; }
+    // Time spent in the last present(): tile diff, copy to the fb, page flip.
+    uint32_t diffUs = 0, writeUs = 0, flipUs = 0;
 
   private:
     static constexpr int kTile = 32;

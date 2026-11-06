@@ -8,7 +8,15 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <time.h>
 #include <unistd.h>
+
+static uint64_t nowUs()
+{
+    timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000u + (uint64_t)ts.tv_nsec / 1000u;
+}
 
 static int envInt(const char* name, int def)
 {
@@ -69,6 +77,8 @@ void FbOutput::open()
                 pages = 1;
             if (pages > 3)
                 pages = 3;
+            if (int want = envInt("MPDJ_FB_PAGES", 0); want >= 1 && want < pages)
+                pages = want; // 1 = draw straight to the visible page, no flips
             fbSize = fix.smem_len;
             fbMem = (uint8_t*)mmap(nullptr, fbSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
             if (fbMem == MAP_FAILED)
@@ -237,30 +247,28 @@ void FbOutput::writeTile(uint8_t* dst, int lx0, int ly0, int lx1, int ly1)
 // marked stale on every page; each page catches up when it is next drawn.
 void FbOutput::diffTiles()
 {
+    // Walk both buffers in memory order (row by row) so the prefetcher can
+    // stream them; most rows are identical and cost one memcmp.
     const int W = logicalW, H = logicalH;
     const uint8_t allPages = (uint8_t)((1u << pages) - 1);
+    const size_t rowBytes = (size_t)W * 4;
     tilesChanged = 0;
-    for (int ty = 0; ty < tilesY; ty++)
+    for (int y = 0; y < H; y++)
     {
-        int y0 = ty * kTile, y1 = y0 + kTile < H ? y0 + kTile : H;
+        size_t o = (size_t)y * W;
+        if (memcmp(&prev[o], &buffer[o], rowBytes) == 0)
+            continue;
+        uint8_t* maskRow = &tileMask[(size_t)(y / kTile) * tilesX];
         for (int tx = 0; tx < tilesX; tx++)
         {
             int x0 = tx * kTile, x1 = x0 + kTile < W ? x0 + kTile : W;
             size_t bytes = (size_t)(x1 - x0) * 4;
-            bool changed = false;
-            for (int y = y0; y < y1; y++)
+            if (memcmp(&prev[o + x0], &buffer[o + x0], bytes) == 0)
+                continue;
+            memcpy(&prev[o + x0], &buffer[o + x0], bytes);
+            if (maskRow[tx] != allPages)
             {
-                size_t o = (size_t)y * W + x0;
-                // Rows above the first difference are already identical.
-                if (changed || memcmp(&prev[o], &buffer[o], bytes) != 0)
-                {
-                    changed = true;
-                    memcpy(&prev[o], &buffer[o], bytes);
-                }
-            }
-            if (changed)
-            {
-                tileMask[ty * tilesX + tx] = allPages;
+                maskRow[tx] = allPages;
                 tilesChanged++;
             }
         }
@@ -292,9 +300,15 @@ void FbOutput::present()
     if (fbMem)
     {
         int next = pages > 1 ? (page + 1) % pages : 0;
+        uint64_t t0 = nowUs();
         if (!fullPresent)
             diffTiles();
+        uint64_t t1 = nowUs();
         writeRotated(fbMem + (size_t)next * yres * lineLength, next);
+        uint64_t t2 = nowUs();
+        diffUs = (uint32_t)(t1 - t0);
+        writeUs = (uint32_t)(t2 - t1);
+        flipUs = 0;
         if (fakeFb && tilesWritten > 0)
             page = next;
         else if (pages > 1 && tilesWritten > 0)
@@ -303,7 +317,10 @@ void FbOutput::present()
             if (ioctl(fd, FBIOGET_VSCREENINFO, &var) == 0)
             {
                 var.yoffset = (uint32_t)(next * yres);
-                if (ioctl(fd, FBIOPAN_DISPLAY, &var) == 0)
+                uint64_t t3 = nowUs();
+                int ok = ioctl(fd, FBIOPAN_DISPLAY, &var);
+                flipUs = (uint32_t)(nowUs() - t3);
+                if (ok == 0)
                     page = next;
                 else
                     pages = 1; // panning unsupported: draw to the visible page from now on
