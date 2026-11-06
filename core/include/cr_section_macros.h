@@ -50,7 +50,11 @@
 // Macros for placing data or bss into a section that has the NOLOAD option set in the linker script
 #define __NOINIT_DEF __SECTION_SIMPLE(noinit)
 #define __NOINIT_EXT(bank, name) __SECTION_EXT(noinit, bank, name)
+#ifdef PLATFORM_MPC
+#define __NOINIT(bank)
+#else
 #define __NOINIT(bank) __SECTION(noinit, bank)
+#endif
 
 // Macros for placing text (code), or rodata into a different (flash) bank
 #define __RODATA_EXT(bank,name) __SECTION_EXT(rodata, bank, name)

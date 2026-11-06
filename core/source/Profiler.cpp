@@ -3,6 +3,9 @@
 #include "limits.h"
 #include "log.h"
 #include "malloc.h"
+#ifdef PLATFORM_MPC
+#include <unistd.h>
+#endif
 #include <polyassert.h>
 
 #include "Platform.h"
@@ -21,6 +24,12 @@ Profiler* Profiler::instance = nullptr;
 
 void Profiler::init()
 {
+#ifdef PLATFORM_MPC
+    // Linux overcommits memory: the claim-everything probe below would run the
+    // whole system out of RAM. Free memory comes from the OS instead.
+    resetMeasuringAudio();
+    return;
+#endif
     // allocate and then free all available memory for malloc to claim all space
     // from sbrk, so that mallinfo data includes all of it
 
@@ -44,7 +53,11 @@ void Profiler::init()
     allocations.clear();
     allocations.shrink_to_fit();
 
+#if defined(PLATFORM_MPC) && !defined(__GLIBC__)
+    struct { int arena, uordblks, fordblks; } mi = {};
+#else
     struct mallinfo mi = mallinfo();
+#endif
     (void)mi;
     LOGF(
       "memory on init: arena: %d, allocated: %d, free: %d\r\n", mi.arena, mi.uordblks, mi.fordblks);
@@ -54,12 +67,17 @@ void Profiler::init()
 
 size_t Profiler::freeRamBytes()
 {
+#ifdef PLATFORM_MPC
+    return (size_t)sysconf(_SC_AVPHYS_PAGES) * (size_t)sysconf(_SC_PAGESIZE);
+#endif
+#if !defined(PLATFORM_MPC) || defined(__GLIBC__)
     return mallinfo().fordblks;
+#endif
 }
 
 size_t Profiler::maxStackBytes()
 {
-#ifdef PLATFORM_IMX
+#if defined(PLATFORM_IMX) && !defined(PLATFORM_MPC)
     const uint8_t* base = (uint8_t*)&_vStackBase;
     const uint8_t* top = (uint8_t*)&_vStackTop;
 

@@ -1,13 +1,28 @@
 #ifndef CONFIG_CONFIG_H_
 #define CONFIG_CONFIG_H_
 
+#ifdef PLATFORM_MPC
+// Linux user space has no interrupts to mask; take the audio-thread lock instead.
+void disableAudioInterrupt();
+void enableAudioInterrupt();
+#define DISABLE_GLOBAL_INTERRUPTS() disableAudioInterrupt()
+#define ENABLE_GLOBAL_INTERRUPTS()  enableAudioInterrupt()
+#else
 #define DISABLE_GLOBAL_INTERRUPTS() __asm__ volatile("CPSID i" ::: "memory")
 #define ENABLE_GLOBAL_INTERRUPTS()  __asm__ volatile("CPSIE i" ::: "memory")
+#endif
 
+#ifdef PLATFORM_MPC
+#define DMAMEM
+#define AUDIO_CORE_FLASH
+#define AUDIO_CORE_RAM
+#define OCRAM_BSS_SECTION
+#else
 #define DMAMEM            __attribute__((section(".dmabuffers"), used))
 #define AUDIO_CORE_FLASH  __attribute__((section(".audio_flash_functions"), used))
 #define AUDIO_CORE_RAM    __attribute__((section(".audio_ram_functions"), used))
 #define OCRAM_BSS_SECTION __attribute__((section(".bss.$RAM3"), used))
+#endif
 
 static constexpr int kMaxFilesListLength = 256;
 static constexpr int kMaxFilePathLen = 255;
