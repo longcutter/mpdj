@@ -111,6 +111,7 @@ int16_t blockL[kBlock], blockR[kBlock];
 int16_t inBuf[kBlock * 2];
 int16_t outBuf[kBlock * 2];
 float currentGain = 1.0f;
+int peakEngine = 0; // largest engine sample since the last stats line (before gain)
 
 int envInt(const char* name, int def)
 {
@@ -175,6 +176,11 @@ void renderBlock()
     float g = currentGain, step = (target - g) / kBlock;
     for (unsigned i = 0; i < kBlock; i++)
     {
+        int a = abs(blockL[i]), b = abs(blockR[i]);
+        if (a > peakEngine)
+            peakEngine = a;
+        if (b > peakEngine)
+            peakEngine = b;
         g += step;
         if (g == 1.0f)
         {
@@ -273,11 +279,15 @@ void* audioThread(void*)
         {
             if (stats || xruns)
                 printf("audio: %llu blocks, render avg %llu us max %llu us (budget %u us), "
-                       "xruns %llu\n",
+                       "xruns %llu, peak %.1f dBFS, gain %.1f dB\n",
                        (unsigned long long)statBlocks,
                        (unsigned long long)(statBlocks ? renderSum / statBlocks : 0),
                        (unsigned long long)renderMax, kBlock * 1000000u / kRate,
-                       (unsigned long long)xruns);
+                       (unsigned long long)xruns,
+                       peakEngine ? 20.0 * log10(peakEngine / 32768.0) : -99.0,
+                       currentGain > 0 ? 20.0 * log10(currentGain) : -99.0);
+            peakEngine = 0;
+
             renderSum = renderMax = statBlocks = 0;
             xruns = 0;
             lastReport = now;

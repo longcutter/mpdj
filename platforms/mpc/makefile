@@ -35,8 +35,11 @@ INCLUDES := -Isource -Isource/compat \
 -include $(ROOT)/version.mk
 
 # PLATFORM_IMX = Tracker+ feature set (stereo, 16 tracks). FEATURE_SYNTH left out.
+# KINETISK selects the ARM DSP-instruction bodies in core/libs/Audio/utility/dspinst.h
+# (SSAT, SMULWB, SMMUL, PKHBT...); the A17 has them all. Without it most of those
+# helpers have no body at all and every sample player outputs silence.
 DEFINES := -DPLATFORM_IMX -DPLATFORM_MPC -DUSB_MIDI -DLAYOUT_US_ENGLISH \
-  -D__MK66FX1M0__ -DTEENSYDUINO=142 -DARDUINO=10805 -DF_CPU=180000000 \
+  -D__MK66FX1M0__ -DKINETISK -DTEENSYDUINO=142 -DARDUINO=10805 -DF_CPU=180000000 \
   -DNDEBUG $(FW_VERSION_DEFINES) $(CUSTOM_DEFINES)
 
 COMMON   := $(MCPU) -O2 -g -fno-common -ffunction-sections -fdata-sections \
