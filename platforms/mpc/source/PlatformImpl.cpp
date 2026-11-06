@@ -131,6 +131,13 @@ uint32_t CrcCalculatorImpl::calculate32bitCrc(const uint8_t* data, const uint16_
 }
 
 // ---------------------------------------------------------------- platform
+void onButtonPush(uint8_t n); // core/source/mtActions.cpp
+void onButtonRelease(uint8_t n);
+void onButtonHold(uint8_t n);
+void onPadPush(uint8_t n);
+void onPadRelease(uint8_t n);
+void onPadHold(uint8_t n);
+
 static constexpr int kButtons = 44; // interfaceButtonsCount
 static constexpr int kPads = 48;    // interfacePadsCount
 
@@ -144,10 +151,19 @@ void PlatformImpl::init()
     config.init("tracker-config.bin");
     fileSystem.init();
     display.init();
+
+    buttons.setActionCallback(SwitchGroup::kPress, onButtonPush);
+    buttons.setActionCallback(SwitchGroup::kRelease, onButtonRelease);
+    buttons.setActionCallback(SwitchGroup::kHold, onButtonHold);
+    pads.setActionCallback(SwitchGroup::kPress, onPadPush);
+    pads.setActionCallback(SwitchGroup::kRelease, onPadRelease);
+    pads.setActionCallback(SwitchGroup::kHold, onPadHold);
+    input.open(&buttons, &pads, &encoder, &display.output());
 }
 
 void PlatformImpl::update()
 {
+    input.poll();
     buttons.update();
     pads.update();
     display.service(timer.millis());

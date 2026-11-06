@@ -6,6 +6,7 @@
 #include "ConfigManager.h"
 #include "DisplayDriverImpl.h"
 #include "FileSystemImpl.h"
+#include "input/MpcInput.h"
 #include "Platform.h"
 
 #include <stdint.h>
@@ -243,6 +244,7 @@ class PlatformImpl : public Platform
     SwitchGroupImpl pads;
     EncoderImpl encoder;
     DisplayDriverImpl display;
+    MpcInput input;
     FileSystemImpl fileSystem;
 
   private:

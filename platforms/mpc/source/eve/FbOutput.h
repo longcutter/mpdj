@@ -31,6 +31,11 @@ class FbOutput
     // Maps a landscape screen point to the tracker's 800x480 coordinates (for touch).
     void toNative(float x, float y, float& nx, float& ny) const;
 
+    // Physical panel (0 when headless) and panel pixel -> landscape screen pixel.
+    int panelWidth() const { return xres; }
+    int panelHeight() const { return yres; }
+    void panelToScreen(int px, int py, int& x, int& y) const;
+
   private:
     void writeRotated(uint8_t* dst);
     void dumpFrame();

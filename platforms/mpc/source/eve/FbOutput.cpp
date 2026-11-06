@@ -91,8 +91,8 @@ void FbOutput::open()
     float fit = fminf((float)logicalW / eve::kNativeW, (float)logicalH / eve::kNativeH);
     const char* s = getenv("MPDJ_SCALE");
     tgt.scale = s && *s ? (float)atof(s) : fit;
-    tgt.offX = (float)envInt("MPDJ_OFFSET_X", (int)((logicalW - eve::kNativeW * tgt.scale) / 2));
-    tgt.offY = (float)envInt("MPDJ_OFFSET_Y", (int)((logicalH - eve::kNativeH * tgt.scale) / 2));
+    tgt.offX = (float)envInt("MPDJ_OFFSET_X", (int)lroundf((logicalW - eve::kNativeW * tgt.scale) / 2));
+    tgt.offY = (float)envInt("MPDJ_OFFSET_Y", (int)lroundf((logicalH - eve::kNativeH * tgt.scale) / 2));
     tgt.smoothBitmaps = envInt("MPDJ_SMOOTH", 1) != 0;
     printf("display: %dx%d, UI scale %.3f at (%.0f, %.0f), rotate %d\n",
            logicalW,
@@ -101,6 +101,29 @@ void FbOutput::open()
            tgt.offX,
            tgt.offY,
            rotate);
+}
+
+void FbOutput::panelToScreen(int px, int py, int& x, int& y) const
+{
+    switch (rotate)
+    {
+        case 90:
+            x = py;
+            y = logicalH - 1 - px;
+            break;
+        case 180:
+            x = logicalW - 1 - px;
+            y = logicalH - 1 - py;
+            break;
+        case 270:
+            x = logicalW - 1 - py;
+            y = px;
+            break;
+        default:
+            x = px;
+            y = py;
+            break;
+    }
 }
 
 void FbOutput::toNative(float x, float y, float& nx, float& ny) const
@@ -152,25 +175,7 @@ void FbOutput::writeRotated(uint8_t* dst)
                 for (int px = tx; px < tx + T && px < xres; px++)
                 {
                     int x, y;
-                    switch (rotate)
-                    {
-                        case 90:
-                            x = py;
-                            y = logicalH - 1 - px;
-                            break;
-                        case 180:
-                            x = logicalW - 1 - px;
-                            y = logicalH - 1 - py;
-                            break;
-                        case 270:
-                            x = logicalW - 1 - py;
-                            y = px;
-                            break;
-                        default:
-                            x = px;
-                            y = py;
-                            break;
-                    }
+                    panelToScreen(px, py, x, y);
                     uint32_t v = pack(buffer[(size_t)y * logicalW + x]);
                     if (bpp == 32)
                         ((uint32_t*)row)[px] = v;
