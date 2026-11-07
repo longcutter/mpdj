@@ -255,11 +255,13 @@ const strItemTypeLabel currentVersionSetup{ interfaceGlobals.currentFirmwareVers
 const strItemTypeLabelPtr currentBuildSetup{ &interfaceGlobals.currentFirmwareBuild };
 const strItemTypeActionButton resetConfigSetup{ resetConfigShowPopup, nullptr };
 
+#ifndef PLATFORM_MPC // MPDJ is updated by copying a new binary; the Tracker+ bootloader path hangs here
 cMenuItem melUpdateFirmware(menuFirmware,
                             "Firmware update",
                             firmUpdDesc,
                             menuTypeItemActionButton,
                             &updateFirmwareSetup);
+#endif
 cMenuItem melCurrentVersion(menuFirmware,
                             "Current version",
                             nullptr,

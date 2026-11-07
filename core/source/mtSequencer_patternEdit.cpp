@@ -1066,6 +1066,15 @@ uint8_t Sequencer::changeInstrumentInSpecificOrder(int8_t actualValue,
     {
         return MIDI_INSTRUMENTS_START_IDX;
     }
+#ifdef PLATFORM_MPC
+    // MPDJ: no MIDI out yet, so sample tracks step through the sample instruments
+    // only (1, 2, 3... instead of wrapping below 1 into M01-M16).
+    if (!midiTypeOnly)
+    {
+        int v = isSampleInstrument(actualValue) ? actualValue : 0;
+        return (uint8_t)clamp<int>(v + delta, 0, kSampleInstrumentsCount - 1);
+    }
+#endif
 
     uint8_t uiChangeInstrumentOrder[instrumentCount];
     [[maybe_unused]] bool initArray = [&]() -> bool

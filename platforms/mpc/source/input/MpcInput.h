@@ -49,6 +49,7 @@ class MpcInput
     int tapCount = 0;
     int divideQLink(int knob, int steps);
     void stepEditParam(int steps);
+    bool stepFxType(int steps);
     int qlinkAcc[4] = {};
     int qlinkDivider = 4; // MPDJ_QLINK_DIV
 

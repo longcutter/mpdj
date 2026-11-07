@@ -56,7 +56,7 @@ enum class Act : uint8_t
     Copy,        // copy; SHIFT+COPY (DELETE label) = remove the selected steps
     Undo,        // undo; SHIFT = redo (Pattern screen)
     TapTempo,    // tap tempo; SHIFT = lock / unlock the tempo
-    EncoderPush, // Pattern screen: paste (Tracker Shift+Copy)
+    EncoderPush, // Pattern screen: paste (Tracker Shift+Copy); elsewhere Enter (Mini middle)
 };
 
 struct ButtonMap
@@ -360,7 +360,12 @@ void MpcInput::onButton(uint8_t note, bool down)
                 hold = interfaceButtonPerformance;
             }
             else if (playing)
-                sequencer.sequencialSwitch_changeNextPattern(1); // at the end of this one
+            {
+                // queue it and arm the switch for the end of this pattern, as the
+                // Tracker does when its Pattern button is released
+                sequencer.sequencialSwitch_changeNextPattern(1);
+                sequencer.sequencialSwitch_SetReady();
+            }
             else if (onPattern)
                 patternEditor.changeActualPattern(1);
             break;
@@ -420,6 +425,8 @@ void MpcInput::onButton(uint8_t note, bool down)
         case Act::EncoderPush:
             if (onPattern)
                 tapWithShift(interfaceButtonCopy); // paste
+            else
+                hold = interfaceButtonMiniMiddle; // the Tracker Mini's Enter: open, load, select, confirm
             break;
     }
 
@@ -548,13 +555,48 @@ void MpcInput::stepEditParam(int steps)
     pe.focusOnPattern();
 }
 
+void sendSelection(); // fPatternEdit.cpp: hands the cursor/selection to the sequencer
+
+// Pattern screen, FX column, edit mode: change the effect type (the Tracker's
+// "hold FX + turn the jog"), so the main encoder is left for the value.
+// Returns false when that doesn't apply (the caller turns the encoder instead).
+bool MpcInput::stepFxType(int steps)
+{
+    cPatternEditor& pe = patternEditor;
+    if (!mtInterface.isPatternScreenActive() || pe.fillState || pe.selectedPlace >= 0 ||
+        !pe.editMode || pe.isMicVolView ||
+        (pe.editParam != cPatternEditor::EditFx1 && pe.editParam != cPatternEditor::EditFx2))
+        return false;
+    if (pe.patternViewMode > 0 && !(pe.patternViewMode & (1 << pe.editParam)))
+        return true; // column hidden in this view: do nothing, as the encoder would
+    sendSelection();
+    uint8_t fxIndex = pe.editParam == cPatternEditor::EditFx1 ? 1 : 0; // as the core maps it
+    const auto& step = sequencer.getPatternToUI()
+                         ->track[pe.trackerPattern.actualTrack]
+                         .step[pe.trackerPattern.actualStep];
+    if (step.fx[fxIndex].type == 0)
+    {
+        // empty: insert the last used effect first, as the Tracker's FX popup does
+        uint8_t name = pe.getPreviousUsedFx();
+        sequencer.setSelectionFxType(fxIndex, interfaceGlobals.fxIDs[name > 1 ? name : 2]); // else Volume
+    }
+    else
+        sequencer.changeSelectionFxType(fxIndex, steps);
+    pe.showActualParamOnBar();
+    pe.showFxInfo();
+    pe.refreshPattern();
+    return true;
+}
+
 // Q-Link mode 1 (navigate). Q-Links 1-2 move around the sheet, 3-4 work on
 // the selected cell:
 //   1 = tracks left/right (the Tracker's Left/Right move a whole track)
 //   2 = rows up/down (clockwise = down the pattern)
 //   3 = Note > Instrument > FX1 > FX2 within the track (Pattern screen);
 //       elsewhere left/right like Q-Link 1
-//   4 = the selected cell's value (same as the main encoder)
+//   4 = the selected cell's value (same as the main encoder); on an FX column
+//       in edit mode, the effect TYPE (the main encoder changes its value)
+//   Song screen: 3 = pattern number of the selected slot (edit mode)
 void MpcInput::onRelative(uint8_t cc, uint8_t value)
 {
     int steps = relSteps(value);
@@ -579,10 +621,15 @@ void MpcInput::onRelative(uint8_t cc, uint8_t value)
             if (mtInterface.isPatternScreenActive() && patternEditor.fillState == 0 &&
                 patternEditor.selectedPlace < 0)
                 stepEditParam(steps);
+            else if (mtInterface.isSongScreenActive())
+                songEditor.changeSelectedPlayListPattern(steps); // in edit mode (REC)
             else
                 tapButton(steps > 0 ? interfaceButtonRight : interfaceButtonLeft, abs(steps));
             break;
-        case 3: encoder->turn(steps); break;
+        case 3:
+            if (!stepFxType(steps))
+                encoder->turn(steps);
+            break;
     }
 }
 
