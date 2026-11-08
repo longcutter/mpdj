@@ -338,6 +338,11 @@ void* audioThread(void*)
 }
 } // namespace
 
+int MpcAudio::codecCard()
+{
+    return findCodecCard();
+}
+
 void MpcAudio::start(Tracker* t)
 {
     tracker = t;
