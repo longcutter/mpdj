@@ -1,11 +1,13 @@
 // Entry point for the MPC One+ build of Polyend Tracker CE.
 #include "PlatformImpl.h"
 #include "Tracker.h"
+#include "audio/AudioProbe.h"
 #include "audio/MpcAudio.h"
 
 #include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 
 PlatformImpl platform;
@@ -30,6 +32,13 @@ int main()
 
     printf("Tracker CE for MPC One+ starting\n");
     setvbuf(stdout, nullptr, _IOLBF, 0); // line-buffered logs over ssh
+
+    // Stand-alone audio checks (external resampling groundwork): run and exit.
+    auto envOn = [](const char* n) { const char* v = getenv(n); return v && *v && *v != '0'; };
+    if (envOn("MPDJ_AUDIO_CONTROLS"))
+        return AudioProbe::listControls();
+    if (envOn("MPDJ_LATENCY_TEST"))
+        return AudioProbe::latencyTest();
 
     trackerInstance = Tracker::getInstance();
     platform.init();

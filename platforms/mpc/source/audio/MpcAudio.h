@@ -18,6 +18,9 @@ namespace MpcAudio
 void start(Tracker* tracker);
 void stop();
 
+// ALSA card number of the One+ codec (/proc/asound id "ACVA"), else 1.
+int codecCard();
+
 // Called by CodecImpl: the Tracker's master volume (0..1, SGTL5000 headphone
 // curve) and headphone mute.
 void setVolume(float v);
