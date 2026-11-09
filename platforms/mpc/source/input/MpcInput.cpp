@@ -518,8 +518,9 @@ void MpcInput::tapButton(int trackerButton, int times)
 // reversing responds at once.
 namespace
 {
-// Q-Link 1 tracks, 2 rows, 3 cell within the track, 4 value (Mike, step 1b)
-constexpr int kQLinkDiv[4] = { 11, 8, 11, 6 };
+// Q-Link 1 tracks, 2 rows, 3 cell within the track, 4 value (Mike, step 1b);
+// [4] = Q-Link 4 picking an FX type, half the value speed (Mike, step 1d)
+constexpr int kQLinkDiv[5] = { 11, 8, 11, 6, 12 };
 } // namespace
 
 int MpcInput::divideQLink(int knob, int steps)
@@ -560,15 +561,19 @@ void sendSelection(); // fPatternEdit.cpp: hands the cursor/selection to the seq
 // Pattern screen, FX column, edit mode: change the effect type (the Tracker's
 // "hold FX + turn the jog"), so the main encoder is left for the value.
 // Returns false when that doesn't apply (the caller turns the encoder instead).
-bool MpcInput::stepFxType(int steps)
+bool MpcInput::onFxTypeColumn()
 {
     cPatternEditor& pe = patternEditor;
-    if (!mtInterface.isPatternScreenActive() || pe.fillState || pe.selectedPlace >= 0 ||
-        !pe.editMode || pe.isMicVolView ||
-        (pe.editParam != cPatternEditor::EditFx1 && pe.editParam != cPatternEditor::EditFx2))
-        return false;
+    return mtInterface.isPatternScreenActive() && !pe.fillState && pe.selectedPlace < 0 &&
+           pe.editMode && !pe.isMicVolView &&
+           (pe.editParam == cPatternEditor::EditFx1 || pe.editParam == cPatternEditor::EditFx2);
+}
+
+void MpcInput::stepFxType(int steps)
+{
+    cPatternEditor& pe = patternEditor;
     if (pe.patternViewMode > 0 && !(pe.patternViewMode & (1 << pe.editParam)))
-        return true; // column hidden in this view: do nothing, as the encoder would
+        return; // column hidden in this view: do nothing, as the encoder would
     sendSelection();
     uint8_t fxIndex = pe.editParam == cPatternEditor::EditFx1 ? 1 : 0; // as the core maps it
     const auto& step = sequencer.getPatternToUI()
@@ -581,11 +586,21 @@ bool MpcInput::stepFxType(int steps)
         sequencer.setSelectionFxType(fxIndex, interfaceGlobals.fxIDs[name > 1 ? name : 2]); // else Volume
     }
     else
-        sequencer.changeSelectionFxType(fxIndex, steps);
+    {
+        // Stop at the ends instead of wrapping (Mike, step 1d): the list runs
+        // Off (name 1) .. last effect. The core steps one name at a time and
+        // would go past Off to "none" (empty cell, which the branch above
+        // refills) or past the end to "none" as well.
+        int name = interfaceGlobals.fxIdToName(step.fx[fxIndex].type);
+        int count = interfaceGlobals.fxNameCount(); // 0 = the list has no zero padding
+        int last = (count ? count : FX_COUNT) - 1;
+        int dir = steps > 0 ? 1 : -1;
+        for (int n = abs(steps); n > 0 && name + dir >= 1 && name + dir <= last; n--, name += dir)
+            sequencer.changeSelectionFxType(fxIndex, dir);
+    }
     pe.showActualParamOnBar();
     pe.showFxInfo();
     pe.refreshPattern();
-    return true;
 }
 
 // Q-Link mode 1 (navigate). Q-Links 1-2 move around the sheet, 3-4 work on
@@ -610,6 +625,13 @@ void MpcInput::onRelative(uint8_t cc, uint8_t value)
     if (cc < kCcQLink1 || cc >= kCcQLink1 + 4)
         return;
     int knob = cc - kCcQLink1;
+    if (knob == 3 && onFxTypeColumn())
+    {
+        steps = divideQLink(4, steps);
+        if (steps)
+            stepFxType(steps);
+        return;
+    }
     steps = divideQLink(knob, steps);
     if (!steps)
         return;
@@ -626,10 +648,7 @@ void MpcInput::onRelative(uint8_t cc, uint8_t value)
             else
                 tapButton(steps > 0 ? interfaceButtonRight : interfaceButtonLeft, abs(steps));
             break;
-        case 3:
-            if (!stepFxType(steps))
-                encoder->turn(steps);
-            break;
+        case 3: encoder->turn(steps); break;
     }
 }
 

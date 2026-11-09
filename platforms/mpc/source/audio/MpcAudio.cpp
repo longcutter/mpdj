@@ -373,7 +373,7 @@ void MpcAudio::start(Tracker* t)
         else
             printf("audio: %s; running without sound\n", err);
 
-        if (out.isOpen() && envInt("MPDJ_AUDIO_IN", 0))
+        if (out.isOpen() && envInt("MPDJ_AUDIO_IN", 1))
         {
             if (in.open(card, device, true, kRate, 2, kBlock, periods + 1, err, sizeof err))
                 printf("audio: input hw:%d,%d on\n", card, device);

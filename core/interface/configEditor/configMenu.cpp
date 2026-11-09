@@ -21,6 +21,10 @@
 constexpr uint8_t baseMenuGroupCount = 8;
 constexpr uint8_t projectMenuGroupCount = 10;
 constexpr uint8_t generalMenuGroupCount = 9;
+#elif defined(PLATFORM_MPC) // no USB group (USB storage / USB audio are Tracker+ hardware)
+constexpr uint8_t baseMenuGroupCount = 6;
+constexpr uint8_t projectMenuGroupCount = 10;
+constexpr uint8_t generalMenuGroupCount = 12;
 #elif defined(PLATFORM_IMX)
 constexpr uint8_t baseMenuGroupCount = 7;
 constexpr uint8_t projectMenuGroupCount = 10;
@@ -45,12 +49,16 @@ cMenuGroup menuProject(menuBase, "Project Settings", projectMenuGroupCount);
 cMenuGroup menuGeneral(menuBase, "General", generalMenuGroupCount);
 cMenuGroup menuMidi(menuBase, "MIDI", 11);
 
-#ifdef PLATFORM_IMX
+#if defined(PLATFORM_IMX) && !defined(PLATFORM_MPC)
 cMenuGroup menuUsb(menuBase, "USB", 2);
 #endif
 
 cMenuGroup menuMetro(menuBase, "Metronome", 5);
+#ifdef PLATFORM_MPC // no "Firmware update" item, so 3 children (a spare slot is an unset pointer)
+cMenuGroup menuFirmware(menuBase, "Version", 3);
+#else
 cMenuGroup menuFirmware(menuBase, "Firmware", 4);
+#endif
 
 #ifdef TRACKER_MINI
 cMenuGroup menuFunctionButtons(menuBase, "Fn buttons binding", 8);
@@ -281,7 +289,7 @@ cMenuItem melResetConfig(menuFirmware,
 //==================================================================================================================================================================
 // USB
 
-#ifdef PLATFORM_IMX
+#if defined(PLATFORM_IMX) && !defined(PLATFORM_MPC)
 const strItemTypeActionButton usbStorageSetup{ usbStorageEnter, nullptr };
 const strItemTypeListTextWithAction usbAudioSetup{ &mtConfig.common.usbAudioMode,
                                               sizeof(kUsbAudioList)/sizeof(kUsbAudioList[0]), kUsbAudioList, usbAudioChange };

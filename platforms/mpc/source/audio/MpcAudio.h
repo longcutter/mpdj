@@ -7,7 +7,8 @@
 //   MPDJ_AUDIO_WAV=file    no device; write the output to a WAV file in real time
 //   MPDJ_AUDIO_CARD / _DEVICE   default: the card named ACVA (card 1), device 0
 //   MPDJ_AUDIO_PERIODS     128-frame periods in the ALSA buffer (default 3, ~8.7 ms)
-//   MPDJ_AUDIO_IN=1        open the codec's capture side and feed the Tracker input
+//   MPDJ_AUDIO_IN=0        leave the input closed (default: open the codec's capture
+//                          side and feed the Tracker input; confirmed clean 2026-11-09)
 //   MPDJ_AUDIO_STATS=1     every 5 s: render time and xruns
 #pragma once
 
