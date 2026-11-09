@@ -57,6 +57,10 @@ class Interface
     bool isMasterScreenActive();
     bool isInstrumentParamsScreenActive();
     bool isSamplePlayerScreenActive();
+    // MPDJ (MPC controls)
+    bool isSampleEditorScreenActive();
+    bool isSampleLoaderScreenActive();
+    bool isFileScreenActive();
 
     void handleCardSlotAction(bool state);
     void handlePowerButtonAction(uint8_t state);

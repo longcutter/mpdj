@@ -607,6 +607,22 @@ bool Interface::isSamplePlayerScreenActive()
     return isOnScreenModule(&samplePlayback);
 }
 
+// MPDJ (MPC controls)
+bool Interface::isSampleEditorScreenActive()
+{
+    return isOnScreenModule(&sampleEditor);
+}
+
+bool Interface::isSampleLoaderScreenActive()
+{
+    return isOnScreenModule(&sampleImporter);
+}
+
+bool Interface::isFileScreenActive()
+{
+    return isOnScreenModule(&projectEditor);
+}
+
 bool Interface::isOnScreenModule(ModuleBase* module)
 {
     return onScreenModule == module;

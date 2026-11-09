@@ -43,6 +43,12 @@ class MpcInput
     bool coreShift();
     void releaseCoreShift();
     void tapTempo();
+    void saveProject();
+    void pollSave();
+    bool savePending = false;
+    bool onProgramScreen();
+    void closeProgramPicker();
+    bool programPicker = false; // SHIFT holding the Tracker's Instr button
     bool mpcShift = false; // MPC SHIFT physically held
     static constexpr int kTaps = 5;
     uint32_t tapTimes[kTaps] = {};

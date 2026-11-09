@@ -10,6 +10,7 @@
 #include "mtSequencer.h"
 #include "mtStructs.h"
 #include "patternEditor/patternEditor.h"
+#include "projectEditor/projectEditor.h"
 #include "songEditor/songEditor.h"
 
 #include <errno.h>
@@ -149,6 +150,84 @@ void MpcInput::poll()
 {
     pollMidi();
     pollTouch();
+    pollSave();
+}
+
+// SHIFT+BROWSE = SAVE (the MPC's printed shift label), from any screen.
+// A project that has never been saved needs a name: that goes through the
+// File screen's Save As (keyboard). Otherwise save in place here; the File
+// screen normally finishes a save (fmSaveEnd) in its update(), so pollSave()
+// does that part when the save was started from another screen.
+void MpcInput::saveProject()
+{
+    if (savePending)
+        return;
+    bool needsName = (mtProject.values.projectNotSavedFlag & 2) ||
+                     newFileManager.getCurrentProjectName()[0] == 0 ||
+                     !newFileManager.projectExist(newFileManager.getCurrentProjectPath(),
+                                                  newFileManager.getCurrentProjectName());
+    if (needsName || mtInterface.isFileScreenActive())
+    {
+        if (!mtInterface.isFileScreenActive())
+            tapButton(interfaceButtonFile, 1);
+        if (mtInterface.isFileScreenActive())
+        {
+            projectEditor.afterSaveOperation = cProjectEditor::AfterSaveOperation::noOperationAfterSave;
+            projectEditor.saveProject(); // Save As browser if it needs a name
+        }
+        return;
+    }
+    if (!newFileManager.saveProject())
+    {
+        mtPopups.show(0, "Busy - try SAVE again");
+        return;
+    }
+    savePending = true;
+    printf("input: saving project \"%s\"\n", newFileManager.getCurrentProjectName());
+}
+
+void MpcInput::pollSave()
+{
+    if (!savePending)
+        return;
+    uint8_t s = newFileManager.getStatus();
+    if (s == fmSaveEnd)
+        newFileManager.clearStatus();
+    else if (s >= fmError)
+    {
+        newFileManager.clearStatus();
+        savePending = false;
+        mtPopups.show(0, "Save failed");
+        printf("input: save failed (status %u)\n", s);
+        return;
+    }
+    else if (s != fmIdle)
+        return; // still saving
+    // fmIdle here also covers a screen that took the end status first
+    savePending = false;
+    static char text[64];
+    snprintf(text, sizeof text, "Saved %s", newFileManager.getCurrentProjectName());
+    mtPopups.show(0, text);
+    printf("input: project saved\n");
+}
+
+// SAMPLE EDIT / PROGRAM EDIT screens: hold SHIFT to pick the program. This
+// holds the Tracker's Instr button as well, which opens its instrument list
+// popup; the main encoder, Q-Link 4 (and Q-Links 1-2, pads) pick from it, and
+// letting go of SHIFT closes it on the new program. Any other MPC button
+// closes the list first, so SHIFT combos still work.
+bool MpcInput::onProgramScreen()
+{
+    return mtInterface.isSamplePlayerScreenActive() || mtInterface.isSampleEditorScreenActive() ||
+           mtInterface.isInstrumentParamsScreenActive();
+}
+
+void MpcInput::closeProgramPicker()
+{
+    if (!programPicker)
+        return;
+    programPicker = false;
+    buttons->release(interfaceButtonInstr);
 }
 
 // ---------------------------------------------------------------- controller MIDI
@@ -303,7 +382,10 @@ void MpcInput::onButton(uint8_t note, bool down)
     if (!down)
     {
         if (note == kNoteShift)
+        {
             mpcShift = false;
+            closeProgramPicker();
+        }
         if (buttonHeld[note] >= 0)
         {
             buttons->release(buttonHeld[note]);
@@ -323,6 +405,8 @@ void MpcInput::onButton(uint8_t note, bool down)
         printf("input: button note %u%s %s\n", note, mpcShift ? " +SHIFT" : "", m ? m->name : "(unmapped)");
     if (!m)
         return;
+    if (note != kNoteShift)
+        closeProgramPicker();
 
     int hold = -1; // Tracker button to press now and release with the MPC button
     bool playing = sequencer.isPlay();
@@ -347,10 +431,11 @@ void MpcInput::onButton(uint8_t note, bool down)
             if (mpcShift)
             {
                 releaseCoreShift();
-                hold = interfaceButtonFile;
+                saveProject(); // SAVE
             }
-            else
-                hold = interfaceButtonSampleLoad;
+            else // Sample Loader <-> File
+                hold = mtInterface.isSampleLoaderScreenActive() ? interfaceButtonFile
+                                                                : interfaceButtonSampleLoad;
             break;
 
         case Act::NextSeq:
@@ -434,6 +519,11 @@ void MpcInput::onButton(uint8_t note, bool down)
     {
         buttonHeld[note] = (int8_t)hold;
         buttons->press(hold);
+    }
+    if (note == kNoteShift && onProgramScreen())
+    {
+        programPicker = true;
+        buttons->press(interfaceButtonInstr);
     }
 }
 
