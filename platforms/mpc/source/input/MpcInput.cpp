@@ -1,6 +1,7 @@
 #include "MpcInput.h"
 
 #include "PlatformImpl.h"
+#include "DisplayDriverImpl.h"
 #include "eve/FbOutput.h"
 #include "core/interfaceDefs.h"
 #include "core/interface.h"
@@ -58,6 +59,7 @@ enum class Act : uint8_t
     Undo,        // undo; SHIFT = redo (Pattern screen)
     TapTempo,    // tap tempo; SHIFT = lock / unlock the tempo
     EncoderPush, // Pattern screen: paste (Tracker Shift+Copy); elsewhere Enter (Mini middle)
+    QLinkMode,   // Q-LINK: Q-Link modes 1 (navigate) > 2 (screen buttons 1-4) > 3 (5-8)
 };
 
 struct ButtonMap
@@ -89,7 +91,8 @@ const ButtonMap kButtonMap[] = {
     { 67, Act::Undo, -1, "UNDO" },
     { 53, Act::TapTempo, -1, "TAP TEMPO" },
     { 111, Act::EncoderPush, -1, "ENCODER PUSH" },
-    // Not mapped yet: Q-LINK (mode cycling, build step 2), TRACK MUTE, NOTE REPEAT,
+    { 0, Act::QLinkMode, -1, "Q-LINK" },
+    // Not mapped yet: TRACK MUTE, NOTE REPEAT,
     // FULL LEVEL, 16 LEVELS, STEP SEQ, TC, OVER DUB, bank D (pad work, milestone 5)
 };
 
@@ -121,12 +124,13 @@ constexpr float kScreenButtonTop = 400.0f;
 } // namespace
 
 // ---------------------------------------------------------------- setup
-void MpcInput::open(SwitchGroupImpl* b, SwitchGroupImpl* p, EncoderImpl* e, const FbOutput* f)
+void MpcInput::open(SwitchGroupImpl* b, SwitchGroupImpl* p, EncoderImpl* e, DisplayDriverImpl* d)
 {
     buttons = b;
     pads = p;
     encoder = e;
-    fb = f;
+    disp = d;
+    fb = d ? &d->output() : nullptr;
     trace = envFlag("MPDJ_INPUT_TRACE");
     qlinkDivider = atoi(envStr("MPDJ_QLINK_DIV", "4"));
     if (qlinkDivider < 1)
@@ -151,6 +155,7 @@ void MpcInput::poll()
     pollMidi();
     pollTouch();
     pollSave();
+    pollQLinks();
 }
 
 // SHIFT+BROWSE = SAVE (the MPC's printed shift label), from any screen.
@@ -338,7 +343,10 @@ void MpcInput::onMidi(uint8_t status, uint8_t d1, uint8_t d2)
     else if (noteOn || noteOff)
     {
         if (d1 >= 84 && d1 <= 87)
-            return; // Q-Link touch
+        {
+            qlinkTouch(d1 - 84, noteOn); // Q-Link touch
+            return;
+        }
         onButton(d1, noteOn);
     }
 }
@@ -407,6 +415,8 @@ void MpcInput::onButton(uint8_t note, bool down)
         return;
     if (note != kNoteShift)
         closeProgramPicker();
+    if (m->act != Act::QLinkMode && note != kNoteShift)
+        releaseQLinkButton();
 
     int hold = -1; // Tracker button to press now and release with the MPC button
     bool playing = sequencer.isPlay();
@@ -513,6 +523,7 @@ void MpcInput::onButton(uint8_t note, bool down)
             else
                 hold = interfaceButtonMiniMiddle; // the Tracker Mini's Enter: open, load, select, confirm
             break;
+        case Act::QLinkMode: cycleQLinkMode(); break;
     }
 
     if (hold >= 0)
@@ -613,9 +624,9 @@ namespace
 constexpr int kQLinkDiv[5] = { 11, 8, 11, 6, 12 };
 } // namespace
 
-int MpcInput::divideQLink(int knob, int steps)
+int MpcInput::divideQLink(int knob, int steps, int divIdx)
 {
-    int div = (kQLinkDiv[knob] * qlinkDivider + 2) / 4;
+    int div = (kQLinkDiv[divIdx < 0 ? knob : divIdx] * qlinkDivider + 2) / 4;
     if (div < 1)
         div = 1;
     int& acc = qlinkAcc[knob];
@@ -709,12 +720,17 @@ void MpcInput::onRelative(uint8_t cc, uint8_t value)
         return;
     if (cc == kCcMainEncoder)
     {
-        encoder->turn(steps);
+        turnValue(steps);
         return;
     }
     if (cc < kCcQLink1 || cc >= kCcQLink1 + 4)
         return;
     int knob = cc - kCcQLink1;
+    if (qlinkMode != 1)
+    {
+        qlinkScreenTurn(knob, steps);
+        return;
+    }
     if (knob == 3 && onFxTypeColumn())
     {
         steps = divideQLink(4, steps);
@@ -738,7 +754,126 @@ void MpcInput::onRelative(uint8_t cc, uint8_t value)
             else
                 tapButton(steps > 0 ? interfaceButtonRight : interfaceButtonLeft, abs(steps));
             break;
-        case 3: encoder->turn(steps); break;
+        case 3: turnValue(steps); break;
+    }
+}
+
+// ---------------------------------------------------------------- Q-Link modes
+// Q-LINK cycles 1 > 2 > 3 (mode 4, program quick controls, is still to be
+// decided). In modes 2 and 3 the four knobs stand for the screen buttons
+// under the red box (1-4 or 5-8): touching a knob holds that screen button,
+// turning it holds the button and turns the jog, which is how the Tracker+
+// changes the parameter above a button. A popup in the middle of the screen
+// repeats the label while its value changes, since a finger may cover it.
+namespace
+{
+constexpr uint32_t kQLinkReleaseMs = 600; // untouched knob: let go of its button after this
+constexpr uint32_t kValuePopupMs = 1500;
+constexpr int kQLinkModes = 3;
+} // namespace
+
+void MpcInput::cycleQLinkMode()
+{
+    setQLinkMode(qlinkMode % kQLinkModes + 1, true);
+}
+
+void MpcInput::setQLinkMode(int mode, bool announce)
+{
+    releaseQLinkButton();
+    memset(qlinkTouched, 0, sizeof qlinkTouched);
+    memset(qlinkAcc, 0, sizeof qlinkAcc);
+    qlinkMode = mode;
+    if (disp)
+    {
+        disp->overlay().setBoxGroup(mode == 2 ? 0 : mode == 3 ? 1 : -1);
+        disp->requestRedraw();
+    }
+    if (announce)
+    {
+        static const char* const kNames[] = { "", "Q-Links: navigate", "Q-Links: buttons 1-4",
+                                              "Q-Links: buttons 5-8" };
+        mtPopups.show(0, kNames[mode]);
+    }
+    if (trace)
+        printf("input: Q-Link mode %d\n", mode);
+}
+
+void MpcInput::holdScreenButton(int trackerButton)
+{
+    if (qlinkHeld == trackerButton)
+        return;
+    releaseQLinkButton();
+    qlinkHeld = trackerButton;
+    buttons->press(trackerButton);
+}
+
+void MpcInput::releaseQLinkButton()
+{
+    if (qlinkHeld < 0)
+        return;
+    buttons->release(qlinkHeld);
+    qlinkHeld = -1;
+}
+
+void MpcInput::qlinkTouch(int knob, bool down)
+{
+    if (qlinkMode == 1)
+        return; // mode 1: touch does nothing (yet)
+    int target = interfaceButton0 + (qlinkMode - 2) * 4 + knob;
+    qlinkTouched[knob] = down;
+    if (down)
+        holdScreenButton(target);
+    else if (qlinkHeld == target)
+        releaseQLinkButton();
+}
+
+void MpcInput::qlinkScreenTurn(int knob, int steps)
+{
+    steps = divideQLink(knob, steps, 3); // value speed for all four
+    if (!steps)
+        return;
+    holdScreenButton(interfaceButton0 + (qlinkMode - 2) * 4 + knob);
+    qlinkTurnMs = platform.getTimer()->millis();
+    turnValue(steps);
+}
+
+// Turn the jog; when it changes a screen button's parameter (the button is
+// held by a Q-Link or a finger on its label), show that label big.
+void MpcInput::turnValue(int steps)
+{
+    encoder->turn(steps);
+    int held = qlinkHeld >= 0 ? qlinkHeld : touchedButton;
+    if (held >= interfaceButton0 && held <= interfaceButton7)
+        showValuePopup(held - interfaceButton0);
+}
+
+void MpcInput::showValuePopup(int label)
+{
+    popupUntilMs = platform.getTimer()->millis() + kValuePopupMs;
+    if (popupShown == label || !disp)
+        return;
+    popupShown = label;
+    disp->overlay().setPopupLabel(label);
+    disp->requestRedraw();
+}
+
+void MpcInput::pollQLinks()
+{
+    uint32_t now = platform.getTimer()->millis();
+    if (qlinkHeld >= 0 && now - qlinkTurnMs > kQLinkReleaseMs)
+    {
+        bool touched = false;
+        for (bool t : qlinkTouched)
+            touched |= t;
+        if (!touched)
+            releaseQLinkButton();
+    }
+    // The copy follows the label by itself: a value change redraws the frame.
+    if (popupShown >= 0 && disp && (int32_t)(now - popupUntilMs) > 0)
+    {
+        popupShown = -1;
+        disp->overlay().setPopupLabel(-1);
+        disp->requestRedraw();
     }
 }
 

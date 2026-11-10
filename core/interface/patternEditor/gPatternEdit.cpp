@@ -1442,8 +1442,13 @@ void cPatternEditor::showActionButtonPage1Labels()
     display.setControlText(label[2], "Step jump");
     display.setControlText(label[3], "Fill");
     display.setControlText(label[4], "Preview");
+#ifdef PLATFORM_MPC // MPDJ: the MPC's UNDO button (SHIFT = redo) replaces these two
+    display.setControlText(label[5], "");
+    display.setControlText(label[6], "");
+#else
     display.setControlText(label[5], "Undo");
     display.setControlText(label[6], "Redo");
+#endif
     display.setControlText(label[7], "More");
 
     display.setControlText2(label[3], "");
@@ -1473,6 +1478,10 @@ void cPatternEditor::showActionButtonPage1Labels()
         display.setControlColors(label[5], display.getTheme().inactiveButtonLabelsColors);
         display.setControlColors(label[6], display.getTheme().inactiveLabelsColors);
     }
+#ifdef PLATFORM_MPC
+    display.setControlColors(label[5], display.getTheme().inactiveButtonLabelsColors);
+    display.setControlColors(label[6], display.getTheme().inactiveLabelsColors);
+#endif
     display.setControlColors(label[7], display.getTheme().moreButtonColors);
 
     display.setControlData(label[0], &labelDataGreen);
@@ -1500,6 +1509,12 @@ void cPatternEditor::showActionButtonPage1Labels()
                                  controlStyleCenterX | controlStyleCenterY | controlStyleFont2);
         display.refreshControl(label[i]);
     }
+#ifdef PLATFORM_MPC // MPDJ: Undo / Redo slots stay empty (no underline either)
+    display.setControlHide(label[5]);
+    display.setControlHide(label[6]);
+    display.refreshControl(label[5]);
+    display.refreshControl(label[6]);
+#endif
 
     display.synchronizeRefresh();
 }

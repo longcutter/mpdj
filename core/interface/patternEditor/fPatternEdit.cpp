@@ -35,8 +35,8 @@ static void functChangePatternLength(uint8_t state);
 static void functChangePatternEditStep(uint8_t state);
 static void functFill();
 static void functPreview();
-static void functUndo(uint8_t state);
-static void functRedo(uint8_t state);
+[[maybe_unused]] static void functUndo(uint8_t state);
+[[maybe_unused]] static void functRedo(uint8_t state);
 
 static void functExportSelection();
 static void functInvert();
@@ -5117,8 +5117,10 @@ void cPatternEditor::setActionButtonPage1Funct()
     {
         ip->setButtonObj(interfaceButton3, buttonPress, functFill);
         ip->setButtonObj(interfaceButton4, buttonPress, functPreview);
+#ifndef PLATFORM_MPC // MPDJ: the MPC's UNDO button does these
         ip->setButtonObj(interfaceButton5, functUndo);
         ip->setButtonObj(interfaceButton6, functRedo);
+#endif
     }
     else
     {

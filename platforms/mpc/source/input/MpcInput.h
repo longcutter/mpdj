@@ -18,6 +18,7 @@
 
 #include <stdint.h>
 
+class DisplayDriverImpl;
 class FbOutput;
 class SwitchGroupImpl;
 class EncoderImpl;
@@ -26,7 +27,7 @@ class MpcInput
 {
   public:
     void open(SwitchGroupImpl* buttons, SwitchGroupImpl* pads, EncoderImpl* encoder,
-              const FbOutput* fb);
+              DisplayDriverImpl* display);
     void poll();
     void close();
 
@@ -53,12 +54,30 @@ class MpcInput
     static constexpr int kTaps = 5;
     uint32_t tapTimes[kTaps] = {};
     int tapCount = 0;
-    int divideQLink(int knob, int steps);
+    int divideQLink(int knob, int steps, int divIdx = -1);
     void stepEditParam(int steps);
     bool onFxTypeColumn();
     void stepFxType(int steps);
     int qlinkAcc[5] = {}; // [4] = Q-Link 4 on an FX column (FX type)
     int qlinkDivider = 4; // MPDJ_QLINK_DIV
+
+    // ---- Q-Link modes (build step 2): 1 = navigate, 2 = screen buttons 1-4,
+    // 3 = screen buttons 5-8 (turn = change, touch the knob = press)
+    void cycleQLinkMode();
+    void setQLinkMode(int mode, bool announce);
+    void qlinkScreenTurn(int knob, int steps);
+    void qlinkTouch(int knob, bool down);
+    void holdScreenButton(int trackerButton);
+    void releaseQLinkButton();
+    void turnValue(int steps); // main encoder / value knob: + value popup for a held label
+    void showValuePopup(int label);
+    void pollQLinks();
+    int qlinkMode = 1;
+    int qlinkHeld = -1;          // Tracker screen button held for the Q-Links
+    bool qlinkTouched[4] = {};   // Q-Link touch notes 84-87
+    uint32_t qlinkTurnMs = 0, popupUntilMs = 0;
+    int popupShown = -1;
+    DisplayDriverImpl* disp = nullptr;
 
     int midiFd = -1;
     uint8_t runningStatus = 0, data[2] = {}, dataCount = 0;

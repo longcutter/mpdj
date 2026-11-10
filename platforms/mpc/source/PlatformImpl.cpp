@@ -158,7 +158,7 @@ void PlatformImpl::init()
     pads.setActionCallback(SwitchGroup::kPress, onPadPush);
     pads.setActionCallback(SwitchGroup::kRelease, onPadRelease);
     pads.setActionCallback(SwitchGroup::kHold, onPadHold);
-    input.open(&buttons, &pads, &encoder, &display.output());
+    input.open(&buttons, &pads, &encoder, &display);
 }
 
 void PlatformImpl::update()

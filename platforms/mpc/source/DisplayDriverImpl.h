@@ -4,6 +4,7 @@
 
 #include "DisplayDriver.h"
 #include "eve/FbOutput.h"
+#include "eve/Overlay.h"
 #include "eve/eve.h"
 
 #include <condition_variable>
@@ -20,6 +21,8 @@ class DisplayDriverImpl : public DisplayDriver
     void service(uint32_t nowMs); // renders the latest swapped frame, at most ~60 per second
 
     FbOutput& output() { return fb; }
+    Overlay& overlay() { return marks; }
+    void requestRedraw() { frameDirty = true; } // main thread: redraw the last frame (overlay changed)
     eve::Chip& chip() { return eveChip; }
 
     void setPowerState(bool state) override;
@@ -66,6 +69,7 @@ class DisplayDriverImpl : public DisplayDriver
     std::condition_variable renderCv;
     bool jobReady = false, rendering = false, quitRender = false, threaded = false;
     FbOutput fb;
+    Overlay marks;
     bool frameDirty = false;
     bool powered = true;
     uint32_t lastRenderMs = 0;

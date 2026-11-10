@@ -105,6 +105,7 @@ void DisplayDriverImpl::renderOne()
     fb.beginFrame();
     renderChip.renderer.render(
       renderChip.front, (int)renderChip.frontWords, &fb.target(), renderChip.frontHandles);
+    marks.draw(fb.target());
     uint32_t t1 = microsNow();
     fb.present();
     uint32_t t2 = microsNow();
