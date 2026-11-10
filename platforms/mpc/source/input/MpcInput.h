@@ -12,7 +12,7 @@
 //   MPDJ_TOUCH_DEV=/dev/input/event0
 //   MPDJ_QLINK_DIV=4            Q-Link speed scale (4 = the built-in speeds,
 //                               higher = slower)
-//   MPDJ_QLINK_LEDS=cc:a,b,c,d  (or note:...) Q-Link mode LEDs, MPDJ_QLINK_LED_ON=127
+//   MPDJ_QLINK_LEDS=cc:90,91,92,93 (default; note:..., off) Q-Link mode LEDs, MPDJ_QLINK_LED_ON=127
 //   MPDJ_TOUCH_SWAP_XY=1, MPDJ_TOUCH_INVERT_X=1, MPDJ_TOUCH_INVERT_Y=1
 //                               fix-ups if taps land in the wrong place
 #pragma once

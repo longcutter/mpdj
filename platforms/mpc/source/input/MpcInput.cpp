@@ -910,11 +910,12 @@ void MpcInput::pollQLinks()
 }
 
 // ---------------------------------------------------------------- LEDs
-// Not mapped yet: inMusic doesn't publish the controller protocol. The LEDs
-// above the Q-LINK button (one per Q-Link column) follow the Q-Link mode, lit
-// with the messages in MPDJ_QLINK_LEDS until MPDJ_LED_PROBE finds the real
-// ones: "cc:n1,n2,n3,n4" or "note:n1,n2,n3,n4" (channel 1), value
-// MPDJ_QLINK_LED_ON (default 127). Unset = no LED messages at all.
+// Controller LEDs are lit with CC messages on channel 1 sent back on the
+// Private port (mapped by Mike with MPDJ_LED_PROBE, 2026-11-10). Button LEDs
+// use the button's own note number as the CC (PLAY 82, OVER DUB 80, REC 73,
+// UNDO 67, TAP TEMPO 53); the four LEDs above Q-LINK are CC 90-93 and follow
+// the Q-Link mode. MPDJ_QLINK_LEDS overrides them ("cc:a,b,c,d" or
+// "note:a,b,c,d", "off" for none), MPDJ_QLINK_LED_ON the value (default 127).
 void MpcInput::midiOut(uint8_t s, uint8_t d1, uint8_t d2)
 {
     if (midiFd < 0)
@@ -926,9 +927,9 @@ void MpcInput::midiOut(uint8_t s, uint8_t d1, uint8_t d2)
 
 void MpcInput::parseQLinkLeds()
 {
-    const char* v = getenv("MPDJ_QLINK_LEDS");
+    const char* v = envStr("MPDJ_QLINK_LEDS", "cc:90,91,92,93");
     ledOn = (uint8_t)atoi(envStr("MPDJ_QLINK_LED_ON", "127"));
-    if (!v || !*v)
+    if (!strcmp(v, "off"))
         return;
     if (!strncmp(v, "note:", 5))
         ledStatus = 0x90, v += 5;
