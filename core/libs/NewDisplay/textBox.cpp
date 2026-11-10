@@ -160,7 +160,7 @@ void cTextBox::update()
         API_END();
     }
 
-    textLength = strlen(text);
+    textLength = text ? strlen(text) : 0; // MPDJ: text is null until first set (address 0 is readable on the MCU)
     position = text;
 
     API_COLOR(colors[0]);
