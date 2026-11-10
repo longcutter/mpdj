@@ -5,10 +5,10 @@
 
 namespace
 {
-// Tracker screen-button labels: 8 boxes of 100 x ~55 along the bottom of the
-// 800x480 UI (label centres at y 424; the row the touchscreen treats as buttons
-// starts at 400).
-constexpr float kLabelTop = 408.0f, kLabelBottom = 480.0f, kLabelW = 100.0f;
+// Tracker screen-button labels (same on every screen, e.g. gPatternEdit.cpp):
+// 8 cLabels of 94 x 55 at x 100n+3, y 424 of the 800x480 UI, framed with a
+// half-pixel line. The touchscreen treats y >= 400 as the button row.
+constexpr float kLabelTop = 424.0f, kLabelBottom = 479.0f, kLabelW = 100.0f, kLabelInset = 3.0f;
 constexpr uint32_t kRed = 0xFFE0282Au;
 constexpr uint32_t kPopupBg = 0xFF101010u;
 
@@ -68,9 +68,11 @@ void Overlay::draw(const eve::Target& t) const
     int popup = popupLabel.load();
     if (popup >= 0 && popup < 8)
     {
-        // Copy the label first (the box below may cross it), then draw it 2x in
-        // the middle of the UI with a dark backing and a red frame.
-        Rect src = toTarget(t, popup * kLabelW, kLabelTop, (popup + 1) * kLabelW, kLabelBottom);
+        // Copy the label (with its own frame, which shows while it's held) first,
+        // then draw it 2x in the middle of the UI on a thin dark margin. No frame
+        // of our own: the label's frame is enough (Mike, step 2 test).
+        Rect src = toTarget(t, popup * kLabelW + kLabelInset - 1, kLabelTop - 1,
+                            (popup + 1) * kLabelW - kLabelInset + 1, kLabelBottom + 1);
         int sw = src.x1 - src.x0, sh = src.y1 - src.y0;
         if (sw > 0 && sh > 0)
         {
@@ -79,7 +81,7 @@ void Overlay::draw(const eve::Target& t) const
                 for (int x = 0; x < sw; x++)
                     copy[(size_t)y * sw + x] = t.px[(size_t)(src.y0 + y) * t.stride + src.x0 + x];
 
-            const int k = 2, pad = 3 * th;
+            const int k = 2, pad = th;
             Rect ui = toTarget(t, 0, 0, eve::kNativeW, eve::kNativeH);
             int cx = (ui.x0 + ui.x1) / 2, cy = (ui.y0 + ui.y1) / 2;
             int dx0 = cx - sw * k / 2, dy0 = cy - sh * k / 2;
@@ -99,14 +101,16 @@ void Overlay::draw(const eve::Target& t) const
                         row[px] = s[x / k];
                 }
             }
-            frame(t, box, th, kRed);
         }
     }
 
     int group = boxGroup.load();
     if (group == 0 || group == 1)
     {
-        Rect r = toTarget(t, group * 4 * kLabelW + 2, kLabelTop, (group + 1) * 4 * kLabelW - 2, kLabelBottom - 1);
+        // Just outside the four label frames, same height as they are (Mike)
+        Rect in = toTarget(t, group * 4 * kLabelW + kLabelInset - 1, kLabelTop - 1,
+                           (group + 1) * 4 * kLabelW - kLabelInset + 1, kLabelBottom + 1);
+        Rect r{ in.x0 - th, in.y0 - th, in.x1 + th, in.y1 + th };
         frame(t, r, th, kRed);
     }
 }

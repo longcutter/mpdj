@@ -132,7 +132,11 @@ void cPatternEditor::initDisplayControls()
     labelDataGreen.line.x2 = 40;
     labelDataGreen.line.y2 = 50;
 
+#ifdef PLATFORM_MPC
+    labelDataMore.dotIndicator.count = 2;
+#else
     labelDataMore.dotIndicator.count = 3;
+#endif
     labelDataMore.dotIndicator.current = 0;
 
     // lista 1
@@ -1442,9 +1446,10 @@ void cPatternEditor::showActionButtonPage1Labels()
     display.setControlText(label[2], "Step jump");
     display.setControlText(label[3], "Fill");
     display.setControlText(label[4], "Preview");
-#ifdef PLATFORM_MPC // MPDJ: the MPC's UNDO button (SHIFT = redo) replaces these two
-    display.setControlText(label[5], "");
-    display.setControlText(label[6], "");
+#ifdef PLATFORM_MPC // MPDJ: the MPC's UNDO button (SHIFT = redo) replaces Undo / Redo;
+                    // their slots take page 3's Pattern Name / Track Name (Mike)
+    display.setControlText(label[5], "Pattern");
+    display.setControlText(label[6], "Track");
 #else
     display.setControlText(label[5], "Undo");
     display.setControlText(label[6], "Redo");
@@ -1453,8 +1458,13 @@ void cPatternEditor::showActionButtonPage1Labels()
 
     display.setControlText2(label[3], "");
     display.setControlText2(label[4], "");
+#ifdef PLATFORM_MPC
+    display.setControlText2(label[5], "Name");
+    display.setControlText2(label[6], "Name");
+#else
     display.setControlText2(label[5], "");
     display.setControlText2(label[6], "");
+#endif
     display.setControlText2(label[7], "");
 
     showPattern(1);
@@ -1478,9 +1488,9 @@ void cPatternEditor::showActionButtonPage1Labels()
         display.setControlColors(label[5], display.getTheme().inactiveButtonLabelsColors);
         display.setControlColors(label[6], display.getTheme().inactiveLabelsColors);
     }
-#ifdef PLATFORM_MPC
-    display.setControlColors(label[5], display.getTheme().inactiveButtonLabelsColors);
-    display.setControlColors(label[6], display.getTheme().inactiveLabelsColors);
+#ifdef PLATFORM_MPC // Pattern / Track Name work in and out of edit mode, as on page 3
+    display.setControlColors(label[5], display.getTheme().activeButtonLabelsColors);
+    display.setControlColors(label[6], display.getTheme().activeButtonLabelsColors);
 #endif
     display.setControlColors(label[7], display.getTheme().moreButtonColors);
 
@@ -1489,15 +1499,24 @@ void cPatternEditor::showActionButtonPage1Labels()
     display.setControlData(label[2], &labelDataGreen);
     display.setControlData(label[3], &labelDataRed);
     display.setControlData(label[4], &labelDataGreen);
+#ifdef PLATFORM_MPC
+    display.setControlData(label[5], &labelDataGreen);
+    display.setControlData(label[6], &labelDataGreen);
+#else
     display.setControlData(label[5], &labelDataRed);
     display.setControlData(label[6], &labelDataRed);
+#endif
     display.setControlData(label[7], &labelDataMore);
 
     labelDataMore.dotIndicator.current = 0;
 
     for (uint8_t i = 0; i < 8; i++)
     {
+#ifdef PLATFORM_MPC // two-line labels: 0-2 (value under name) and 5-6 (Pattern / Track Name)
+        display.setControlValue(label[i], (i > 2 && i < 5) ? 0 : 1);
+#else
         display.setControlValue(label[i], (i > 2 && i < 7) ? 0 : 1);
+#endif
         display.setControlStyle(
           label[i],
           controlStyleCenterX | controlStyleCenterY | controlStyleFont3 | controlStyleShow |
@@ -1509,12 +1528,6 @@ void cPatternEditor::showActionButtonPage1Labels()
                                  controlStyleCenterX | controlStyleCenterY | controlStyleFont2);
         display.refreshControl(label[i]);
     }
-#ifdef PLATFORM_MPC // MPDJ: Undo / Redo slots stay empty (no underline either)
-    display.setControlHide(label[5]);
-    display.setControlHide(label[6]);
-    display.refreshControl(label[5]);
-    display.refreshControl(label[6]);
-#endif
 
     display.synchronizeRefresh();
 }

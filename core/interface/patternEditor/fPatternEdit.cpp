@@ -5126,6 +5126,10 @@ void cPatternEditor::setActionButtonPage1Funct()
     {
         ip->setButtonObj(interfaceButton4, buttonPress, functPreview);
     }
+#ifdef PLATFORM_MPC // MPDJ: page 3's buttons, in and out of edit mode as there
+    ip->setButtonObj(interfaceButton5, buttonPress, functNamePattern);
+    ip->setButtonObj(interfaceButton6, buttonPress, functNameTrack);
+#endif
 
     ip->setButtonObj(interfaceButton7, buttonPress, functNextActionButtonPage);
 }

@@ -2,10 +2,12 @@
 #include "PlatformImpl.h"
 #include "Tracker.h"
 #include "audio/MpcAudio.h"
+#include "input/LedProbe.h"
 
 #include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 
 PlatformImpl platform;
@@ -30,6 +32,9 @@ int main()
 
     printf("Tracker CE for MPC One+ starting\n");
     setvbuf(stdout, nullptr, _IOLBF, 0); // line-buffered logs over ssh
+
+    if (const char* v = getenv("MPDJ_LED_PROBE"); v && *v && *v != '0')
+        return runLedProbe();
 
     trackerInstance = Tracker::getInstance();
     platform.init();

@@ -139,10 +139,14 @@ void MpcInput::open(SwitchGroupImpl* b, SwitchGroupImpl* p, EncoderImpl* e, Disp
     memset(buttonHeld, -1, sizeof buttonHeld);
     openMidi();
     openTouch();
+    parseQLinkLeds();
+    setQLinkLeds();
 }
 
 void MpcInput::close()
 {
+    qlinkMode = 0; // all Q-Link mode LEDs off
+    setQLinkLeds();
     if (midiFd >= 0)
         ::close(midiFd);
     if (touchFd >= 0)
@@ -251,7 +255,10 @@ void MpcInput::openMidi()
     if (ctl >= 0 && ioctl(ctl, SNDRV_CTL_IOCTL_RAWMIDI_PREFER_SUBDEVICE, &subdev) < 0)
         printf("input: prefer subdevice %d failed: %s\n", subdev, strerror(errno));
 
-    midiFd = ::open(dev, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+    // read-write: LEDs are lit by messages sent back on the same port
+    midiFd = ::open(dev, O_RDWR | O_NONBLOCK | O_CLOEXEC);
+    if (midiFd < 0)
+        midiFd = ::open(dev, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
     if (midiFd >= 0)
     {
         snd_rawmidi_info info{};
@@ -726,7 +733,7 @@ void MpcInput::onRelative(uint8_t cc, uint8_t value)
     if (cc < kCcQLink1 || cc >= kCcQLink1 + 4)
         return;
     int knob = cc - kCcQLink1;
-    if (qlinkMode != 1)
+    if (qlinkScreenMode())
     {
         qlinkScreenTurn(knob, steps);
         return;
@@ -763,8 +770,9 @@ void MpcInput::onRelative(uint8_t cc, uint8_t value)
 // decided). In modes 2 and 3 the four knobs stand for the screen buttons
 // under the red box (1-4 or 5-8): touching a knob holds that screen button,
 // turning it holds the button and turns the jog, which is how the Tracker+
-// changes the parameter above a button. A popup in the middle of the screen
-// repeats the label while its value changes, since a finger may cover it.
+// changes the parameter above a button. When a finger on the label holds the
+// button instead, a popup in the middle of the screen repeats the label while
+// its value changes, since the finger covers it.
 namespace
 {
 constexpr uint32_t kQLinkReleaseMs = 600; // untouched knob: let go of its button after this
@@ -777,17 +785,37 @@ void MpcInput::cycleQLinkMode()
     setQLinkMode(qlinkMode % kQLinkModes + 1, true);
 }
 
+// Modes 2-3 act on the screen buttons, except on screens whose buttons are
+// all one-press actions with no value to turn: there the knobs navigate as in
+// mode 1 and the red box goes away (Mike, step 2 test: the Pattern screen's
+// second page, Render / Invert / Duplicate / Expand / Shrink / Copy / Paste).
+bool MpcInput::qlinkScreenMode()
+{
+    if (qlinkMode == 1)
+        return false;
+    if (mtInterface.isPatternScreenActive() && patternEditor.actualActionButtonsPage != 0)
+        return false;
+    return true;
+}
+
+void MpcInput::updateQLinkBox()
+{
+    int group = qlinkScreenMode() ? qlinkMode - 2 : -1;
+    if (group == boxGroup || !disp)
+        return;
+    boxGroup = group;
+    disp->overlay().setBoxGroup(group);
+    disp->requestRedraw();
+}
+
 void MpcInput::setQLinkMode(int mode, bool announce)
 {
     releaseQLinkButton();
     memset(qlinkTouched, 0, sizeof qlinkTouched);
     memset(qlinkAcc, 0, sizeof qlinkAcc);
     qlinkMode = mode;
-    if (disp)
-    {
-        disp->overlay().setBoxGroup(mode == 2 ? 0 : mode == 3 ? 1 : -1);
-        disp->requestRedraw();
-    }
+    updateQLinkBox();
+    setQLinkLeds();
     if (announce)
     {
         static const char* const kNames[] = { "", "Q-Links: navigate", "Q-Links: buttons 1-4",
@@ -817,8 +845,11 @@ void MpcInput::releaseQLinkButton()
 
 void MpcInput::qlinkTouch(int knob, bool down)
 {
-    if (qlinkMode == 1)
+    if (!qlinkScreenMode())
+    {
+        qlinkTouched[knob] = false;
         return; // mode 1: touch does nothing (yet)
+    }
     int target = interfaceButton0 + (qlinkMode - 2) * 4 + knob;
     qlinkTouched[knob] = down;
     if (down)
@@ -837,14 +868,14 @@ void MpcInput::qlinkScreenTurn(int knob, int steps)
     turnValue(steps);
 }
 
-// Turn the jog; when it changes a screen button's parameter (the button is
-// held by a Q-Link or a finger on its label), show that label big.
+// Turn the jog; when a finger on a label holds its screen button, show that
+// label big, since the finger covers it. A Q-Link turn alone shows no popup:
+// the label stays in view (Mike, step 2 test).
 void MpcInput::turnValue(int steps)
 {
     encoder->turn(steps);
-    int held = qlinkHeld >= 0 ? qlinkHeld : touchedButton;
-    if (held >= interfaceButton0 && held <= interfaceButton7)
-        showValuePopup(held - interfaceButton0);
+    if (touchedButton >= interfaceButton0 && touchedButton <= interfaceButton7)
+        showValuePopup(touchedButton - interfaceButton0);
 }
 
 void MpcInput::showValuePopup(int label)
@@ -859,6 +890,7 @@ void MpcInput::showValuePopup(int label)
 
 void MpcInput::pollQLinks()
 {
+    updateQLinkBox(); // follows screen and page changes
     uint32_t now = platform.getTimer()->millis();
     if (qlinkHeld >= 0 && now - qlinkTurnMs > kQLinkReleaseMs)
     {
@@ -875,6 +907,57 @@ void MpcInput::pollQLinks()
         disp->overlay().setPopupLabel(-1);
         disp->requestRedraw();
     }
+}
+
+// ---------------------------------------------------------------- LEDs
+// Not mapped yet: inMusic doesn't publish the controller protocol. The LEDs
+// above the Q-LINK button (one per Q-Link column) follow the Q-Link mode, lit
+// with the messages in MPDJ_QLINK_LEDS until MPDJ_LED_PROBE finds the real
+// ones: "cc:n1,n2,n3,n4" or "note:n1,n2,n3,n4" (channel 1), value
+// MPDJ_QLINK_LED_ON (default 127). Unset = no LED messages at all.
+void MpcInput::midiOut(uint8_t s, uint8_t d1, uint8_t d2)
+{
+    if (midiFd < 0)
+        return;
+    uint8_t m[3] = { s, d1, d2 };
+    if (write(midiFd, m, 3) != 3 && trace)
+        printf("input: LED write failed: %s\n", strerror(errno));
+}
+
+void MpcInput::parseQLinkLeds()
+{
+    const char* v = getenv("MPDJ_QLINK_LEDS");
+    ledOn = (uint8_t)atoi(envStr("MPDJ_QLINK_LED_ON", "127"));
+    if (!v || !*v)
+        return;
+    if (!strncmp(v, "note:", 5))
+        ledStatus = 0x90, v += 5;
+    else if (!strncmp(v, "cc:", 3))
+        ledStatus = 0xB0, v += 3;
+    else
+    {
+        printf("input: MPDJ_QLINK_LEDS should be cc:a,b,c,d or note:a,b,c,d\n");
+        return;
+    }
+    for (int i = 0; i < 4 && *v; i++)
+    {
+        char* end;
+        long n = strtol(v, &end, 0);
+        if (end == v || n < 0 || n > 127)
+            break;
+        qlinkLed[i] = (int)n;
+        ledCount = i + 1;
+        v = *end == ',' ? end + 1 : end;
+    }
+    printf("input: Q-Link mode LEDs: %s %d,%d,%d,%d\n", ledStatus == 0x90 ? "note" : "cc",
+           qlinkLed[0], qlinkLed[1], qlinkLed[2], qlinkLed[3]);
+}
+
+void MpcInput::setQLinkLeds()
+{
+    for (int i = 0; i < ledCount; i++)
+        if (qlinkLed[i] >= 0)
+            midiOut(ledStatus, (uint8_t)qlinkLed[i], i == qlinkMode - 1 ? ledOn : 0);
 }
 
 // ---------------------------------------------------------------- touchscreen

@@ -12,6 +12,7 @@
 //   MPDJ_TOUCH_DEV=/dev/input/event0
 //   MPDJ_QLINK_DIV=4            Q-Link speed scale (4 = the built-in speeds,
 //                               higher = slower)
+//   MPDJ_QLINK_LEDS=cc:a,b,c,d  (or note:...) Q-Link mode LEDs, MPDJ_QLINK_LED_ON=127
 //   MPDJ_TOUCH_SWAP_XY=1, MPDJ_TOUCH_INVERT_X=1, MPDJ_TOUCH_INVERT_Y=1
 //                               fix-ups if taps land in the wrong place
 #pragma once
@@ -72,12 +73,23 @@ class MpcInput
     void turnValue(int steps); // main encoder / value knob: + value popup for a held label
     void showValuePopup(int label);
     void pollQLinks();
+    bool qlinkScreenMode(); // modes 2-3 and the screen has value buttons
+    void updateQLinkBox();
+    int boxGroup = -1;      // red box shown: 0 = labels 1-4, 1 = 5-8, -1 none
     int qlinkMode = 1;
     int qlinkHeld = -1;          // Tracker screen button held for the Q-Links
     bool qlinkTouched[4] = {};   // Q-Link touch notes 84-87
     uint32_t qlinkTurnMs = 0, popupUntilMs = 0;
     int popupShown = -1;
     DisplayDriverImpl* disp = nullptr;
+
+    // ---- LEDs (Q-Link mode LEDs; MPDJ_QLINK_LEDS until the probe maps them)
+    void midiOut(uint8_t status, uint8_t d1, uint8_t d2);
+    void parseQLinkLeds();
+    void setQLinkLeds();
+    int qlinkLed[4] = { -1, -1, -1, -1 };
+    int ledCount = 0;
+    uint8_t ledStatus = 0xB0, ledOn = 127;
 
     int midiFd = -1;
     uint8_t runningStatus = 0, data[2] = {}, dataCount = 0;

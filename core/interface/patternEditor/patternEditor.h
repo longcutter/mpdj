@@ -349,7 +349,11 @@ class cPatternEditor : public ModuleBase
 
     //--------------------------------------------------------
     // powiekszona funkcjolanosc przyciskow pod ekranem - 2 strony
+#ifdef PLATFORM_MPC // MPDJ: page 3 (Pattern / Track Name) moved onto page 1
+    const uint8_t actionButtonsPagesCount = 2;
+#else
     const uint8_t actionButtonsPagesCount = 3;
+#endif
     uint8_t actualActionButtonsPage = 0;
 
     void setActionButtonPage1Funct();
