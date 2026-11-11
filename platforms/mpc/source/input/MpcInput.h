@@ -32,6 +32,13 @@ class MpcInput
     void poll();
     void close();
 
+    // Sideloads (sideload/Sideload.h): let go of everything held in the core,
+    // switch the LEDs off and close the touchscreen; the controller MIDI port
+    // stays open so MPDJ can relay it to the sideload and watch for the way back.
+    void suspend();
+    void resume();
+    int controllerFd() const { return midiFd; }
+
   private:
     // ---- controller MIDI
     void openMidi();
@@ -53,6 +60,7 @@ class MpcInput
     void closeProgramPicker();
     bool programPicker = false; // SHIFT holding the Tracker's Instr button
     bool mpcShift = false; // MPC SHIFT physically held
+    uint32_t sideloadComboMs = 0; // SHIFT+MAIN held since (MPDJ_SIDELOAD set)
     static constexpr int kTaps = 5;
     uint32_t tapTimes[kTaps] = {};
     int tapCount = 0;

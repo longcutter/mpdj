@@ -24,6 +24,8 @@ class FbOutput
     eve::Target& target() { return tgt; }
     void beginFrame(); // clears the margins around the UI
     void present();
+    // Next present() rewrites every tile (another program drew on the panel).
+    void invalidate();
 
     int width() const { return logicalW; }
     int height() const { return logicalH; }

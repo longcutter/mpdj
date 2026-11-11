@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "FbOutput.h"
 
 #include <fcntl.h>
@@ -296,6 +297,26 @@ void FbOutput::writeRotated(uint8_t* dst, int pageIdx)
             writeTile(dst, x0, y0, x1, y1);
             tilesWritten++;
         }
+}
+
+void FbOutput::invalidate()
+{
+    const uint8_t allPages = (uint8_t)((1u << pages) - 1);
+    std::fill(tileMask.begin(), tileMask.end(), allPages);
+    if (fd >= 0 && fbMem)
+    {
+        // Back to the page MPDJ draws on, in case the other program panned.
+        fb_var_screeninfo var;
+        if (ioctl(fd, FBIOGET_VSCREENINFO, &var) == 0)
+        {
+            int target = pages > 1 ? page : shownPage;
+            if (var.yoffset != (uint32_t)(target * yres))
+            {
+                var.yoffset = (uint32_t)(target * yres);
+                ioctl(fd, FBIOPAN_DISPLAY, &var);
+            }
+        }
+    }
 }
 
 void FbOutput::present()

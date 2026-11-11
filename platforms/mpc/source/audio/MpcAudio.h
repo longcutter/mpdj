@@ -19,6 +19,11 @@ namespace MpcAudio
 void start(Tracker* tracker);
 void stop();
 
+// Sideloads: stop the audio thread and close the codec so another program can
+// use it; resume() reopens it (retrying for up to 3 s while it is busy).
+void suspend();
+void resume();
+
 // ALSA card number of the One+ codec (/proc/asound id "ACVA"), else 1.
 int codecCard();
 

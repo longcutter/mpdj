@@ -1,6 +1,7 @@
 #include "MpcInput.h"
 
 #include "PlatformImpl.h"
+#include "sideload/Sideload.h"
 #include "DisplayDriverImpl.h"
 #include "eve/FbOutput.h"
 #include "core/interfaceDefs.h"
@@ -98,6 +99,7 @@ const ButtonMap kButtonMap[] = {
 
 constexpr uint8_t kNoteBankA = 35, kNoteBankC = 37;
 constexpr uint8_t kNoteShift = 49;
+constexpr uint8_t kNoteMain = 52;
 constexpr uint8_t kNoteErase = 9;
 
 // MPC pad note (bank A layout) -> pad number 1..16 (1 = bottom left).
@@ -161,6 +163,54 @@ void MpcInput::poll()
     pollTouch();
     pollSave();
     pollQLinks();
+    if (sideloadComboMs && mpcShift &&
+        platform.getTimer()->millis() - sideloadComboMs >= Sideload::kComboHoldMs)
+    {
+        sideloadComboMs = 0;
+        Sideload::request();
+    }
+}
+
+void MpcInput::suspend()
+{
+    releaseQLinkButton();
+    closeProgramPicker();
+    for (int n = 0; n < 128; n++)
+    {
+        if (buttonHeld[n] >= 0)
+            buttons->release(buttonHeld[n]);
+        if (padHeld[n] >= 0)
+            pads->release(padHeld[n]);
+    }
+    memset(padHeld, -1, sizeof padHeld);
+    memset(buttonHeld, -1, sizeof buttonHeld);
+    if (touchedButton >= 0)
+        buttons->release(touchedButton);
+    touchedButton = -1;
+    releaseCoreShift();
+    mpcShift = false;
+    sideloadComboMs = 0;
+    for (bool& t : qlinkTouched)
+        t = false;
+    int mode = qlinkMode;
+    qlinkMode = 0; // Q-Link mode LEDs off
+    setQLinkLeds();
+    qlinkMode = mode;
+    if (touchFd >= 0)
+        ::close(touchFd);
+    touchFd = -1;
+    touching = wasTouching = false;
+    runningStatus = dataCount = 0;
+    inSysex = false;
+}
+
+void MpcInput::resume()
+{
+    runningStatus = dataCount = 0;
+    inSysex = false;
+    mpcShift = false;
+    openTouch();
+    setQLinkLeds();
 }
 
 // SHIFT+BROWSE = SAVE (the MPC's printed shift label), from any screen.
@@ -424,6 +474,8 @@ void MpcInput::onButton(uint8_t note, bool down)
 
     if (!down)
     {
+        if (note == kNoteMain || note == kNoteShift)
+            sideloadComboMs = 0;
         if (note == kNoteShift)
         {
             mpcShift = false;
@@ -434,6 +486,17 @@ void MpcInput::onButton(uint8_t note, bool down)
             buttons->release(buttonHeld[note]);
             buttonHeld[note] = -1;
         }
+        return;
+    }
+
+    if (note == kNoteMain && mpcShift && Sideload::enabled())
+    {
+        // SHIFT+MAIN held 2 s hands the MPC to the sideload (MPDJ_SIDELOAD).
+        sideloadComboMs = platform.getTimer()->millis();
+        if (!sideloadComboMs)
+            sideloadComboMs = 1;
+        if (trace)
+            printf("input: SHIFT+MAIN: hold for the sideload\n");
         return;
     }
 

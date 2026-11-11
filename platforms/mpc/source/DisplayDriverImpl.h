@@ -23,6 +23,10 @@ class DisplayDriverImpl : public DisplayDriver
     FbOutput& output() { return fb; }
     Overlay& overlay() { return marks; }
     void requestRedraw() { frameDirty = true; } // main thread: redraw the last frame (overlay changed)
+    // Sideloads: stop drawing (waits for a frame in progress) so another program
+    // owns the panel; resume() repaints the whole screen.
+    void suspend();
+    void resume();
     eve::Chip& chip() { return eveChip; }
 
     void setPowerState(bool state) override;
@@ -72,6 +76,7 @@ class DisplayDriverImpl : public DisplayDriver
     Overlay marks;
     bool frameDirty = false;
     bool powered = true;
+    bool suspended = false;
     uint32_t lastRenderMs = 0;
     uint32_t frames = 0, renderUsTotal = 0, lastReportMs = 0;
     uint32_t drawUsTotal = 0, presentUsTotal = 0, tilesTotal = 0;

@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 // ---------------------------------------------------------------- audio "interrupt" lock
 // On the Tracker the audio engine runs in an interrupt, and the core masks that
@@ -343,6 +344,51 @@ int MpcAudio::codecCard()
     return findCodecCard();
 }
 
+namespace
+{
+bool useDevice = false;
+
+// Opens the codec (playback, then capture unless MPDJ_AUDIO_IN=0). retryMs > 0:
+// keep trying while the device is busy (a sideload that just exited may still
+// be closing it). Returns false if playback didn't open.
+bool openDevice(int retryMs)
+{
+    int card = envInt("MPDJ_AUDIO_CARD", -1);
+    if (card < 0)
+        card = findCodecCard();
+    int device = envInt("MPDJ_AUDIO_DEVICE", 0);
+    int periods = envInt("MPDJ_AUDIO_PERIODS", 3);
+    if (periods < 2)
+        periods = 2;
+    char err[200];
+    bool ok = false;
+    for (int waited = 0;; waited += 100)
+    {
+        ok = out.open(card, device, false, kRate, 2, kBlock, periods, err, sizeof err);
+        if (ok || waited >= retryMs)
+            break;
+        usleep(100000);
+    }
+    if (ok)
+        printf("audio: hw:%d,%d %u Hz, %u x %u frames (%.1f ms)\n", card, device, out.rate,
+               out.bufferFrames / out.periodFrames, out.periodFrames,
+               out.bufferFrames * 1000.0 / out.rate);
+    else
+        printf("audio: %s; running without sound\n", err);
+
+    if (out.isOpen() && envInt("MPDJ_AUDIO_IN", 1))
+    {
+        if (in.open(card, device, true, kRate, 2, kBlock, periods + 1, err, sizeof err))
+            printf("audio: input hw:%d,%d on\n", card, device);
+        else
+            printf("audio: input: %s\n", err);
+    }
+    return ok;
+}
+
+void startThread();
+} // namespace
+
 void MpcAudio::start(Tracker* t)
 {
     tracker = t;
@@ -363,30 +409,16 @@ void MpcAudio::start(Tracker* t)
     }
     else
     {
-        int card = envInt("MPDJ_AUDIO_CARD", -1);
-        if (card < 0)
-            card = findCodecCard();
-        int device = envInt("MPDJ_AUDIO_DEVICE", 0);
-        int periods = envInt("MPDJ_AUDIO_PERIODS", 3);
-        if (periods < 2)
-            periods = 2;
-        char err[200];
-        if (out.open(card, device, false, kRate, 2, kBlock, periods, err, sizeof err))
-            printf("audio: hw:%d,%d %u Hz, %u x %u frames (%.1f ms)\n", card, device, out.rate,
-                   out.bufferFrames / out.periodFrames, out.periodFrames,
-                   out.bufferFrames * 1000.0 / out.rate);
-        else
-            printf("audio: %s; running without sound\n", err);
-
-        if (out.isOpen() && envInt("MPDJ_AUDIO_IN", 1))
-        {
-            if (in.open(card, device, true, kRate, 2, kBlock, periods + 1, err, sizeof err))
-                printf("audio: input hw:%d,%d on\n", card, device);
-            else
-                printf("audio: input: %s\n", err);
-        }
+        useDevice = true;
+        openDevice(0);
     }
+    startThread();
+}
 
+namespace
+{
+void startThread()
+{
     running = true;
     pthread_attr_t attr;
     pthread_attr_init(&attr);
@@ -406,6 +438,32 @@ void MpcAudio::start(Tracker* t)
     threadStarted = e == 0;
     if (!threadStarted)
         printf("audio: thread failed: %s\n", strerror(e));
+}
+} // namespace
+
+// Sideloads: let go of the codec (the WAV file, if any, stays open) and take it back.
+void MpcAudio::suspend()
+{
+    if (!threadStarted)
+        return;
+    running = false;
+    pthread_join(thread, nullptr);
+    threadStarted = false;
+    out.drop();
+    out.close();
+    in.drop();
+    in.close();
+    currentGain = 0.0f; // ramp up from silence on resume
+    printf("audio: suspended, codec released\n");
+}
+
+void MpcAudio::resume()
+{
+    if (threadStarted)
+        return;
+    if (useDevice)
+        openDevice(3000);
+    startThread();
 }
 
 void MpcAudio::stop()

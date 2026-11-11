@@ -1,5 +1,7 @@
 #include "DisplayDriverImpl.h"
 
+#include <unistd.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -72,9 +74,33 @@ void DisplayDriverImpl::onSwap(void* self, const uint32_t* dl, int words)
     }
 }
 
+void DisplayDriverImpl::suspend()
+{
+    suspended = true;
+    if (threaded)
+    {
+        std::unique_lock<std::mutex> lock(renderMutex);
+        jobReady = false;
+        while (rendering)
+        {
+            lock.unlock();
+            usleep(1000);
+            lock.lock();
+        }
+    }
+}
+
+void DisplayDriverImpl::resume()
+{
+    fb.invalidate(); // the sideload drew over everything
+    suspended = false;
+    frameDirty = true;
+    lastRenderMs = 0;
+}
+
 void DisplayDriverImpl::service(uint32_t nowMs)
 {
-    if (!frameDirty || !powered || nowMs - lastRenderMs < 16)
+    if (!frameDirty || !powered || suspended || nowMs - lastRenderMs < 16)
         return;
     if (threaded)
     {
