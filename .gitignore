@@ -26,3 +26,7 @@ __pycache__/
 .vscode/
 .idea/
 .DS_Store
+
+# MPDJ build outputs and test binaries
+/out/
+tools/sideload/s3/s3tone
