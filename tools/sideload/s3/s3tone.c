@@ -24,7 +24,10 @@
  */
 #include "mpdj_ring.h"
 
+#include <errno.h>
 #include <math.h>
+#include <pthread.h>
+#include <string.h>
 #include <sched.h>
 #include <signal.h>
 #include <stdio.h>
@@ -67,8 +70,11 @@ int main(void)
     {
         struct sched_param sp = { 0 };
         sp.sched_priority = prio;
-        if (sched_setscheduler(0, SCHED_FIFO, &sp) != 0)
-            printf("s3tone: SCHED_FIFO %d not available, normal priority\n", prio);
+        /* pthread_setschedparam, not sched_setscheduler: musl's sched_setscheduler
+         * is a stub that always fails with ENOSYS */
+        int e = pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp);
+        if (e != 0)
+            printf("s3tone: SCHED_FIFO %d not available (%s), normal priority\n", prio, strerror(e));
     }
 
     const double rate = r->rate, twoPi = 6.283185307179586;
