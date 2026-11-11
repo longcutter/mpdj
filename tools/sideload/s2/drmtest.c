@@ -11,6 +11,11 @@
 // then puts back whatever was on the CRTC before. Prints every ioctl failure.
 // Run with MPDJ and the MPC app stopped.
 //
+//   drmtest pitch   same as stage 1, but with a padded row pitch (800 px wide
+//                   buffer laid out 832 px apart, 3,328 bytes, as Mesa makes them)
+//   drmtest peek    no master needed: read the pixels of whatever buffer the
+//                   screen shows now (run it while another program draws)
+//
 // Build: zig cc -target arm-linux-musleabihf -O2 -static -s -I/usr/include/drm -o drmtest drmtest.c
 #include <drm.h>
 #include <drm_mode.h>
@@ -52,9 +57,9 @@ struct Buf
     uint32_t* px;
 };
 
-static int makeBuf(struct Buf* b, uint32_t w, uint32_t h)
+static int makeBuf(struct Buf* b, uint32_t w, uint32_t h, uint32_t allocW)
 {
-    struct drm_mode_create_dumb c = { .height = h, .width = w, .bpp = 32 };
+    struct drm_mode_create_dumb c = { .height = h, .width = allocW, .bpp = 32 };
     if (io(DRM_IOCTL_MODE_CREATE_DUMB, &c, "CREATE_DUMB"))
         return -1;
     b->handle = c.handle, b->pitch = c.pitch, b->size = c.size, b->w = w, b->h = h;
@@ -92,7 +97,59 @@ static void dirty(struct Buf* b)
     ioctl(fd, DRM_IOCTL_MODE_DIRTYFB, &d); // only some drivers need it; ignore errors
 }
 
-int main(void)
+// Reads back the buffer the CRTC shows: format, pitch, and a few pixels.
+static int peek(void)
+{
+    struct drm_mode_card_res res = { 0 };
+    uint32_t crtcs[16];
+    if (io(DRM_IOCTL_MODE_GETRESOURCES, &res, "GETRESOURCES") || res.count_crtcs > 16)
+        return 1;
+    res.crtc_id_ptr = (uintptr_t)crtcs;
+    res.count_connectors = res.count_encoders = res.count_fbs = 0;
+    if (io(DRM_IOCTL_MODE_GETRESOURCES, &res, "GETRESOURCES 2"))
+        return 1;
+    for (uint32_t i = 0; i < res.count_crtcs; i++)
+    {
+        struct drm_mode_crtc c = { .crtc_id = crtcs[i] };
+        if (io(DRM_IOCTL_MODE_GETCRTC, &c, "GETCRTC") || !c.fb_id)
+            continue;
+        struct drm_mode_fb_cmd f = { .fb_id = c.fb_id };
+        if (io(DRM_IOCTL_MODE_GETFB, &f, "GETFB"))
+            continue;
+        printf("peek: crtc %u shows fb %u: %ux%u pitch %u bpp %u depth %u handle %u\n", c.crtc_id, f.fb_id, f.width,
+               f.height, f.pitch, f.bpp, f.depth, f.handle);
+        if (!f.handle)
+        {
+            printf("peek: no handle (not allowed to read it)\n");
+            continue;
+        }
+        struct drm_mode_map_dumb m = { .handle = f.handle };
+        if (io(DRM_IOCTL_MODE_MAP_DUMB, &m, "MAP_DUMB"))
+            continue;
+        size_t size = (size_t)f.pitch * f.height;
+        uint8_t* p = mmap(0, size, PROT_READ, MAP_SHARED, fd, m.offset);
+        if (p == MAP_FAILED)
+        {
+            printf("peek: mmap: %s\n", strerror(errno));
+            continue;
+        }
+        unsigned nonBlack = 0;
+        for (uint32_t y = 0; y < f.height; y += 8)
+            for (uint32_t x = 0; x < f.width; x += 8)
+                if (*(uint32_t*)(p + (size_t)y * f.pitch + x * 4) & 0xFFFFFF)
+                    nonBlack++;
+        printf("peek: %u of %u sampled pixels are not black\n", nonBlack, ((f.height + 7) / 8) * ((f.width + 7) / 8));
+        for (int band = 0; band < 3; band++)
+        {
+            uint32_t y = f.height * (2 * band + 1) / 6, x = f.width / 2;
+            printf("peek: pixel (%u, %u) = 0x%08X\n", x, y, *(uint32_t*)(p + (size_t)y * f.pitch + x * 4));
+        }
+        munmap(p, size);
+    }
+    return 0;
+}
+
+int main(int argc, char** argv)
 {
     setvbuf(stdout, NULL, _IOLBF, 0);
     fd = open("/dev/dri/card0", O_RDWR | O_CLOEXEC);
@@ -101,6 +158,9 @@ int main(void)
         printf("drmtest: open /dev/dri/card0: %s\n", strerror(errno));
         return 1;
     }
+    if (argc > 1 && !strcmp(argv[1], "peek"))
+        return peek();
+    int padded = argc > 1 && !strcmp(argv[1], "pitch");
     if (io(DRM_IOCTL_SET_MASTER, 0, "SET_MASTER (is the MPC app or MPDJ running?)"))
         return 1;
 
@@ -156,7 +216,8 @@ int main(void)
     printf("drmtest: before: crtc %u shows fb %u\n", crtcId, saved.fb_id);
 
     struct Buf a, b;
-    if (makeBuf(&a, mode.hdisplay, mode.vdisplay) || makeBuf(&b, mode.hdisplay, mode.vdisplay))
+    uint32_t allocW = padded ? 832 : mode.hdisplay; // 832 * 4 = 3,328, the pitch Mesa used
+    if (makeBuf(&a, mode.hdisplay, mode.vdisplay, allocW) || makeBuf(&b, mode.hdisplay, mode.vdisplay, allocW))
         return 1;
     static const uint32_t ca[3] = { 0xDC2828, 0x28C828, 0x2850E6 }, cb[3] = { 0x2850E6, 0x28C828, 0xDC2828 };
     bands(&a, ca);
@@ -168,6 +229,11 @@ int main(void)
     io(DRM_IOCTL_MODE_SETCRTC, &set, "SETCRTC");
     dirty(&a);
     sleep(3);
+    if (padded)
+    {
+        printf("drmtest: padded pitch %u: that was the only stage\n", a.pitch);
+        goto restore;
+    }
 
     printf("drmtest: 2/3 white bar drawn into the buffer on screen, 3 s\n");
     double t0 = now();
@@ -208,6 +274,7 @@ int main(void)
     }
     printf("drmtest: %d page flips\n", flips);
 
+restore:
     // Put back what was there (fbdev's buffer), then let go.
     if (saved.fb_id && saved.mode_valid)
     {
