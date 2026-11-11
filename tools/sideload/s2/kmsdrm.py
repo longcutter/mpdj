@@ -33,11 +33,13 @@ def run_pass(n, alpha):
     sdl2.SDL_GetCurrentDisplayMode(0, ctypes.byref(mode))
     w, h = mode.w or 800, mode.h or 1280
     win = sdl2.SDL_CreateWindow(b"MPDJ S2b", 0, 0, w, h, sdl2.SDL_WINDOW_FULLSCREEN | sdl2.SDL_WINDOW_SHOWN)
-    ren = sdl2.SDL_CreateRenderer(win, -1, sdl2.SDL_RENDERER_ACCELERATED) if win else None
+    ren = sdl2.SDL_CreateRenderer(win, -1, 0) if win else None
     if not ren:
         print(f"pass {n}: window / renderer failed: {err()}")
         sdl2.SDL_Quit()
         return
+    info = sdl2.SDL_RendererInfo()
+    sdl2.SDL_GetRendererInfo(ren, ctypes.byref(info))
     got = {}
     for name, attr in (("red", sdl2.SDL_GL_RED_SIZE), ("alpha", sdl2.SDL_GL_ALPHA_SIZE)):
         val = ctypes.c_int(-1)
@@ -46,7 +48,7 @@ def run_pass(n, alpha):
     cols = ((220, 40, 40), (40, 200, 40), (40, 80, 230))
     if n == 2:
         cols = cols[::-1]
-    print(f"pass {n}: {'alpha requested' if alpha else 'SDL defaults'}, GL red {got['red']} bits, alpha {got['alpha']} bits; "
+    print(f"pass {n}: renderer {info.name.decode()}, {'alpha requested' if alpha else 'SDL defaults'}, GL red {got['red']} bits, alpha {got['alpha']} bits; "
           f"{'red/green/blue, bar down' if n == 1 else 'blue/green/red, bar up'}")
     t0 = time.time(); frames = 0
     ev = sdl2.SDL_Event()
