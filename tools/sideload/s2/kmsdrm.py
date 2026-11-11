@@ -6,6 +6,7 @@
 import ctypes, os, sys, time
 
 os.environ.setdefault("SDL_VIDEODRIVER", "kmsdrm")
+SECS = float(os.environ.get("KMS_SECS", "3"))  # per renderer
 import sdl2
 
 def err():
@@ -32,6 +33,9 @@ if not win:
     sdl2.SDL_Quit()
     sys.exit(2)
 
+ww, wh = ctypes.c_int(), ctypes.c_int()
+sdl2.SDL_GetWindowSize(win, ctypes.byref(ww), ctypes.byref(wh))
+print(f"window {ww.value}x{wh.value}")
 results = []
 for name, flags in (("accelerated", sdl2.SDL_RENDERER_ACCELERATED), ("software", sdl2.SDL_RENDERER_SOFTWARE)):
     ren = sdl2.SDL_CreateRenderer(win, -1, flags)
@@ -42,14 +46,14 @@ for name, flags in (("accelerated", sdl2.SDL_RENDERER_ACCELERATED), ("software",
     info = sdl2.SDL_RendererInfo()
     sdl2.SDL_GetRendererInfo(ren, ctypes.byref(info))
     print(f"{name} renderer: {info.name.decode()}")
-    # 3 s of colour: red, green, blue thirds, then a moving bar
+    # SECS of colour: red, green, blue thirds, and a white bar moving down
     t0 = time.time(); frames = 0
-    while time.time() - t0 < 3:
+    while time.time() - t0 < SECS:
         w, h = mode.w or 800, mode.h or 1280
         for i, c in enumerate(((220, 40, 40), (40, 200, 40), (40, 80, 230))):
             sdl2.SDL_SetRenderDrawColor(ren, *c, 255)
             sdl2.SDL_RenderFillRect(ren, sdl2.SDL_Rect(0, i * h // 3, w, h // 3))
-        y = int((time.time() - t0) / 3 * h)
+        y = int((time.time() - t0) / SECS * h)
         sdl2.SDL_SetRenderDrawColor(ren, 255, 255, 255, 255)
         sdl2.SDL_RenderFillRect(ren, sdl2.SDL_Rect(0, y, w, 40))
         sdl2.SDL_RenderPresent(ren)
@@ -57,7 +61,7 @@ for name, flags in (("accelerated", sdl2.SDL_RENDERER_ACCELERATED), ("software",
         ev = sdl2.SDL_Event()
         while sdl2.SDL_PollEvent(ctypes.byref(ev)):
             pass
-    print(f"{name} renderer: {frames / 3:.0f} fps")
+    print(f"{name} renderer: {frames / SECS:.0f} fps")
     results.append((name, True))
     sdl2.SDL_DestroyRenderer(ren)
 
