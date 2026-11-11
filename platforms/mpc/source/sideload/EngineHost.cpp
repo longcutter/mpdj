@@ -221,7 +221,7 @@ void EngineHost::poll()
     uint32_t blocks = statBlocks.exchange(0), shortBlocks = statShort.exchange(0);
     uint64_t sum = statFillSum.exchange(0);
     uint32_t mn = statFillMin.exchange(UINT32_MAX), mx = statFillMax.exchange(0);
-    if (!stats && !shortBlocks)
+    if ((!stats && !shortBlocks) || (!blocks && pid <= 0)) // quiet once the engine is gone
         return;
     if (!blocks)
     {
