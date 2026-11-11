@@ -266,7 +266,14 @@ void cSampleEditor::update()
         refreshPlayhead();
     }
 
-    if (!currentEffect->isDataLoaded() && currentEffect->getLoadingState())
+    if (currentEffect == nullptr)
+    {
+        // MPDJ: start() returns early to show the "stop the pattern?" or "sample too
+        // long" popup before it sets currentEffect. On the Tracker+ a null read is
+        // harmless (address 0 is readable); on Linux it segfaults. Nothing to update
+        // until start() completes.
+    }
+    else if (!currentEffect->isDataLoaded() && currentEffect->getLoadingState())
     {
         currentEffect->update();
         if (!currentEffect->getLoadingState())
