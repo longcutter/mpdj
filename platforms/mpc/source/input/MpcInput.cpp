@@ -98,6 +98,7 @@ const ButtonMap kButtonMap[] = {
 
 constexpr uint8_t kNoteBankA = 35, kNoteBankC = 37;
 constexpr uint8_t kNoteShift = 49;
+constexpr uint8_t kNoteErase = 9;
 
 // MPC pad note (bank A layout) -> pad number 1..16 (1 = bottom left).
 int padNumber(uint8_t note)
@@ -363,6 +364,33 @@ bool MpcInput::coreShift()
     return buttons->isButtonPressed(interfaceButtonShift);
 }
 
+// The Sample Editor's and Sample Recorder's confirm popups ("This action will stop
+// the pattern", "Selected sample is too long", ...) clear every binding but screen
+// buttons 6 (Cancel / No) and 7 (Yes / Ok), so on the MPC only touch would answer
+// them. Recognise that state (no mode button and no Play bound, 6 or 7 bound) and
+// map hardware to it (Mike 2026-11-11): ENCODER PUSH, PLAY, PLAY START = Yes / Ok;
+// STOP, ERASE = Cancel, or Ok when the popup has nothing else. Returns the screen
+// button to press, or -1 when this isn't such a popup or the key has no part in it.
+int MpcInput::confirmPopupButton(uint8_t note, int act)
+{
+    InputProcessor* ip = ModuleBase::ip;
+    if (!ip || ip->hasButtonObj(interfaceButtonPlay))
+        return -1;
+    for (int b = interfaceButton8; b <= interfaceButton22; b++)
+        if (ip->hasButtonObj(b))
+            return -1;
+    bool yes = ip->hasButtonObj(interfaceButton7), no = ip->hasButtonObj(interfaceButton6);
+    if (!yes && !no)
+        return -1;
+
+    Act a = (Act)act;
+    if (a == Act::EncoderPush || a == Act::Play || a == Act::PlayStart)
+        return yes ? interfaceButton7 : -1;
+    if (a == Act::Stop || note == kNoteErase)
+        return no ? interfaceButton6 : interfaceButton7;
+    return -1;
+}
+
 // Some MPC combos use SHIFT to mean something the Tracker doesn't (SHIFT+BROWSE
 // = File): take Shift off the core before pressing, so screens don't see a
 // Shift combo. It stays off until SHIFT is pressed again.
@@ -429,7 +457,14 @@ void MpcInput::onButton(uint8_t note, bool down)
     bool playing = sequencer.isPlay();
     bool onPattern = mtInterface.isPatternScreenActive();
 
-    switch (m->act)
+    int popupAnswer = mpcShift ? -1 : confirmPopupButton(note, (int)m->act);
+    if (popupAnswer >= 0)
+    {
+        if (trace)
+            printf("input: confirm popup -> screen button %d\n", popupAnswer - interfaceButton0);
+        hold = popupAnswer;
+    }
+    else switch (m->act)
     {
         case Act::Forward:
             if (note == kNoteShift)

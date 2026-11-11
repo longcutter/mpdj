@@ -49,6 +49,7 @@ class MpcInput
     void pollSave();
     bool savePending = false;
     bool onProgramScreen();
+    int confirmPopupButton(uint8_t note, int act);
     void closeProgramPicker();
     bool programPicker = false; // SHIFT holding the Tracker's Instr button
     bool mpcShift = false; // MPC SHIFT physically held

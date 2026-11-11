@@ -127,6 +127,13 @@ class InputProcessor
 
     void setPowerButtonObj(void (*funct)(uint8_t));
 
+    // MPDJ: lets the MPC input layer see which buttons the current screen binds
+    // (e.g. to answer a confirm popup that cleared everything but screen buttons 6-7)
+    bool hasButtonObj(uint8_t objectID) const
+    {
+        return objectID < buttonsCount && buttons[objectID].mode != 0;
+    }
+
     void setPadsGlobal(void (*funct)(uint8_t, uint8_t, int16_t));
 
     //----------------------
