@@ -2,6 +2,7 @@
 
 #include "AlsaPcm.h"
 #include "Tracker.h"
+#include "sideload/EngineHost.h"
 
 #include <atomic>
 #include <errno.h>
@@ -211,6 +212,7 @@ void renderBlock()
     tracker->updateInputAudioBuffers(in.isOpen() ? inBuf : nullptr, nullptr, kBlock);
     tracker->updateAudioBuffers(blockL, blockR, kBlock);
     unlockForBlock();
+    EngineHost::mixBlock(blockL, blockR, kBlock); // engine sideload, if any (S3)
 
     // Gain ramps across the block so volume changes and mutes don't click.
     float target = (keyMuted || headphoneMuted) ? 0.0f : volumeGain.load();

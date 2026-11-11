@@ -4,6 +4,7 @@
 #include "audio/AudioProbe.h"
 #include "audio/MpcAudio.h"
 #include "input/LedProbe.h"
+#include "sideload/EngineHost.h"
 #include "sideload/Sideload.h"
 
 #include <signal.h>
@@ -50,6 +51,7 @@ int main()
         startDisplay(&platform); // same point in boot as the Tracker+ hardware init
     trackerInstance->init(&platform);
     printf("Tracker initialized, version %s\n", Tracker::getVersion());
+    EngineHost::start();
     MpcAudio::start(trackerInstance); // audio callback also clocks the sequencer
     Sideload::init();
 
@@ -58,6 +60,7 @@ int main()
     {
         platform.update();
         Sideload::poll();
+        EngineHost::poll();
         trackerInstance->update();
         frames++;
 
@@ -71,6 +74,7 @@ int main()
         usleep(500);
     }
     MpcAudio::stop();
+    EngineHost::stop();
     printf("Bye.\n");
     return 0;
 }
