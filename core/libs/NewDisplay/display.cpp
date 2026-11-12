@@ -138,8 +138,16 @@ const CompressedFontData fontsData1[displayFontCount] =
 __NOINIT(EXTERNAL_RAM)
 strFont fonts[displayFontCount];
 
+#ifdef PLATFORM_MPC
+extern const uint8_t mpdj_logo_320x162_l4[25920]; // platforms/mpc/source/MpdjLogo.cpp
+#endif
+
 const strBitmap bitmaps[displayBitmapsCount] = {
-#ifndef TRACKER_MINI
+#if defined(PLATFORM_MPC)
+    // MPDJ: the MPDJ logo on the boot / start screen instead of Polyend's
+    // (fits the logo slot: 25,920 bytes from 80,000, the next bitmap is at 110,000)
+    { mpdj_logo_320x162_l4, 80000, 25920, 320, 162, L4, 160 },
+#elif !defined(TRACKER_MINI)
     {
       poly_logo_160x172_l8,
       80000,
@@ -298,7 +306,7 @@ void cDisplay::begin(DisplayDriver* displayDriver, Timer* timer)
 
     this->timer = timer;
     // ####################################
-#ifndef TRACKER_MINI
+#if !defined(TRACKER_MINI) && !defined(PLATFORM_MPC)
     decompress(poly_logo_160x172_l8_compressed,
                sizeof(poly_logo_160x172_l8_compressed) / sizeof(poly_logo_160x172_l8_compressed[0]),
                poly_logo_160x172_l8);
