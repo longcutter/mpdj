@@ -26,6 +26,8 @@ Polyend's factory synth engines are closed binaries for the Tracker's chip and a
 
 Running MPDJ stops the MPC app while it runs and doesn't change the MPC's system partition; restarting the MPC app (or the MPC) brings everything back. Still, modifying your MPC is at your own risk and may affect its warranty.
 
+What we've learned about the MPC One+'s hardware and system while building MPDJ (audio latency, the controller's MIDI and LED maps, display, USB and more) is written up separately for anyone hacking on MPCs: [MPC Linux notes](https://github.com/longcutter/mpc-linux-notes).
+
 ## Build
 
 MPDJ cross-compiles for 32-bit ARM Linux with [zig](https://ziglang.org/) as the C/C++ toolchain:
