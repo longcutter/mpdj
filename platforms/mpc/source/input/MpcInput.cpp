@@ -1108,8 +1108,9 @@ namespace
 //            of QL1 / QL2, for zoomed-in work; Mike 2026-11-12)
 //   Plain  = one step per message (short lists: window size)
 //   Slow   = a short list at the screen-button value speed (several messages
-//            per step: granular Shape and Loop, wavetable window size on QL4)
-enum class Knob : uint8_t { Scaled, Fine, Plain, Slow };
+//            per step: granular Shape and Loop)
+//   Slower = half that speed (wavetable window size on QL4; Mike 2026-11-12)
+enum class Knob : uint8_t { Scaled, Fine, Plain, Slow, Slower };
 
 struct PointMap
 {
@@ -1141,7 +1142,7 @@ bool pointMap(PointMap& m)
             m.button[2] = interfaceButton1; // slow twins: one window per message
             m.kind[2] = Knob::Fine;
             m.button[3] = interfaceButton2;
-            m.kind[3] = Knob::Slow;
+            m.kind[3] = Knob::Slower;
             m.listSelected = sp.selectedPlace == 6;
             return true;
         }
@@ -1238,15 +1239,16 @@ bool MpcInput::pointScreenTurn(int knob, int steps)
     pointMsgMs[knob] = now;
 
     Knob kind = m.kind[knob];
-    if (kind == Knob::Slow)
+    if (kind == Knob::Slow || kind == Knob::Slower)
     {
-        steps = divideQLink(knob, steps, 3); // screen-button value speed
+        // screen-button value speed (kQLinkDiv[3]), or half of it (kQLinkDiv[4] = twice the messages)
+        steps = divideQLink(knob, steps, kind == Knob::Slow ? 3 : 4);
         if (!steps)
             return true;
     }
     holdScreenButton(m.button[knob]);
     qlinkTurnMs = now;
-    if (kind == Knob::Plain || kind == Knob::Slow)
+    if (kind == Knob::Plain || kind == Knob::Slow || kind == Knob::Slower)
         turnValue(steps); // a short list of values: one per message
     else if (kind == Knob::Fine || dt >= pointFineMs)
     {
@@ -1262,7 +1264,7 @@ bool MpcInput::pointScreenTurn(int knob, int steps)
         turnValue(dt < pointFastMs ? steps * 8 : steps * 2); // screens counting in their own units
     if (trace)
         printf("input: point knob %d %+d (%s, %u ms) -> %u\n", knob + 1, steps,
-               kind == Knob::Plain ? "plain" : kind == Knob::Slow ? "slow" : kind == Knob::Fine ? "fine knob"
+               kind == Knob::Plain ? "plain" : kind == Knob::Slow ? "slow" : kind == Knob::Slower ? "slower" : kind == Knob::Fine ? "fine knob"
                : dt >= pointFineMs ? "fine" : dt < pointFastMs ? "fast" : "coarse",
                (unsigned)dt, m.value[knob] ? *m.value[knob] : 0u);
     return true;
