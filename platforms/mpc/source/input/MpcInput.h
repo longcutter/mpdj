@@ -65,6 +65,7 @@ class MpcInput
     uint32_t tapTimes[kTaps] = {};
     int tapCount = 0;
     int divideQLink(int knob, int steps, int divIdx = -1);
+    void songJumpArea(int steps);
     void stepEditParam(int steps);
     bool onFxTypeColumn();
     void stepFxType(int steps);

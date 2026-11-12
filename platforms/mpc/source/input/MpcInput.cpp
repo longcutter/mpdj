@@ -125,6 +125,7 @@ int relSteps(uint8_t v)
 }
 
 constexpr uint8_t kCcMainEncoder = 100;
+constexpr int kListJump = 5; // file lists: rows per Q-Link 2 step (Q-Link 4 = one row)
 constexpr uint8_t kCcQLink1 = 16; // Q-Links 1-4 = CC 16-19, top to bottom
 
 // Tracker+ screen buttons sit under 8 label boxes, y 423-478 of 480.
@@ -843,7 +844,28 @@ void MpcInput::stepFxType(int steps)
 //       elsewhere left/right like Q-Link 1
 //   4 = the selected cell's value (same as the main encoder); on an FX column
 //       in edit mode, the effect TYPE (the main encoder changes its value)
-//   Song screen: 3 = pattern number of the selected slot (edit mode)
+//   Song screen (Mike's labels, 2026-11-12): 3 = jump between the song grid,
+//       the pattern list and the tempo; 4 = the selected slot's pattern number
+//       on the list (edit mode), the value elsewhere
+//   Sample Loader / File screen: 2 = jump kListJump rows, 4 = one row
+// Song screen, Q-Link 3: one area per step (song grid > pattern list > tempo).
+// Left / Right already move between the areas except from the grid, where Right
+// walks the tracks first, so that step jumps straight to the list. Outside edit
+// mode the grid can't be entered (the Tracker's own rule).
+void MpcInput::songJumpArea(int steps)
+{
+    for (int i = 0; i < abs(steps); i++)
+    {
+        if (steps > 0 && songEditor.selectedPlace == 0)
+        {
+            songEditor.selectedPlace = 1;
+            songEditor.activateLabelsBorder();
+        }
+        else
+            tapButton(steps > 0 ? interfaceButtonRight : interfaceButtonLeft, 1);
+    }
+}
+
 void MpcInput::onRelative(uint8_t cc, uint8_t value)
 {
     int steps = relSteps(value);
@@ -886,20 +908,31 @@ void MpcInput::onRelative(uint8_t cc, uint8_t value)
     steps = divideQLink(knob, steps);
     if (!steps)
         return;
+    bool song = mtInterface.isSongScreenActive();
     switch (knob)
     {
         case 0: tapButton(steps > 0 ? interfaceButtonRight : interfaceButtonLeft, abs(steps)); break;
-        case 1: tapButton(steps > 0 ? interfaceButtonDown : interfaceButtonUp, abs(steps)); break;
+        case 1:
+        {
+            bool list = mtInterface.isSampleLoaderScreenActive() || mtInterface.isFileScreenActive();
+            tapButton(steps > 0 ? interfaceButtonDown : interfaceButtonUp, abs(steps) * (list ? kListJump : 1));
+            break;
+        }
         case 2:
             if (mtInterface.isPatternScreenActive() && patternEditor.fillState == 0 &&
                 patternEditor.selectedPlace < 0)
                 stepEditParam(steps);
-            else if (mtInterface.isSongScreenActive())
-                songEditor.changeSelectedPlayListPattern(steps); // in edit mode (REC)
+            else if (song)
+                songJumpArea(steps);
             else
                 tapButton(steps > 0 ? interfaceButtonRight : interfaceButtonLeft, abs(steps));
             break;
-        case 3: turnValue(steps); break;
+        case 3:
+            if (song && songEditor.selectedPlace == 1 && songEditor.editMode)
+                songEditor.changeSelectedPlayListPattern(steps);
+            else
+                turnValue(steps);
+            break;
     }
 }
 
@@ -1055,7 +1088,10 @@ void MpcInput::pollQLinks()
 // navigation. Since 2026-11-12 the order follows Mike's Q-Link labels:
 // Q-Link 1 = Start, 2 = End, 3 = Loop start, 4 = Loop end (the editor has no
 // loop points: 1 = Start, 2 = End); granular: 1 = Position, 2 = Length;
-// wavetable: 1 = Position, 2 = Window size. The speed of the turn picks
+// wavetable: 1 = Position, 2 = Window size. QL3 / QL4 where they aren't loop
+// points: the slow twins of QL1 / QL2 (1-shot, editor: Start / End at the
+// finest step; wavetable: Position one window per message, Window size at the
+// value speed); granular: 3 = Shape, 4 = Loop. The speed of the turn picks
 // the step: messages more than pointFineMs apart move 1/8 of a screen pixel at
 // the current zoom (at least one point unit, 1/65536 of the sample, the finest
 // the Tracker stores; Mike couldn't see the original one-unit step), quicker
@@ -1066,11 +1102,20 @@ void MpcInput::pollQLinks()
 // Modes 2-3 keep working on these screens as before.
 namespace
 {
+// How a point-map knob turns its value:
+//   Scaled = by turn speed (fine / coarse / fast, see pointScreenTurn)
+//   Fine   = always the finest step, one per message (QL3 / QL4 "slow" twins
+//            of QL1 / QL2, for zoomed-in work; Mike 2026-11-12)
+//   Plain  = one step per message (short lists: window size)
+//   Slow   = a short list at the screen-button value speed (several messages
+//            per step: granular Shape and Loop, wavetable window size on QL4)
+enum class Knob : uint8_t { Scaled, Fine, Plain, Slow };
+
 struct PointMap
 {
     int button[4] = { -1, -1, -1, -1 }; // Tracker screen button per knob, -1 = none
     uint16_t* value[4] = {};            // the point each knob moves
-    bool scaled[4] = { true, true, true, true }; // speed-scaled (false: one step per message)
+    Knob kind[4] = { Knob::Scaled, Knob::Scaled, Knob::Scaled, Knob::Scaled };
     int zoomButton = -1;                // -1 = the screen has no zoom (encoder turns the value)
     bool* fine = nullptr;               // the screen's mpdjFineStep flag (nullptr: none)
     strZoomParams* zoom = nullptr;
@@ -1092,7 +1137,11 @@ bool pointMap(PointMap& m)
         {
             m.button[0] = interfaceButton1; // Position (window)
             m.button[1] = interfaceButton2; // Window size: a few sizes, one per message
-            m.scaled[1] = false;
+            m.kind[1] = Knob::Plain;
+            m.button[2] = interfaceButton1; // slow twins: one window per message
+            m.kind[2] = Knob::Fine;
+            m.button[3] = interfaceButton2;
+            m.kind[3] = Knob::Slow;
             m.listSelected = sp.selectedPlace == 6;
             return true;
         }
@@ -1107,6 +1156,10 @@ bool pointMap(PointMap& m)
             m.value[0] = &ins->granular.currentPosition;
             m.button[1] = interfaceButton2; // Length
             m.value[1] = &ins->granular.grainLength;
+            m.button[2] = interfaceButton3; // Shape
+            m.kind[2] = Knob::Slow;
+            m.button[3] = interfaceButton4; // Loop
+            m.kind[3] = Knob::Slow;
             m.listSelected = sp.selectedPlace == 6;
             return true; // no zoom on this screen
         }
@@ -1124,6 +1177,16 @@ bool pointMap(PointMap& m)
             m.value[2] = &ins->loopPoint1;
             m.button[3] = interfaceButton3;
             m.value[3] = &ins->loopPoint2;
+        }
+        else
+        {
+            // 1-shot: QL3 / QL4 = Start / End at the finest step
+            m.button[2] = m.button[0];
+            m.value[2] = m.value[0];
+            m.kind[2] = Knob::Fine;
+            m.button[3] = m.button[1];
+            m.value[3] = m.value[1];
+            m.kind[3] = Knob::Fine;
         }
         m.zoomButton = interfaceButton5;
         m.fine = &sp.mpdjFineStep;
@@ -1144,6 +1207,12 @@ bool pointMap(PointMap& m)
         m.value[0] = &se.selection.startPoint;
         m.button[1] = interfaceButton1;
         m.value[1] = &se.selection.endPoint;
+        m.button[2] = interfaceButton0; // QL3 / QL4 = Start / End at the finest step
+        m.value[2] = m.value[0];
+        m.kind[2] = Knob::Fine;
+        m.button[3] = interfaceButton1;
+        m.value[3] = m.value[1];
+        m.kind[3] = Knob::Fine;
         m.zoomButton = interfaceButton2;
         m.fine = &se.mpdjFineStep;
         m.zoom = &se.zoom;
@@ -1168,11 +1237,18 @@ bool MpcInput::pointScreenTurn(int knob, int steps)
     uint32_t dt = now - pointMsgMs[knob];
     pointMsgMs[knob] = now;
 
+    Knob kind = m.kind[knob];
+    if (kind == Knob::Slow)
+    {
+        steps = divideQLink(knob, steps, 3); // screen-button value speed
+        if (!steps)
+            return true;
+    }
     holdScreenButton(m.button[knob]);
     qlinkTurnMs = now;
-    if (!m.scaled[knob])
+    if (kind == Knob::Plain || kind == Knob::Slow)
         turnValue(steps); // a short list of values: one per message
-    else if (dt >= pointFineMs)
+    else if (kind == Knob::Fine || dt >= pointFineMs)
     {
         if (m.fine)
             *m.fine = true; // one point unit per message
@@ -1186,7 +1262,8 @@ bool MpcInput::pointScreenTurn(int knob, int steps)
         turnValue(dt < pointFastMs ? steps * 8 : steps * 2); // screens counting in their own units
     if (trace)
         printf("input: point knob %d %+d (%s, %u ms) -> %u\n", knob + 1, steps,
-               !m.scaled[knob] ? "plain" : dt >= pointFineMs ? "fine" : dt < pointFastMs ? "fast" : "coarse",
+               kind == Knob::Plain ? "plain" : kind == Knob::Slow ? "slow" : kind == Knob::Fine ? "fine knob"
+               : dt >= pointFineMs ? "fine" : dt < pointFastMs ? "fast" : "coarse",
                (unsigned)dt, m.value[knob] ? *m.value[knob] : 0u);
     return true;
 }
