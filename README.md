@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/mpdj-logo.png" alt="MPDJ logo" width="320"></p>
+
 # MPDJ
 
 **MPDJ** (MPDJ Tracker) runs a tracker natively on the **Akai MPC One+**, in place of the MPC app. It is a port of [Polyend Tracker Community Edition](https://github.com/polyend/tracker-ce) to the MPC's Linux system: the tracker's sequencer, sample engine and screens, driven by the MPC's pads, Q-Link knobs, buttons, touchscreen and audio interface.
