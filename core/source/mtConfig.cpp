@@ -402,9 +402,9 @@ void checkConfig()
         mtConfig.general.recThreshold = recThreshold_default;
 #ifdef PLATFORM_MPC
     if (mtConfig.general.buttonLights > 3)
-        mtConfig.general.buttonLights = 1;
+        mtConfig.general.buttonLights = 3;
     if (mtConfig.general.tapTempoFlash > 2)
-        mtConfig.general.tapTempoFlash = 0;
+        mtConfig.general.tapTempoFlash = 1;
 #endif
     if (mtConfig.general.performanceSource > 1)
         mtConfig.general.performanceSource = 0;
@@ -565,8 +565,8 @@ void resetConfig()
     mtConfig.general.previewVolume = PREVIEW_VOLUME_DEFAULT;
     mtConfig.general.recThreshold = recThreshold_default;
 #ifdef PLATFORM_MPC
-    mtConfig.general.buttonLights = 1;  // Dim (Mike: nothing bright indoors)
-    mtConfig.general.tapTempoFlash = 0; // Off
+    mtConfig.general.buttonLights = 3;  // Dynamic (Mike's default, 2026-11-12)
+    mtConfig.general.tapTempoFlash = 1; // Dim
 #endif
 
     // interface ----------------------------------------

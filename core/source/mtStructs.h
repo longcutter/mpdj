@@ -1122,8 +1122,8 @@ struct strMtConfig
         // MPDJ (2026-11-12): MPC button lights 0 Off / 1 Dim / 2 Bright / 3 Dynamic,
         // TAP TEMPO beat flash 0 Off / 1 Dim / 2 Bright. Appended, so older config
         // files load with these defaults
-        uint8_t buttonLights = 1;
-        uint8_t tapTempoFlash = 0;
+        uint8_t buttonLights = 3;  // Dynamic (Mike's default, 2026-11-12)
+        uint8_t tapTempoFlash = 1; // Dim
 #endif
     } general;
 

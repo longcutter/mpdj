@@ -1527,7 +1527,7 @@ void MpcInput::setQLinkLeds()
 //   Off      everything dark
 //   Dim      active = dim (white or red), the rest dark (default: nothing bright)
 //   Bright   active = bright, the rest dark
-//   Dynamic  available = dim white, active = bright
+//   Dynamic  available = dim white, active = bright (default)
 // Values (hardware map): one-colour LEDs 0 off, 1 dim, 2+ bright; two-colour
 // buttons 1 dim white, 2 dim red, 3 bright white, 4 bright red, so the same
 // numbers work for both. "Tap tempo flash" (Off / Dim / Bright) flashes TAP
