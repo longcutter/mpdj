@@ -48,3 +48,24 @@ Polyend Tracker Community Edition (CE) incorporates or links against the followi
 * **Location**: `synth/lib/`
 * **License**: Polyend Precompiled Synthesizer & DSP Library License (`synth/lib/LICENSE-PROPRIETARY.txt`)
 * **Copyright**: Copyright (c) 2023-2026 Polyend Sp. z o.o. All rights reserved.
+
+---
+
+# MPDJ additions
+
+MPDJ (the `mpc-port` branch) adds the Akai MPC One+ platform layer in `platforms/mpc/` and small, marked changes (`MPDJ` / `PLATFORM_MPC`) to the shared code. MPDJ's own additions: Copyright (c) 2026 MPDJ contributors, released under the MIT License (Part 1 of `LICENSE`); the project as a whole remains under `LICENSE`, including Part 2.
+
+MPDJ is not affiliated with Polyend, Akai Professional or inMusic Brands. "Polyend" and "Polyend Tracker" are trademarks of Polyend Sp. z o.o.; "MPC" and "Akai Professional" are trademarks of inMusic Brands, Inc.
+
+Third-party components used by MPDJ:
+
+## 10. stb_image
+* **Location**: `platforms/mpc/source/3rdparty/stb_image.h`
+* **License**: Public domain or MIT (dual-licensed, at the user's choice)
+* **Copyright**: Sean Barrett and contributors
+
+## 11. JACK (optional, not linked)
+* **Use**: MPDJ can run as a JACK client (`platforms/mpc/source/audio/JackClient.*`). `libjack` is loaded at run time with `dlopen` only when that mode is enabled; MPDJ ships no JACK code and the normal build has no JACK dependency
+* **License of libjack**: LGPL-2.1
+
+Planned components are credited here as they are added (e.g. zepto8 for the PICO-8-style engine on the `p8sound` branch, Mutable Instruments, CHOMPI Club / Chase Bliss DSP, Signalsmith Stretch), each under its own license.
