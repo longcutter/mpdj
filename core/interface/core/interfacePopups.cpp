@@ -38,6 +38,23 @@ extern cPatternEditor patternEditor;
 InterfacePopups mtPopups;
 static InterfacePopups* POP = &mtPopups;
 
+// MPDJ: the Midi-track picker lists the MIDI programs only (programListSlots)
+static int midiListLength()
+{
+    uint8_t slots[kProgramSlots];
+    int n = programListSlots(true, slots);
+    return n > 0 ? n : 1;
+}
+
+static uint8_t midiListSlot(int pos)
+{
+    uint8_t slots[kProgramSlots];
+    int n = programListSlots(true, slots);
+    if (n == 0)
+        return mtProject.values.lastUsedInstrument; // no MIDI programs yet
+    return slots[pos < 0 ? 0 : (pos < n ? pos : n - 1)];
+}
+
 //=====================================================================================================
 //
 //=====================================================================================================
@@ -440,12 +457,13 @@ int InterfacePopups::convertInstrumentIdxToPopupListPos(enumStepPopups stepPopup
              stepPopupType == stepPopupOnlySynthAndMidiInstr)
 #endif
     {
-        if (instrIdx < MIDI_INSTRUMENTS_START_IDX ||
-            instrIdx > MIDI_INSTRUMENTS_START_IDX + kMidiInstrumentsCount - 1)
-        {
-            instrIdx = MIDI_INSTRUMENTS_START_IDX;
-        }
-        listPos = instrIdx - MIDI_INSTRUMENTS_START_IDX;
+        // MPDJ: the list holds the MIDI programs only (programListSlots)
+        uint8_t slots[kProgramSlots];
+        int n = programListSlots(true, slots);
+        listPos = 0;
+        for (int i = 0; i < n; i++)
+            if (slots[i] == instrIdx)
+                listPos = i;
     }
 #if GUI_HANDLE_SYNTH
     else if (stepPopupType == stepPopupOnlySynthAndMidiInstr)
@@ -704,7 +722,7 @@ void InterfacePopups::setStepPopupValue(int16_t value)
         {
             value = clamp<int8_t>(value,
                                   0,
-                                  kMidiInstrumentsCount
+                                  midiListLength() // MPDJ: MIDI programs
 #if GUI_HANDLE_SYNTH
                                     + kSynthInstrumentsCount
 #endif
@@ -723,7 +741,7 @@ void InterfacePopups::setStepPopupValue(int16_t value)
                   MIDI_INSTRUMENTS_START_IDX + (selectedActualItem - kSynthInstrumentsCount);
             }
 #else
-            mtProject.values.lastUsedInstrument = MIDI_INSTRUMENTS_START_IDX + (selectedActualItem);
+            mtProject.values.lastUsedInstrument = midiListSlot(selectedActualItem);
 #endif
 
             display.setControlValue(popupListControl, selectedActualItem);
@@ -732,8 +750,8 @@ void InterfacePopups::setStepPopupValue(int16_t value)
         }
         case stepPopupOnlyMidiInstr:
         {
-            selectedActualItem = clamp<int8_t>(value, 0, kMidiInstrumentsCount - 1);
-            mtProject.values.lastUsedInstrument = MIDI_INSTRUMENTS_START_IDX + selectedActualItem;
+            selectedActualItem = clamp<int8_t>(value, 0, midiListLength() - 1);
+            mtProject.values.lastUsedInstrument = midiListSlot(selectedActualItem);
 
             display.setControlValue(popupListControl, selectedActualItem);
             display.refreshControl(popupListControl);
@@ -833,8 +851,13 @@ void InterfacePopups::changeStepPopupValue(int16_t value, InterfacePopups::Popup
         }
         case stepPopupOnlySynthAndMidiInstr:
         {
-            selectedActualItem = clamp<int8_t>(
-              selectedActualItem + value, 0, kSynthInstrumentsCount + kMidiInstrumentsCount - 1);
+            selectedActualItem = clamp<int8_t>(selectedActualItem + value,
+                                               0,
+                                               midiListLength() // MPDJ: MIDI programs
+#if GUI_HANDLE_SYNTH
+                                                 + kSynthInstrumentsCount
+#endif
+                                                 - 1);
 
 #if GUI_HANDLE_SYNTH
             if (selectedActualItem < kSynthInstrumentsCount)
@@ -848,7 +871,7 @@ void InterfacePopups::changeStepPopupValue(int16_t value, InterfacePopups::Popup
                   MIDI_INSTRUMENTS_START_IDX + (selectedActualItem - kSynthInstrumentsCount);
             }
 #else
-            mtProject.values.lastUsedInstrument = MIDI_INSTRUMENTS_START_IDX + selectedActualItem;
+            mtProject.values.lastUsedInstrument = midiListSlot(selectedActualItem);
 #endif
 
             display.setControlValue(popupListControl, selectedActualItem);
@@ -858,9 +881,9 @@ void InterfacePopups::changeStepPopupValue(int16_t value, InterfacePopups::Popup
         case stepPopupOnlyMidiInstr:
         {
             selectedActualItem =
-              clamp<int8_t>(selectedActualItem + value, 0, kMidiInstrumentsCount - 1);
+              clamp<int8_t>(selectedActualItem + value, 0, midiListLength() - 1);
 
-            mtProject.values.lastUsedInstrument = MIDI_INSTRUMENTS_START_IDX + selectedActualItem;
+            mtProject.values.lastUsedInstrument = midiListSlot(selectedActualItem);
 
             display.setControlValue(popupListControl, selectedActualItem);
             display.refreshControl(popupListControl);
@@ -980,34 +1003,35 @@ int InterfacePopups::listInstruments(enumStepPopups mode)
     }
 #endif
 
-    if (mode != stepPopupOnlyMidiInstr && mode != stepPopupOnlySynthAndMidiInstr)
+    // MPDJ: one list of the 64 program slots by number, or only the MIDI
+    // programs (Midi tracks). List position -> slot: midiListSlot()
+    bool midiOnly = mode == stepPopupOnlyMidiInstr || mode == stepPopupOnlySynthAndMidiInstr;
+    uint8_t slots[kProgramSlots];
+    int n = programListSlots(midiOnly, slots);
+    for (int k = 0; k < n; k++)
     {
-        for (uint8_t i = 0; i < kSampleInstrumentsCount; i++)
+        int i = slots[k];
+        char* name = &interfaceGlobals.intrumentsNames[instrIdx][0];
+        if (isMidiInstrument(i))
         {
-            sprintf(&interfaceGlobals.intrumentsNames[instrIdx][0], "%d. ", i + 1);
-
+            sprintf(name, "%d. MIDI Channel %d", i + 1, instrumentIdxToMidiChannel(i));
+        }
+        else
+        {
+            sprintf(name, "%d. ", i + 1);
             if (mtProject.instrument[i].isActive)
             {
-                strncat(&interfaceGlobals.intrumentsNames[instrIdx][0],
-                        mtProject.instrument[i].sample.file_name,
-                        SAMPLE_NAME_SIZE);
-                interfaceGlobals.intrumentsNames[instrIdx][SAMPLE_NAME_SIZE + 5] = 0;
+                strncat(name, mtProject.instrument[i].sample.file_name, SAMPLE_NAME_SIZE);
+                name[SAMPLE_NAME_SIZE + 5] = 0;
             }
-
-            interfaceGlobals.ptrIntrumentsNames[instrIdx] =
-              &interfaceGlobals.intrumentsNames[instrIdx][0];
-            instrIdx++;
         }
+        interfaceGlobals.ptrIntrumentsNames[instrIdx] = name;
+        instrIdx++;
     }
-
-    for (uint8_t i = 0; i < kMidiInstrumentsCount; i++)
+    if (n == 0) // a list control needs a line
     {
-        sprintf(&interfaceGlobals.intrumentsNames[instrIdx][0],
-                "%d. MIDI Channel %d",
-                kSampleInstrumentsCount + i + 3,
-                i + 1);
-        interfaceGlobals.ptrIntrumentsNames[instrIdx] =
-          &interfaceGlobals.intrumentsNames[instrIdx][0];
+        strcpy(&interfaceGlobals.intrumentsNames[instrIdx][0], "No MIDI programs");
+        interfaceGlobals.ptrIntrumentsNames[instrIdx] = &interfaceGlobals.intrumentsNames[instrIdx][0];
         instrIdx++;
     }
 
@@ -1190,11 +1214,6 @@ static void functPadsPopup(uint8_t pad, uint8_t state, int16_t)
                 int8_t noteToPlay = Sequencer::STEP_NOTE_DEFAULT;
                 if (mtInterface.isPatternScreenActive())
                 {
-                    int instrumentToSet =
-                      patternEditor.isSelectionOrCursorInMidiTracks()
-                        ? MIDI_INSTRUMENTS_START_IDX + (pad % kMidiInstrumentsCount)
-                        : pad;
-
                     sendSelection();
                     noteToPlay = sequencer.getSelectionFirstNote();
                 }
@@ -1326,6 +1345,18 @@ void InterfacePopups::show(uint8_t, char** multiLineText, uint8_t lines_count, u
     display.setControlHide(progressBar);
 
     display.synchronizeRefresh();
+}
+
+void InterfacePopups::showProgramsImportNotice()
+{
+    if (programsTakeImportNotice())
+    {
+        show(0,
+             "Polyend Tracker project imported:",
+             "MIDI instruments M01-M16 are now",
+             "programs 49-64 (MIDI channels 1-16).",
+             8);
+    }
 }
 
 void InterfacePopups::hide()

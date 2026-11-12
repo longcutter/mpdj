@@ -105,6 +105,8 @@ class InterfacePopups
     void hideProgressPopup();
 
     void showInfoPopup(const char* text1, const char* text2);
+    // MPDJ: one-time note after a Tracker+ project was imported (mpdjPrograms)
+    void showProgramsImportNotice();
     void hideInfoPopup();
     //-------------------------------------
     // global popups functs

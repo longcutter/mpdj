@@ -103,14 +103,16 @@ static constexpr int kMaxAllTracksInTrackers =
 // this const for now indicates places where tracks are used in performance context
 static constexpr int kPerformanceTracks = kAllTracks;
 
-static constexpr uint8_t kSampleInstrumentsCount = 48;
-static constexpr uint8_t kMidiInstrumentsCount = 16;
-static constexpr uint8_t kSynthInstrumentsCount = 3;
+// MPDJ (step 5a-2): 64 program slots (mpdjPrograms.h), each of any type. Every
+// slot has sample storage; MIDI is a slot type, not an index range.
+static constexpr uint8_t kSampleInstrumentsCount = kProgramSlots; // slots with sample storage
+static constexpr uint8_t kMidiInstrumentsCount = 16; // MIDI channels (midiInstrument[] settings)
+static constexpr uint8_t kSynthInstrumentsCount = 3; // Polyend synths (FEATURE_SYNTH only)
 static constexpr uint8_t kTotalInstrumentsCount =
 #ifdef FEATURE_SYNTH
   kSynthInstrumentsCount +
 #endif
-  kMidiInstrumentsCount + kSampleInstrumentsCount;
+  kProgramSlots;
 
 static constexpr int kSynthMacrosCount = 6;
 
@@ -118,8 +120,13 @@ static constexpr int kCCMinValue = 0;
 static constexpr int kCCMidValue = 63;
 static constexpr int kCCMaxValue = 127;
 
-const uint8_t MIDI_INSTRUMENTS_START_IDX = kSampleInstrumentsCount;
-const uint8_t SYNTH_INSTRUMENTS_START_IDX = MIDI_INSTRUMENTS_START_IDX + kMidiInstrumentsCount;
+// MPDJ: no MIDI index range any more (slot types, mpdjPrograms.h). The Polyend
+// synth code (FEATURE_SYNTH, off on the MPC) still uses the old constant;
+// revisit with our own synth host (milestone 6).
+#ifdef FEATURE_SYNTH
+const uint8_t MIDI_INSTRUMENTS_START_IDX = kLegacySampleSlots;
+#endif
+const uint8_t SYNTH_INSTRUMENTS_START_IDX = kProgramSlots;
 
 const uint8_t PATTERN_INDEX_MIN = 1;
 const uint8_t PATTERN_INDEX_MAX = 255;
@@ -894,7 +901,7 @@ struct strMtValues
     float globalTempo = DEFAULT_TEMPO;
     uint16_t patternLength = 32;
 
-    uint8_t instrumentsToSave[kSampleInstrumentsCount];
+    uint8_t instrumentsToSave[kLegacySampleSlots]; // unused; size kept for the file layout
     uint8_t patternsToSave[PATTERN_INDEX_MAX];
 
     // performance 2/2
@@ -984,6 +991,8 @@ struct strMtProjectRemote
     strMtValues values;
     char projectName[PROJECT_NAME_SIZE]; // used for identify source project name in workspace
     char projectPath[PATCH_SIZE - PROJECT_NAME_SIZE]; // and location of that project
+    // MPDJ: after the Tracker+ data (aligned like the old struct's end), mpdjPrograms.h
+    alignas(alignof(strMtValues)) strMpdjProjectData mpdj;
 };
 
 //----------------------------------------------------------------------------------

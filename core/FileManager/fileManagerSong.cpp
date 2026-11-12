@@ -220,7 +220,7 @@ bool cFileManager::updatePatternBitmask(uint8_t patternIdx, Sequencer::strPatter
               &((Sequencer::strPattern*)sourcePattern)->track[trackNum].step[stepIdx];
 
             if (step->note != Sequencer::STEP_NOTE_EMPTY || step->hasAnyFx() ||
-                step->instrument >= MIDI_INSTRUMENTS_START_IDX)
+                programType(step->instrument) == kProgramMidi) // MPDJ: slot type
             {
                 isAnyActive = true;
                 break;

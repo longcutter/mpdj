@@ -36,6 +36,7 @@ class Battery;
 class Interface
 {
   public:
+    bool isRunning() const; // MPDJ: past the start screen
     Interface() {}
     ~Interface() {}
 

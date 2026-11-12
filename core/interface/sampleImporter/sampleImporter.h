@@ -6,7 +6,7 @@
 #include "mtStructs.h"
 
 //#define PREVIOUS_POSITION_LIFO	25
-#define MAX_SELECT 48
+#define MAX_SELECT kSampleInstrumentsCount // MPDJ: 64 slots
 
 enum
 {

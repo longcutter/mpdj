@@ -1498,7 +1498,7 @@ void cInstrumentEditor::showLfoAmount()
 
 void cInstrumentEditor::showParamsVelocity()
 {
-    if (mtProject.values.lastUsedInstrument < kSampleInstrumentsCount)
+    if (isSampleInstrument(mtProject.values.lastUsedInstrument))
     {
         sprintf(labelText[0], "%d", editorInstrument->volume);
 
@@ -1508,7 +1508,7 @@ void cInstrumentEditor::showParamsVelocity()
     {
         uint8_t temp_velocity =
           mtProject.values
-            .midiInstrument[mtProject.values.lastUsedInstrument - kSampleInstrumentsCount]
+            .midiInstrument[programMidiSettings(mtProject.values.lastUsedInstrument)]
             .velocity;
         sprintf(labelText[0], "%d", temp_velocity);
 
@@ -1523,7 +1523,7 @@ void cInstrumentEditor::showParamsVelocity()
 
 void cInstrumentEditor::showParamsOffset()
 {
-    if (mtProject.values.lastUsedInstrument < kSampleInstrumentsCount)
+    if (isSampleInstrument(mtProject.values.lastUsedInstrument))
     {
         return;
     }
@@ -1531,7 +1531,7 @@ void cInstrumentEditor::showParamsOffset()
     {
         uint8_t temp_offset =
           mtProject.values
-            .midiInstrument[mtProject.values.lastUsedInstrument - kSampleInstrumentsCount]
+            .midiInstrument[programMidiSettings(mtProject.values.lastUsedInstrument)]
             .offset;
         sprintf(labelText[1], "%d", temp_offset);
 
@@ -1546,8 +1546,7 @@ void cInstrumentEditor::showParamsOffset()
 
 void cInstrumentEditor::showParamsCC(uint8_t index)
 {
-    if (mtProject.values.lastUsedInstrument < MIDI_INSTRUMENTS_START_IDX ||
-        mtProject.values.lastUsedInstrument >= MIDI_INSTRUMENTS_START_IDX + kMidiInstrumentsCount ||
+    if (!isMidiInstrument(mtProject.values.lastUsedInstrument) ||
         index >= 6)
     {
         return;

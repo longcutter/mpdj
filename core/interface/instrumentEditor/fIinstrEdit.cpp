@@ -98,7 +98,7 @@ void cInstrumentEditor::start(uint32_t options)
             }
             else
 #endif
-              if (mtProject.values.lastUsedInstrument >= MIDI_INSTRUMENTS_START_IDX)
+              if (isMidiInstrument(mtProject.values.lastUsedInstrument)) // MPDJ: slot type
             {
                 mode = mtInstEditModeMidi;
             }
@@ -118,7 +118,7 @@ void cInstrumentEditor::start(uint32_t options)
             else
 #endif
             {
-                if (mtProject.values.lastUsedInstrument >= kSampleInstrumentsCount)
+                if (!isSampleInstrument(mtProject.values.lastUsedInstrument))
                 {
                     mtProject.values.lastUsedInstrument = 0;
                 }
@@ -128,7 +128,7 @@ void cInstrumentEditor::start(uint32_t options)
         }
         case 3:
         {
-            if (mtProject.values.lastUsedInstrument >= kSampleInstrumentsCount)
+            if (!isSampleInstrument(mtProject.values.lastUsedInstrument))
             {
                 mtProject.values.lastUsedInstrument = 0;
             }
@@ -166,7 +166,7 @@ void cInstrumentEditor::start(uint32_t options)
             }
             else
 #endif
-              if (mtProject.values.lastUsedInstrument >= MIDI_INSTRUMENTS_START_IDX)
+              if (isMidiInstrument(mtProject.values.lastUsedInstrument)) // MPDJ: slot type
             {
                 mode = mtInstEditModeMidi;
             }
@@ -179,7 +179,7 @@ void cInstrumentEditor::start(uint32_t options)
         }
     }
 
-    if (mtProject.values.lastUsedInstrument < kSampleInstrumentsCount)
+    if (isSampleInstrument(mtProject.values.lastUsedInstrument))
     {
         editorInstrument = &mtProject.instrument[mtProject.values.lastUsedInstrument];
     }
@@ -220,7 +220,7 @@ void cInstrumentEditor::start(uint32_t options)
         }
         case mtInstEditModeInstrSynth:
         {
-            if (mtProject.values.lastUsedInstrument >= kSampleInstrumentsCount)
+            if (!isSampleInstrument(mtProject.values.lastUsedInstrument))
             {
                 if (instListPos >= kSampleInstrumentsCount)
                 {
@@ -2036,7 +2036,7 @@ void changeParamsVelocity(int16_t value)
 {
     uint8_t* temp_velocity =
       &mtProject.values
-         .midiInstrument[mtProject.values.lastUsedInstrument - kSampleInstrumentsCount]
+         .midiInstrument[programMidiSettings(mtProject.values.lastUsedInstrument)]
          .velocity;
 
     if (*temp_velocity + value < 0)
@@ -2055,7 +2055,7 @@ void changeParamsOffset(int16_t value)
 {
     uint8_t* temp_offset =
       &mtProject.values
-         .midiInstrument[mtProject.values.lastUsedInstrument - kSampleInstrumentsCount]
+         .midiInstrument[programMidiSettings(mtProject.values.lastUsedInstrument)]
          .offset;
 
     if (*temp_offset + value < 0)
@@ -2081,7 +2081,7 @@ void changeParamsCC(int8_t index, int16_t value)
 
     uint8_t* temp_cc =
       &mtProject.values
-         .midiInstrument[mtProject.values.lastUsedInstrument - kSampleInstrumentsCount]
+         .midiInstrument[programMidiSettings(mtProject.values.lastUsedInstrument)]
          .ccOut[index];
 
     if (*temp_cc + value < 0)
@@ -2137,7 +2137,7 @@ void cInstrumentEditor::onControlChangeReceive(int param, int value)
 
 #endif
 
-    if (mtProject.values.lastUsedInstrument >= kSampleInstrumentsCount)
+    if (!isSampleInstrument(mtProject.values.lastUsedInstrument))
     {
         if (instListPos >= kSampleInstrumentsCount)
         {
@@ -2831,7 +2831,7 @@ void cInstrumentEditor::lightUpPadBoard()
 
     bool isBeatSlice = false;
 
-    if (mtProject.values.lastUsedInstrument < kSampleInstrumentsCount)
+    if (isSampleInstrument(mtProject.values.lastUsedInstrument))
     {
         isBeatSlice =
           mtProject.instrument[mtProject.values.lastUsedInstrument].playMode == playModeBeatSlice;
@@ -2900,7 +2900,7 @@ static void functPads(uint8_t pad, uint8_t state, int16_t)
 
     bool isBeatSlice = false;
 
-    if (mtProject.values.lastUsedInstrument < kSampleInstrumentsCount)
+    if (isSampleInstrument(mtProject.values.lastUsedInstrument))
     {
         isBeatSlice =
           mtProject.instrument[mtProject.values.lastUsedInstrument].playMode == playModeBeatSlice;
@@ -3404,7 +3404,7 @@ void cInstrumentEditor::setDefaultMidiVelocity()
 {
     uint8_t* temp_velocity =
       &mtProject.values
-         .midiInstrument[mtProject.values.lastUsedInstrument - kSampleInstrumentsCount]
+         .midiInstrument[programMidiSettings(mtProject.values.lastUsedInstrument)]
          .velocity;
 
     *temp_velocity = DEFAULT_MIDI_VELOCITY;
@@ -3418,7 +3418,7 @@ void cInstrumentEditor::setDefaultMidiOffset()
 {
     uint8_t* temp_offset =
       &mtProject.values
-         .midiInstrument[mtProject.values.lastUsedInstrument - kSampleInstrumentsCount]
+         .midiInstrument[programMidiSettings(mtProject.values.lastUsedInstrument)]
          .offset;
 
     *temp_offset = 0;
@@ -3432,7 +3432,7 @@ void cInstrumentEditor::setDefaultMidiCC(uint8_t index)
 {
     uint8_t* temp_cc =
       &mtProject.values
-         .midiInstrument[mtProject.values.lastUsedInstrument - kSampleInstrumentsCount]
+         .midiInstrument[programMidiSettings(mtProject.values.lastUsedInstrument)]
          .ccOut[index];
 
     switch (index)
@@ -3455,15 +3455,14 @@ uint8_t cInstrumentEditor::getActualMidiInstrumentCCValue(int ccIndex)
 {
     assert(ccIndex < 6);
 
-    if (mtProject.values.lastUsedInstrument < MIDI_INSTRUMENTS_START_IDX ||
-        mtProject.values.lastUsedInstrument >= MIDI_INSTRUMENTS_START_IDX + kMidiInstrumentsCount)
+    if (!isMidiInstrument(mtProject.values.lastUsedInstrument))
     {
         return 0;
     }
 
     return clamp<int>(
       mtProject.values
-        .midiInstrument[mtProject.values.lastUsedInstrument - MIDI_INSTRUMENTS_START_IDX]
+        .midiInstrument[programMidiSettings(mtProject.values.lastUsedInstrument)]
         .ccOut[ccIndex],
       0,
       ccNumbersCount - 1);

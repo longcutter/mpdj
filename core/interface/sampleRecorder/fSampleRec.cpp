@@ -380,19 +380,19 @@ void cSampleRecorder::start(uint32_t options)
 
     globalLastUsedInstrumentIndex = mtProject.values.lastUsedInstrument;
 
-    if (mtProject.values.lastUsedInstrument >= MIDI_INSTRUMENTS_START_IDX &&
-        mtProject.values.lastUsedInstrument < MIDI_INSTRUMENTS_START_IDX + kMidiInstrumentsCount)
+    // MPDJ: the recorder plays a MIDI program (slot type); none yet = leave it
+    if (isMidiInstrument(mtProject.values.lastUsedInstrument))
     {
         recorderMidiLastUsedInstrumentIndex = mtProject.values.lastUsedInstrument;
     }
     else
     {
-        recorderMidiLastUsedInstrumentIndex =
-          clamp<int>(recorderMidiLastUsedInstrumentIndex,
-                     MIDI_INSTRUMENTS_START_IDX,
-                     MIDI_INSTRUMENTS_START_IDX + kMidiInstrumentsCount - 1);
-
-        mtProject.values.lastUsedInstrument = recorderMidiLastUsedInstrumentIndex;
+        int midi = programStep(recorderMidiLastUsedInstrumentIndex, 0, true);
+        if (isMidiInstrument(midi))
+        {
+            recorderMidiLastUsedInstrumentIndex = midi;
+            mtProject.values.lastUsedInstrument = midi;
+        }
     }
 }
 
@@ -2928,9 +2928,7 @@ static void functInstrument(uint8_t state)
     else if (state == buttonPress)
     {
         mtProject.values.lastUsedInstrument =
-          clamp<uint8_t>(mtProject.values.lastUsedInstrument,
-                         MIDI_INSTRUMENTS_START_IDX,
-                         MIDI_INSTRUMENTS_START_IDX + kMidiInstrumentsCount - 1);
+          programStep(mtProject.values.lastUsedInstrument, 0, true); // MPDJ: a MIDI program
 
         mtPopups.showStepPopup(stepPopupOnlyMidiInstr, mtProject.values.lastUsedInstrument);
     }

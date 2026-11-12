@@ -135,7 +135,7 @@ void cSamplePlayback::update()
     currentAutoSlice = sliceManager.getAutoSliceState();
     if ((currentAutoSlice == 0) && (currentAutoSlice != lastAutoSlice))
     {
-        if (mtProject.values.lastUsedInstrument < kSampleInstrumentsCount &&
+        if (isSampleInstrument(mtProject.values.lastUsedInstrument) &&
             mtProject.sampleMemory[mtProject.values.lastUsedInstrument].isStreamed)
         {
             voiceStreamManager.refreshInstrumentSliceCache(mtProject.values.lastUsedInstrument);
@@ -178,7 +178,7 @@ void cSamplePlayback::start(uint32_t options)
     loadedInstrumentType = mtSampleTypeWaveFile;
 
     //--------------------------------------------------------------------
-    if (mtProject.values.lastUsedInstrument < kSampleInstrumentsCount)
+    if (isSampleInstrument(mtProject.values.lastUsedInstrument))
     {
         if (editorInstrument == nullptr ||
             editorInstrument->playMode !=
@@ -299,7 +299,7 @@ void cSamplePlayback::start(uint32_t options)
 
     ip->setButtonObj(interfaceButtonMiniMenu, functMenu);
 
-    if (mtProject.values.lastUsedInstrument >= kSampleInstrumentsCount)
+    if (!isSampleInstrument(mtProject.values.lastUsedInstrument))
     {
         ip->setButtonObj(interfaceButtonInstr, functInstrument);
         display.hideAllControls();
@@ -618,7 +618,7 @@ void cSamplePlayback::lightUpPadBoard()
 {
     padsBacklight.clearGlobalPads(0, 1, 1);
 
-    if (mtProject.values.lastUsedInstrument >= kSampleInstrumentsCount)
+    if (!isSampleInstrument(mtProject.values.lastUsedInstrument))
     {
         return;
     }
@@ -1801,7 +1801,7 @@ static void changePlayModeSelection(int16_t value)
         SP->editorInstrument->playMode += value;
 
     if (!isPlayModeStreamable(SP->editorInstrument->playMode) &&
-        mtProject.values.lastUsedInstrument < kSampleInstrumentsCount &&
+        isSampleInstrument(mtProject.values.lastUsedInstrument) &&
         mtProject.sampleMemory[mtProject.values.lastUsedInstrument].isStreamed)
     {
         if (!newFileManager.promoteStreamedInstrumentToRam(mtProject.values.lastUsedInstrument))
@@ -1810,7 +1810,7 @@ static void changePlayModeSelection(int16_t value)
         }
     }
     else if (SP->editorInstrument->playMode != prevPlayMode &&
-             mtProject.values.lastUsedInstrument < kSampleInstrumentsCount &&
+             isSampleInstrument(mtProject.values.lastUsedInstrument) &&
              mtProject.sampleMemory[mtProject.values.lastUsedInstrument].isStreamed)
     {
         voiceStreamManager.refreshInstrumentSliceCache(mtProject.values.lastUsedInstrument);
@@ -2295,7 +2295,7 @@ static void modSliceAdjust(int16_t value)
     uint16_t move_step = SP->zoom.zoomWidth / 600;
     value *= move_step;
     sliceManager.adjustSlice(SP->editorInstrument, value);
-    if (mtProject.values.lastUsedInstrument < kSampleInstrumentsCount &&
+    if (isSampleInstrument(mtProject.values.lastUsedInstrument) &&
         mtProject.sampleMemory[mtProject.values.lastUsedInstrument].isStreamed)
     {
         voiceStreamManager.refreshInstrumentSingleSliceCache(
@@ -2323,7 +2323,7 @@ static void modSliceAdjust(int16_t value)
 static void functAddSlice()
 {
     sliceManager.addSlice(SP->editorInstrument);
-    if (mtProject.values.lastUsedInstrument < kSampleInstrumentsCount &&
+    if (isSampleInstrument(mtProject.values.lastUsedInstrument) &&
         mtProject.sampleMemory[mtProject.values.lastUsedInstrument].isStreamed)
     {
         voiceStreamManager.refreshInstrumentSliceCache(mtProject.values.lastUsedInstrument);
@@ -2355,7 +2355,7 @@ static void functAddSlice()
 static void functRemoveSlice()
 {
     sliceManager.removeSlice(SP->editorInstrument);
-    if (mtProject.values.lastUsedInstrument < kSampleInstrumentsCount &&
+    if (isSampleInstrument(mtProject.values.lastUsedInstrument) &&
         mtProject.sampleMemory[mtProject.values.lastUsedInstrument].isStreamed)
     {
         voiceStreamManager.refreshInstrumentSliceCache(mtProject.values.lastUsedInstrument);
@@ -2429,7 +2429,7 @@ static void functAutoSlicConfirmOverwrite()
     else
     {
         sliceManager.equalSlice(SP->editorInstrument, mtConfig.common.equalSliceNumber);
-        if (mtProject.values.lastUsedInstrument < kSampleInstrumentsCount &&
+        if (isSampleInstrument(mtProject.values.lastUsedInstrument) &&
             mtProject.sampleMemory[mtProject.values.lastUsedInstrument].isStreamed)
         {
             voiceStreamManager.refreshInstrumentSliceCache(mtProject.values.lastUsedInstrument);
@@ -3273,7 +3273,7 @@ uint8_t cSamplePlayback::convertWavetableWindowsSizeToCounter(uint16_t size)
 void cSamplePlayback::onControlChangeReceive(int param, int value)
 {
     extern cInstrumentEditor instrumentEditor;
-    if (mtProject.values.lastUsedInstrument >= kSampleInstrumentsCount)
+    if (!isSampleInstrument(mtProject.values.lastUsedInstrument))
     {
         if (instrumentEditor.instListPos < 0)
         {

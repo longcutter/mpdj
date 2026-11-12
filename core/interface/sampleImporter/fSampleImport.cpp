@@ -245,7 +245,7 @@ void cSampleImporter::start(uint32_t options)
 {
     moduleRefresh = 1;
 
-    if (mtProject.values.lastUsedInstrument >= kSampleInstrumentsCount)
+    if (!isSampleInstrument(mtProject.values.lastUsedInstrument))
     {
         // mtProject.values.lastUsedInstrument = 0;
         selectedSlot = 0;
@@ -378,6 +378,23 @@ void cSampleImporter::setDefaultScreenFunct()
 
 //==============================================================================================================
 
+// MPDJ: samples go into any slot that isn't a MIDI program. Shows a popup and
+// returns true when [first, last] holds one.
+static bool slotsHoldMidiProgram(int first, int last)
+{
+    static char line[40];
+    for (int i = first; i <= last && i < kSampleInstrumentsCount; i++)
+    {
+        if (isMidiInstrument(i))
+        {
+            snprintf(line, sizeof(line), "Program %d is a MIDI program", i + 1);
+            mtPopups.show(0, line, "Pick an empty or sample slot.");
+            return true;
+        }
+    }
+    return false;
+}
+
 static void instrumentAdd(bool addNext)
 {
     if (SI->explorerNames == nullptr)
@@ -400,6 +417,8 @@ static void instrumentAdd(bool addNext)
         mtPopups.show(0, "Too many samples selected");
         return;
     }
+    if (slotsHoldMidiProgram(replaceStart, replaceEnd))
+        return;
 
     uint8_t instrToReplaceCount = 0;
     for (uint8_t i = replaceStart; i <= replaceEnd; i++)
@@ -551,6 +570,9 @@ static void functInstrumentImport()
     }
 
     uint8_t instrToReplace = SI->selectedSlot;
+
+    if (slotsHoldMidiProgram(instrToReplace, instrToReplace))
+        return;
 
     if (instrToReplace < kSampleInstrumentsCount && mtProject.instrument[instrToReplace].isActive)
     {
@@ -1078,7 +1100,7 @@ void cSampleImporter::pasteInstruments()
     if (!instrActiveInSel)
         return;
 
-    while (SI->selectedSlot + SI->copyElementsCount > 48)
+    while (SI->selectedSlot + SI->copyElementsCount > kSampleInstrumentsCount)
     {
         SI->copyElementsCount--;
         selectOverMax++;
@@ -1100,7 +1122,7 @@ void cSampleImporter::pasteInstruments()
         }
     }
 
-    if (willFit)
+    if (willFit && !slotsHoldMidiProgram(selectedSlot, selectedSlot + copyElementsCount - 1))
     {
         if (newFileManager.copyInstrumentsInWorkspace(
               instrCopyStart, copyElementsCount, selectedSlot))
@@ -1348,7 +1370,7 @@ uint8_t cSampleImporter::changeInstrumentSelection(int16_t value)
             selectionTab[listInstruments][selectedSlot] = 1;
             selectionLength[listInstruments]++;
         }
-        selectedSlot = handleSelecting(selectedSlot, 48, value, 0);
+        selectedSlot = handleSelecting(selectedSlot, kSampleInstrumentsCount, value, 0);
     }
     else
     {
@@ -1486,6 +1508,14 @@ void cSampleImporter::listInstrumentSlots()
                          mtProject.instrument[i].sample.file_name);
             }
         }
+        else if (isMidiInstrument(i)) // MPDJ: MIDI programs share the 64 slots
+        {
+            snprintf(&interfaceGlobals.intrumentsNames[i][0],
+                     sizeof(interfaceGlobals.intrumentsNames[i]),
+                     "%d.[MIDI ch %d]",
+                     i + 1,
+                     instrumentIdxToMidiChannel(i));
+        }
         else
         {
             snprintf(&interfaceGlobals.intrumentsNames[i][0],
@@ -1542,10 +1572,10 @@ void cSampleImporter::calculateFileMemUsage()
     {
         uint8_t selectionStart = getSelectionStart(listFiles);
 
-        if (selectedSlot + selectionLength[listFiles] > 48)
+        if (selectedSlot + selectionLength[listFiles] > kSampleInstrumentsCount)
         {
-            tempSelectionLength =
-              selectionLength[listFiles] - (selectedSlot + selectionLength[listFiles] - 48);
+            tempSelectionLength = selectionLength[listFiles] -
+                                  (selectedSlot + selectionLength[listFiles] - kSampleInstrumentsCount);
         }
         else
         {

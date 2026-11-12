@@ -475,7 +475,7 @@ uint8_t cProjectEditor::loadProjectValues()
     }
 
     // last used
-    if (mtProject.values.lastUsedInstrument >= kSampleInstrumentsCount + 16)
+    if (mtProject.values.lastUsedInstrument >= kTotalInstrumentsCount) // MPDJ: 64 slots
         mtProject.values.lastUsedInstrument = 0;
 
     if (mtProject.values.lastUsedNote >= 128)

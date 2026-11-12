@@ -450,14 +450,18 @@ void cSampleImporter::showActualInstrument()
 
     uint8_t i = mtProject.values.lastUsedInstrument;
 
-    if (i < kSampleInstrumentsCount)
+    if (isMidiInstrument(i)) // MPDJ: slot types, numbered 1-64
+    {
+        sprintf(actualInstrName, "%d. MIDI Channel %d", i + 1, instrumentIdxToMidiChannel(i));
+    }
+    else if (i < kSampleInstrumentsCount)
     {
         sprintf(actualInstrName, "%d.", i + 1);
         strncat(actualInstrName, mtProject.instrument[i].sample.file_name, 25);
     }
     else
     {
-        sprintf(actualInstrName, "%d. MIDI Channel %d", i + 3, i);
+        actualInstrName[0] = 0;
     }
 
     display.setControlText(instrumentLabel, actualInstrName);
@@ -633,7 +637,7 @@ void cSampleImporter::rewindListToBeggining()
 
 void cSampleImporter::moveInstrListToEnd()
 {
-    selectedSlot = 47;
+    selectedSlot = kSampleInstrumentsCount - 1;
     display.setControlValue(instrumentListControl, selectedSlot);
     display.refreshControl(instrumentListControl);
 }

@@ -85,7 +85,7 @@ void cSampleEditor::start([[maybe_unused]] uint32_t options)
 {
     moduleRefresh = 1;
 
-    if (mtProject.values.lastUsedInstrument < kSampleInstrumentsCount &&
+    if (isSampleInstrument(mtProject.values.lastUsedInstrument) &&
         mtProject.instrument[mtProject.values.lastUsedInstrument].sample.length >
           EDIT_BUFF_SIZE / 2)
     {
@@ -122,7 +122,7 @@ void cSampleEditor::start([[maybe_unused]] uint32_t options)
     effectListData.length = PtfxManager::getTotalEffectListCount();
     effectListData.data = PtfxManager::getEffectListNames();
 
-    if (mtProject.values.lastUsedInstrument > kSampleInstrumentsCount - 1)
+    if (!isSampleInstrument(mtProject.values.lastUsedInstrument))
     {
         editorInstrument->isActive = 0;
         editorInstrument->sample.address = nullptr;
@@ -212,7 +212,7 @@ void cSampleEditor::start([[maybe_unused]] uint32_t options)
     currentEffect->setBaseSampleLength(editorInstrument->sample.length);
 
     if (editorInstrument->isActive &&
-        mtProject.values.lastUsedInstrument < kSampleInstrumentsCount &&
+        isSampleInstrument(mtProject.values.lastUsedInstrument) &&
         mtProject.sampleMemory[mtProject.values.lastUsedInstrument].isStreamed)
     {
         if (currentEffect->startLoad(mtProject.values.lastUsedInstrument) ==
@@ -461,7 +461,7 @@ void cSampleEditor::setCommonFunctions()
 
     ip->setButtonObj(interfaceButtonMiniMenu, functMenu);
 
-    if (mtProject.values.lastUsedInstrument > kSampleInstrumentsCount - 1)
+    if (!isSampleInstrument(mtProject.values.lastUsedInstrument))
         return;
     if (!editorInstrument->isActive)
         return;
@@ -480,7 +480,7 @@ void cSampleEditor::setMainScreenFunctions()
     ip->clearButton(interfaceButtonDelete);
     ip->clearAllPots();
 
-    if (mtProject.values.lastUsedInstrument > kSampleInstrumentsCount - 1)
+    if (!isSampleInstrument(mtProject.values.lastUsedInstrument))
         return;
 
     ip->setButtonObj(interfaceButtonLeft, buttonPress, functMainScreenLeft);
@@ -512,7 +512,7 @@ void cSampleEditor::setParamsScreenFunctions()
     ip->clearButton(interfaceButtonDelete);
     ip->clearAllPots();
 
-    if (mtProject.values.lastUsedInstrument > kSampleInstrumentsCount - 1)
+    if (!isSampleInstrument(mtProject.values.lastUsedInstrument))
         return;
 
     ip->setButtonObj(interfaceButtonLeft, buttonPress, functParamsScreenLeft);

@@ -736,25 +736,9 @@ void cPatternEditor::refreshPattern()
                     row.instr[2] = 0;
                     row.instr[3] = 0;
                 }
-                else if (seqStep.instrument >= MIDI_INSTRUMENTS_START_IDX)
+                else // MPDJ: "07", or "M49" for a MIDI program (slot numbers 1-64)
                 {
-                    char inst0 = (seqStep.instrument - kSampleInstrumentsCount + 1) / 10;
-                    char inst1 = (seqStep.instrument - kSampleInstrumentsCount + 1) % 10;
-
-                    row.instr[0] = 'M';
-                    row.instr[1] = inst0 + 48;
-                    row.instr[2] = inst1 + 48;
-                    row.instr[3] = 0;
-                }
-                else // normal instr
-                {
-                    char inst0 = (seqStep.instrument + 1) / 10;
-                    char inst1 = (seqStep.instrument + 1) % 10;
-
-                    row.instr[0] = inst0 + 48;
-                    row.instr[1] = inst1 + 48;
-                    row.instr[2] = 0;
-                    row.instr[3] = 0;
+                    programCellLabel(seqStep.instrument, row.instr);
                 }
             }
             else
@@ -4746,11 +4730,11 @@ static void functPads(uint8_t pad, uint8_t state, int16_t velo)
                     {
                         sendSelection();
 
+                        // MPDJ: pad N = the N-th program the track can play
                         int instrumentToSet =
-                          PTE->isSelectionOrCursorInMidiTracks()
-                            ? MIDI_INSTRUMENTS_START_IDX + (pad % kMidiInstrumentsCount)
-                            : pad;
-                        sequencer.setSelectionInstrument(instrumentToSet);
+                          programFromPad(pad, PTE->isSelectionOrCursorInMidiTracks());
+                        if (instrumentToSet >= 0)
+                            sequencer.setSelectionInstrument(instrumentToSet);
                     }
                 }
                 break;
@@ -5082,12 +5066,7 @@ void cPatternEditor::refreshLastUsedInstrument()
     {
         mtProject.values.lastUsedNote = actualStep->note;
 
-#if GUI_HANDLE_SYNTH
-        int kMaxInstruments =
-          kSampleInstrumentsCount + kMidiInstrumentsCount + kSynthInstrumentsCount - 1;
-#else
-        int kMaxInstruments = kSampleInstrumentsCount + kMidiInstrumentsCount - 1;
-#endif
+        int kMaxInstruments = kTotalInstrumentsCount - 1; // MPDJ: 64 slots (+ synths)
         mtProject.values.lastUsedInstrument =
           clamp<int>(actualStep->instrument, 0, kMaxInstruments);
     }

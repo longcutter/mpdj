@@ -909,30 +909,27 @@ AUDIO_CORE_RAM void Sequencer::play_microStep(int row)
                     break;
                 case fx.FX_TYPE_RANDOM_INSTRUMENT:
                     killFxOnSlot(row, fxIndex);
+                    // MPDJ: random program of the same type (slot types, 5a-2)
                     if (isSampleInstrument(stepToSend.instrument))
                     {
-                        stepToSend.instrument =
+                        int r =
                           clamp<int>(utilMathRandom::random(stepToSend.instrument - _fx.value,
                                                             stepToSend.instrument + _fx.value + 1),
                                      0,
                                      kSampleInstrumentsCount - 1);
+                        if (isSampleInstrument(r))
+                            stepToSend.instrument = r;
                     }
                     else if (isMidiInstrument(stepToSend.instrument))
                     {
-                        static constexpr int kMidiInstrumentStartIdx = kSampleInstrumentsCount;
-                        static constexpr int kMidiInstrumentEndIdx =
-                          kMidiInstrumentStartIdx + kMidiInstrumentsCount - 1;
-
                         stepToSend.instrument =
-                          clamp<int>(utilMathRandom::random(stepToSend.instrument - _fx.value,
-                                                            stepToSend.instrument + _fx.value + 1),
-                                     kMidiInstrumentStartIdx,
-                                     kMidiInstrumentEndIdx);
+                          programStep(stepToSend.instrument,
+                                      utilMathRandom::random(-_fx.value, _fx.value + 1),
+                                      true);
                     }
                     else if (isSynthInstrument(stepToSend.instrument))
                     {
-                        static constexpr int kSynthInstrumentStartIdx =
-                          kSampleInstrumentsCount + kMidiInstrumentsCount;
+                        static constexpr int kSynthInstrumentStartIdx = SYNTH_INSTRUMENTS_START_IDX;
                         static constexpr int kSynthInstrumentEndIdx =
                           kSynthInstrumentStartIdx + kSynthInstrumentsCount - 1;
 

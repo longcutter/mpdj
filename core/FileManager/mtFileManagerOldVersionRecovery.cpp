@@ -340,7 +340,8 @@ static void recoveryProjectVersion14()
     projectNameShift += 3 * sizeof(uint8_t);
 }
 
-static_assert(sizeof(strMtProjectRemote) ==
+// MPDJ: the Tracker+ part ends where the MPDJ block starts
+static_assert(offsetof(strMtProjectRemote, mpdj) ==
               2304); // if assert hits it is most likely you need to do sth here
 static void recoveryProjectVersion15()
 {

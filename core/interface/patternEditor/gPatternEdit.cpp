@@ -470,7 +470,11 @@ void cPatternEditor::fillInstrumentNames()
 {
     for (int i = 0; i < kSampleInstrumentsCount; i++)
     {
-        if (mtProject.instrument[i].isActive)
+        if (isMidiInstrument(i)) // MPDJ: slot types, one list 1-64
+        {
+            sprintf(&interfaceGlobals.intrumentsNames[i][0], "MIDI %d", instrumentIdxToMidiChannel(i));
+        }
+        else if (mtProject.instrument[i].isActive)
         {
             strncpy(&interfaceGlobals.intrumentsNames[i][0],
                     mtProject.instrument[i].sample.file_name,
@@ -483,18 +487,11 @@ void cPatternEditor::fillInstrumentNames()
 
         interfaceGlobals.ptrIntrumentsNames[i] = &interfaceGlobals.intrumentsNames[i][0];
     }
-    for (int i = 0; i < kMidiInstrumentsCount; i++)
-    {
-        sprintf(
-          &interfaceGlobals.intrumentsNames[kSampleInstrumentsCount + i][0], "MIDI %d", i + 1);
-        interfaceGlobals.ptrIntrumentsNames[kSampleInstrumentsCount + i] =
-          &interfaceGlobals.intrumentsNames[kSampleInstrumentsCount + i][0];
-    }
 
 #ifdef FEATURE_SYNTH
     for (int i = 0; i < kSynthInstrumentsCount; i++)
     {
-        int listPos = i + kMidiInstrumentsCount + kSampleInstrumentsCount;
+        int listPos = SYNTH_INSTRUMENTS_START_IDX + i;
 
         strncpy(interfaceGlobals.intrumentsNames[listPos],
                 synth->getSynthName(i).c_str(),
@@ -791,7 +788,7 @@ void cPatternEditor::refreshFillType()
         if (fillData[fillIdx].from < kSampleInstrumentsCount)
             sprintf(fillText1, "%d", (fillData[fillIdx].from + 1));
         else
-            sprintf(fillText1, "%d", (fillData[fillIdx].from + 3));
+            sprintf(fillText1, "%d", (fillData[fillIdx].from + 1) /* MPDJ: slots 1-64 */);
         display.setControlText2(label[4], fillText1);
         display.setControlValue(intstrumentsFromPopupListControl, fillData[fillIdx].from);
 
@@ -804,7 +801,7 @@ void cPatternEditor::refreshFillType()
             if (fillData[fillIdx].to < kSampleInstrumentsCount)
                 sprintf(fillText2, "%d", (fillData[fillIdx].to + 1));
             else
-                sprintf(fillText2, "%d", (fillData[fillIdx].to + 3));
+                sprintf(fillText2, "%d", (fillData[fillIdx].to + 1) /* MPDJ: slots 1-64 */);
             display.setControlText2(label[5], fillText2);
             display.setControlValue(intstrumentsToPopupListControl, fillData[fillIdx].to);
         }
@@ -872,7 +869,7 @@ void cPatternEditor::refreshFillFrom()
         if (fillData[fillIdx].from < kSampleInstrumentsCount)
             sprintf(fillText1, "%d", (fillData[fillIdx].from + 1));
         else
-            sprintf(fillText1, "%d", (fillData[fillIdx].from + 3));
+            sprintf(fillText1, "%d", (fillData[fillIdx].from + 1) /* MPDJ: slots 1-64 */);
         display.setControlText2(label[4], fillText1);
         display.refreshControl(label[4]);
 
@@ -964,7 +961,7 @@ void cPatternEditor::refreshFillTo()
         if (fillData[fillIdx].to < kSampleInstrumentsCount)
             sprintf(fillText2, "%d", (fillData[fillIdx].to + 1));
         else
-            sprintf(fillText2, "%d", (fillData[fillIdx].to + 3));
+            sprintf(fillText2, "%d", (fillData[fillIdx].to + 1) /* MPDJ: slots 1-64 */);
         display.setControlText2(label[5], fillText2);
         display.refreshControl(label[5]);
 

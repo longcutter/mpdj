@@ -8,7 +8,10 @@
 #include "Synth.h"
 #endif
 
+#include "core/interface.h"
+#include "core/interfacePopups.h"
 #include "log.h"
+#include "mpdjPrograms.h"
 
 #include <cstring>
 
@@ -179,6 +182,11 @@ void WorkspaceProjectLoad::loadProjectFromWorkspaceFinish()
 #endif
 
     newFileManager.loadProjectValues();
+
+    // MPDJ: a Tracker+ project was just imported (no MPDJ block in its file);
+    // at boot the note waits for the start screen to close (processStartScreen)
+    if (mtInterface.isRunning())
+        mtPopups.showProgramsImportNotice();
 
     if (newFileManager.needImportModFileAfterNewProject())
     {

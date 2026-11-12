@@ -15,7 +15,7 @@
 constexpr uint32_t lofiSampleRate = targetSampleRate / 2;
 
 __NOINIT(EXTERNAL_RAM)
-static FileManagerOperation::SampleLoadData sampleImportDataBuff[48];
+static FileManagerOperation::SampleLoadData sampleImportDataBuff[kSampleInstrumentsCount];
 
 void SampleImport::update() // fmImportSamplesToWorkspace
 {

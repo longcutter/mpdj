@@ -151,13 +151,13 @@ void TitleBar::showCurrentInstrumentOnRightLabel()
         actualInstrName[SAMPLE_NAME_SIZE] = 0;
 #endif
     }
-    else if (idx >= MIDI_INSTRUMENTS_START_IDX)
+    else if (isMidiInstrument(idx)) // MPDJ: slot type, numbered 1-64 like every slot
     {
         snprintf(actualInstrName,
                  SAMPLE_NAME_SIZE,
                  "%d. MIDI Channel %d",
-                 idx + 3,
-                 (idx - MIDI_INSTRUMENTS_START_IDX) + 1);
+                 idx + 1,
+                 instrumentIdxToMidiChannel(idx));
     }
     else
     {

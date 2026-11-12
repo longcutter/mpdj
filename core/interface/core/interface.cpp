@@ -248,6 +248,8 @@ void Interface::doStartTasks()
     engine.setPreviewVolume(mtConfig.general.previewVolume);
 }
 
+bool Interface::isRunning() const { return operatingMode == mtOperatingModeRun; }
+
 void Interface::processStartScreen()
 {
     if (fileSystem->isSdCardInserted())
@@ -266,6 +268,7 @@ void Interface::processStartScreen()
 #endif
             activateModule(&patternEditor, 0);
             unmuteAudioOutByKey();
+            mtPopups.showProgramsImportNotice(); // MPDJ: after a Tracker+ import at boot
 
 #ifdef TRACKER_MINI
             platform->getBattery()->enableMonitoring();

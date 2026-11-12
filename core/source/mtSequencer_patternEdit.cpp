@@ -1059,62 +1059,12 @@ uint8_t Sequencer::changeInstrumentInSpecificOrder(int8_t actualValue,
                                                    int16_t delta,
                                                    bool midiTypeOnly)
 {
-    int instrumentCount =
-      midiTypeOnly ? kTotalInstrumentsCount - kSampleInstrumentsCount : kTotalInstrumentsCount;
-
-    if (midiTypeOnly && delta == 0 && isSampleInstrument(actualValue))
-    {
-        return MIDI_INSTRUMENTS_START_IDX;
-    }
-#ifdef PLATFORM_MPC
-    // MPDJ: no MIDI out yet, so sample tracks step through the sample instruments
-    // only (1, 2, 3... instead of wrapping below 1 into M01-M16).
-    if (!midiTypeOnly)
-    {
-        int v = isSampleInstrument(actualValue) ? actualValue : 0;
-        return (uint8_t)clamp<int>(v + delta, 0, kSampleInstrumentsCount - 1);
-    }
-#endif
-
-    uint8_t uiChangeInstrumentOrder[instrumentCount];
-    [[maybe_unused]] bool initArray = [&]() -> bool
-    {
-        int pos = 0;
-        for (pos = 0; pos < kMidiInstrumentsCount; pos++)
-        {
-            uiChangeInstrumentOrder[pos] =
-              kSampleInstrumentsCount + kMidiInstrumentsCount - pos - 1;
-        }
-
-#ifdef FEATURE_SYNTH
-        int synthInstrIdx = kSampleInstrumentsCount + kMidiInstrumentsCount;
-        for (; pos < kMidiInstrumentsCount + kSynthInstrumentsCount; pos++, synthInstrIdx++)
-        {
-            uiChangeInstrumentOrder[pos] = synthInstrIdx;
-        }
-#endif
-
-        int sampleInstrIdx = 0;
-        for (; pos < instrumentCount; pos++, sampleInstrIdx++)
-        {
-            uiChangeInstrumentOrder[pos] = sampleInstrIdx;
-        }
-        return true;
-    }();
-
-    int instrumentPosInOrder = 0;
-    for (uint8_t a = 0; a < instrumentCount; a++)
-    {
-        if (uiChangeInstrumentOrder[a] == actualValue)
-        {
-            instrumentPosInOrder = a;
-            break;
-        }
-    }
-
-    instrumentPosInOrder = clamp<int>(instrumentPosInOrder + delta, 0, instrumentCount - 1);
-
-    return uiChangeInstrumentOrder[instrumentPosInOrder];
+    // MPDJ (step 5a-2): programs are slots 1-64 of any type, stepped in slot
+    // order and clamped at the ends. Sample tracks step through every slot
+    // (a MIDI program there sends MIDI, as on the Tracker+); Midi tracks
+    // through the MIDI programs only. No MIDI programs: the value stays.
+    // (Polyend's order put M16..M01 and the synths before the samples.)
+    return programStep((uint8_t)actualValue, delta, midiTypeOnly);
 }
 
 void Sequencer::changeSelectionInstrument(int16_t value)

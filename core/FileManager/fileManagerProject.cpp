@@ -98,7 +98,12 @@ bool cFileManager::loadProjectFileFormFileStruct(strMtProject* project, strProje
         // todo: informacja do interfejsu zeby wyswietlic popup
     }
 
-    if (pFile->projectDataAndHeader.projectHeader.size != sizeof(strProjectFile))
+    // MPDJ: a Tracker+ project file is the same up to the end of projectPath; only
+    // the MPDJ block after it is missing (read as zeros), so its name stays valid
+    static constexpr size_t kTrackerPlusProjectFileSize =
+      offsetof(strProjectFile, projectDataAndHeader.project.mpdj) + sizeof(uint32_t);
+    if (pFile->projectDataAndHeader.projectHeader.size != sizeof(strProjectFile) &&
+        pFile->projectDataAndHeader.projectHeader.size != kTrackerPlusProjectFileSize)
     {
         // zmienil sie rozmiar pliku projektu (np. po update)
         // wiec rozjadą sie nazwa i patch projektu
@@ -139,7 +144,10 @@ bool cFileManager::loadProjectFileFormFileStruct(strMtProject* project, strProje
 
     memcpy(&project->song, &pFile->projectDataAndHeader.project.song, sizeof(strSong));
     memcpy(&project->values, &pFile->projectDataAndHeader.project.values, sizeof(strMtValues));
-    programsLoadedFromLegacyProject(); // MPDJ: no slot types stored yet (step 5a-2)
+    // MPDJ: slot types; a Tracker+ project gets M01-M16 in slots 49-64
+    if (pFile->projectDataAndHeader.projectHeader.size < sizeof(strProjectFile))
+        memset(&pFile->projectDataAndHeader.project.mpdj, 0, sizeof(strMpdjProjectData));
+    programsReadFromFile(pFile->projectDataAndHeader.project.mpdj);
     //*proj=pFile.projectDataAndHeader.project;
     // mtProject.values=pFile.projectDataAndHeader.project.values;
     return true;
@@ -151,6 +159,7 @@ bool cFileManager::writeProjectFileToFileStruct(strMtProject* project, strProjec
     memcpy(&pFile->projectDataAndHeader.project.values, &project->values, sizeof(strMtValues));
     strcpy(pFile->projectDataAndHeader.project.projectName, currentProjectName);
     strcpy(pFile->projectDataAndHeader.project.projectPath, currentProjectPatch);
+    programsWriteToFile(pFile->projectDataAndHeader.project.mpdj); // MPDJ: slot types
     pFile->projectDataAndHeader.project.projectName[PROJECT_NAME_SIZE - 1] = 0;
     pFile->projectDataAndHeader.project.projectPath[PATCH_SIZE - PROJECT_NAME_SIZE - 1] = 0;
 
@@ -210,6 +219,7 @@ void cFileManager::getDefaultProject(struct strMtProject* source)
         source->perfTracksPatterns[i] = 1;
     }
 
+    source->programs = strProgramTable{}; // MPDJ: a new project starts with all slots empty
     getDefaultSong(&source->song);
     getDefaultValues(&source->values);
 
@@ -300,7 +310,7 @@ void cFileManager::getDefaultValues(struct strMtValues* source)
     source->globalTempo = DEFAULT_TEMPO;
     source->patternLength = 32;
 
-    memset(source->instrumentsToSave, 0, kSampleInstrumentsCount);
+    memset(source->instrumentsToSave, 0, sizeof(source->instrumentsToSave));
     memset(source->patternsToSave, 0, PATTERN_INDEX_MAX);
 
     // instrumenty midi
