@@ -1028,9 +1028,12 @@ int InterfacePopups::listInstruments(enumStepPopups mode)
         interfaceGlobals.ptrIntrumentsNames[instrIdx] = name;
         instrIdx++;
     }
-    if (n == 0) // a list control needs a line
+    if (n == 0) // a list control needs a line; say where MIDI programs come from
     {
-        strcpy(&interfaceGlobals.intrumentsNames[instrIdx][0], "No MIDI programs");
+        strcpy(&interfaceGlobals.intrumentsNames[instrIdx][0], "No MIDI programs:");
+        interfaceGlobals.ptrIntrumentsNames[instrIdx] = &interfaceGlobals.intrumentsNames[instrIdx][0];
+        instrIdx++;
+        strcpy(&interfaceGlobals.intrumentsNames[instrIdx][0], "BROWSE > /MIDI");
         interfaceGlobals.ptrIntrumentsNames[instrIdx] = &interfaceGlobals.intrumentsNames[instrIdx][0];
         instrIdx++;
     }

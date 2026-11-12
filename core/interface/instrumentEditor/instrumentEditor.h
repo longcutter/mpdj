@@ -342,6 +342,7 @@ class cInstrumentEditor : public ModuleBase
 
     uint8_t instSynthCCListPos = 0;
     uint8_t instListPos = 0;
+    bool openLoaderPending = false; // MPDJ: PROGRAM EDIT on an empty slot opens the Program Loader
 
     void showSynthCCList();
     void showInstList();

@@ -95,8 +95,9 @@ void cSampleImporter::update()
 
     if (managerStatus == fmBrowseSamplesEnd)
     {
-        locationExplorerCount =
-          newFileManager.getBrowsedFilesList(&explorerNames, &currentFolderMemoryFileUsage);
+        fmCount = newFileManager.getBrowsedFilesList(&fmNames, &currentFolderMemoryFileUsage);
+        midiBrowse = false;
+        rebuildExplorerView(); // MPDJ: + the virtual /MIDI folder at the root
 
         showFilesTree();
         handleMemoryBar();
@@ -170,6 +171,14 @@ void cSampleImporter::update()
     else if (managerStatus == fmDeleteInstrumentsEnd)
     {
         newFileManager.clearStatus();
+
+        if (midiAddWaitsForDelete) // MPDJ: the samples are gone, now place the MIDI programs
+        {
+            midiAddWaitsForDelete = false;
+            applyMidiPrograms();
+            ip->unblockAllInputs();
+            return;
+        }
 
         if (!stepDelete || !stepDeleteUnusedInstruments())
         {
@@ -245,7 +254,7 @@ void cSampleImporter::start(uint32_t options)
 {
     moduleRefresh = 1;
 
-    if (!isSampleInstrument(mtProject.values.lastUsedInstrument))
+    if (mtProject.values.lastUsedInstrument >= kSampleInstrumentsCount) // MPDJ: any slot type
     {
         // mtProject.values.lastUsedInstrument = 0;
         selectedSlot = 0;
@@ -378,27 +387,48 @@ void cSampleImporter::setDefaultScreenFunct()
 
 //==============================================================================================================
 
-// MPDJ: samples go into any slot that isn't a MIDI program. Shows a popup and
-// returns true when [first, last] holds one.
-static bool slotsHoldMidiProgram(int first, int last)
+// MPDJ: a sample loaded onto a MIDI program replaces it (after the replace
+// confirm): the slot goes back to empty first, so it takes samples again.
+static int countMidiPrograms(int first, int last)
 {
-    static char line[40];
+    int n = 0;
+    for (int i = first; i <= last && i < kSampleInstrumentsCount; i++)
+        if (isMidiInstrument(i))
+            n++;
+    return n;
+}
+
+static void clearMidiPrograms(int first, int last)
+{
+    bool changed = false;
     for (int i = first; i <= last && i < kSampleInstrumentsCount; i++)
     {
         if (isMidiInstrument(i))
         {
-            snprintf(line, sizeof(line), "Program %d is a MIDI program", i + 1);
-            mtPopups.show(0, line, "Pick an empty or sample slot.");
-            return true;
+            mtProject.programs.slot[i] = {};
+            changed = true;
         }
     }
-    return false;
+    if (changed)
+        newFileManager.setProjectStructChanged();
+}
+
+// the slots a sample Add / Add next fills: the selected slot + one per selected file
+static void sampleAddRange(int& first, int& last)
+{
+    first = SI->getSelectionStart(listInstruments);
+    last = first + (SI->getSelectionEnd(listFiles) - SI->getSelectionStart(listFiles));
 }
 
 static void instrumentAdd(bool addNext)
 {
     if (SI->explorerNames == nullptr)
     {
+        return;
+    }
+    if (SI->midiBrowse) // MPDJ: in the /MIDI folder, Add makes MIDI programs
+    {
+        SI->addMidiPrograms(addNext);
         return;
     }
     if (*SI->explorerNames[SI->selectedFile] == '/')
@@ -417,10 +447,7 @@ static void instrumentAdd(bool addNext)
         mtPopups.show(0, "Too many samples selected");
         return;
     }
-    if (slotsHoldMidiProgram(replaceStart, replaceEnd))
-        return;
-
-    uint8_t instrToReplaceCount = 0;
+    uint8_t instrToReplaceCount = countMidiPrograms(replaceStart, replaceEnd); // MPDJ
     for (uint8_t i = replaceStart; i <= replaceEnd; i++)
     {
         if (mtProject.instrument[i].isActive)
@@ -502,7 +529,7 @@ static void functInstrumentDelete()
         return;
     }
 
-    uint8_t instrToDeleteCount = 0;
+    uint8_t instrToDeleteCount = countMidiPrograms(deleteStart, deleteEnd); // MPDJ
     for (uint8_t i = deleteStart; i <= deleteEnd; i++)
     {
         if (mtProject.instrument[i].isActive)
@@ -552,6 +579,11 @@ static void functInstrumentImport()
     {
         return;
     }
+    if (SI->midiBrowse) // MPDJ: nothing to import from /MIDI; Import = Add there
+    {
+        SI->addMidiPrograms(false);
+        return;
+    }
     if (*SI->explorerNames[SI->selectedFile] == '/')
     {
         return;
@@ -571,10 +603,8 @@ static void functInstrumentImport()
 
     uint8_t instrToReplace = SI->selectedSlot;
 
-    if (slotsHoldMidiProgram(instrToReplace, instrToReplace))
-        return;
-
-    if (instrToReplace < kSampleInstrumentsCount && mtProject.instrument[instrToReplace].isActive)
+    if (instrToReplace < kSampleInstrumentsCount &&
+        (mtProject.instrument[instrToReplace].isActive || isMidiInstrument(instrToReplace))) // MPDJ
     {
         SI->replaceSource = 1;
         SI->firstLineReplaceInfoPopup =
@@ -592,6 +622,8 @@ static void functImportAndReplaceInstrumentConfirm()
 {
     SI->clearInfoPopupHandlerFunctions();
     mtPopups.hideInfoPopup();
+
+    clearMidiPrograms(SI->selectedSlot, SI->selectedSlot); // MPDJ: the sample replaces it
 
     SI->lowerData.clear();
     SI->upperData.clear();
@@ -1122,8 +1154,30 @@ void cSampleImporter::pasteInstruments()
         }
     }
 
-    if (willFit && !slotsHoldMidiProgram(selectedSlot, selectedSlot + copyElementsCount - 1))
+    if (willFit)
     {
+        // MPDJ: the copy carries slot types. A MIDI source makes an empty target a
+        // MIDI program; a sample / empty source turns a MIDI target back to empty
+        // (a MIDI source over a sample target leaves the sample)
+        for (int k = 0; k < copyElementsCount; k++)
+        {
+            int src = instrCopyStart + k, dst = selectedSlot + k;
+            if (src >= kSampleInstrumentsCount || dst >= kSampleInstrumentsCount)
+                break;
+            if (isMidiInstrument(src))
+            {
+                if (!mtProject.instrument[dst].isActive)
+                    mtProject.programs.slot[dst] = mtProject.programs.slot[src];
+            }
+            else if (isMidiInstrument(dst))
+            {
+                mtProject.programs.slot[dst] = {};
+            }
+        }
+        newFileManager.setProjectStructChanged();
+        listInstrumentSlots();
+        refreshInstrumentsList();
+
         if (newFileManager.copyInstrumentsInWorkspace(
               instrCopyStart, copyElementsCount, selectedSlot))
         {
@@ -1437,6 +1491,27 @@ void cSampleImporter::BrowseOrAdd()
     if (SI->explorerNames == nullptr)
         return;
 
+    // MPDJ: the virtual /MIDI folder
+    if (midiBrowse)
+    {
+        if (selectedFile == 0) // "/.."
+        {
+            if (selectedPlace == 0)
+                leaveMidiFolder();
+        }
+        else
+        {
+            addMidiPrograms(false);
+        }
+        return;
+    }
+    if (selectedFile == midiFolderIdx)
+    {
+        if (selectedPlace == 0)
+            enterMidiFolder();
+        return;
+    }
+
     if (*explorerNames[selectedFile] == '/')
     {
         if (selectedPlace == 0)
@@ -1453,6 +1528,175 @@ void cSampleImporter::BrowseOrAdd()
     {
         functInstrumentAdd();
     }
+}
+
+//==============================================================================================================
+// MPDJ (step 5a-3): the virtual /MIDI folder of the Program Loader
+
+static char s_midiFolderName[] = "/MIDI";
+static char s_midiUpName[] = "/..";
+static char s_midiChannelNames[16][20];
+static char* s_midiView[17];
+static char* s_rootView[cSampleImporter::maxListLength];
+
+void cSampleImporter::rebuildExplorerView()
+{
+    midiFolderIdx = -1;
+    if (midiBrowse)
+    {
+        s_midiView[0] = s_midiUpName;
+        for (int ch = 1; ch <= 16; ch++)
+        {
+            snprintf(s_midiChannelNames[ch - 1], sizeof(s_midiChannelNames[0]), "MIDI Channel %d", ch);
+            s_midiView[ch] = s_midiChannelNames[ch - 1];
+        }
+        explorerNames = s_midiView;
+        locationExplorerCount = 17;
+        return;
+    }
+
+    // at the card's root, /MIDI goes after the real entries so their indices
+    // (which the file manager uses) don't move
+    bool atRoot = strcmp(newFileManager.getExplorerPath(), "/") == 0;
+    if (fmNames != nullptr && atRoot && fmCount + 1 < maxListLength)
+    {
+        for (int i = 0; i < fmCount; i++)
+            s_rootView[i] = fmNames[i];
+        s_rootView[fmCount] = s_midiFolderName;
+        midiFolderIdx = fmCount;
+        explorerNames = s_rootView;
+        locationExplorerCount = fmCount + 1;
+        return;
+    }
+    explorerNames = fmNames;
+    locationExplorerCount = fmCount;
+}
+
+bool cSampleImporter::isVirtualEntry(int idx) const
+{
+    return midiBrowse || (midiFolderIdx >= 0 && idx == midiFolderIdx);
+}
+
+void cSampleImporter::enterMidiFolder()
+{
+    playFromPads(INTERFACE_BUTTON_PREVIEW, buttonRelease, -1);
+    cancelSelect(listFiles);
+    midiBrowse = true;
+    rebuildExplorerView();
+    selectedFile = 1; // MIDI Channel 1
+    display.setControlText(explorerLabelControl, "MIDI");
+    display.refreshControl(explorerLabelControl);
+    showFilesTree();
+    handleMemoryBar();
+    refreshActionButtons();
+}
+
+void cSampleImporter::leaveMidiFolder()
+{
+    cancelSelect(listFiles);
+    midiBrowse = false;
+    rebuildExplorerView();
+    selectedFile = midiFolderIdx >= 0 ? midiFolderIdx : 0;
+    display.setControlText(explorerLabelControl, "SD Card");
+    display.refreshControl(explorerLabelControl);
+    showFilesTree();
+    handleMemoryBar();
+    refreshActionButtons();
+}
+
+// Add / Add next in the /MIDI folder: the selected channel(s) become MIDI
+// programs in the selected slot and the ones after it
+void cSampleImporter::addMidiPrograms(bool addNext)
+{
+    int chFirst = getSelectionStart(listFiles);
+    int chLast = getSelectionEnd(listFiles);
+    if (chFirst < 1)
+        chFirst = 1; // skip "/.."
+    if (chLast < chFirst || chLast > 16)
+        return;
+
+    int count = chLast - chFirst + 1;
+    int firstSlot = getSelectionStart(listInstruments);
+    if (firstSlot + count > kSampleInstrumentsCount)
+    {
+        mtPopups.show(0, "Too many channels selected");
+        return;
+    }
+
+    midiAddFirstSlot = firstSlot;
+    midiAddFirstChannel = chFirst;
+    midiAddCount = count;
+    midiAddNext = addNext;
+
+    int occupied = 0;
+    for (int i = firstSlot; i < firstSlot + count; i++)
+        if (mtProject.instrument[i].isActive || isMidiInstrument(i))
+            occupied++;
+
+    if (occupied > 0)
+    {
+        midiAddPending = true;
+        replaceSource = 0;
+        firstLineReplaceInfoPopup =
+          firstLineReplacePopupOptions[occupied > 1 ? moreThanOneInstrumentInfoPupupFirstLineText
+                                                    : oneInstrumentInfoPupupFirstLineText];
+        setReplaceInstrumentHandlerFunctions();
+        showInfoPopupReplaceInstrument();
+        return;
+    }
+    applyMidiPrograms();
+}
+
+void cSampleImporter::applyMidiPrograms()
+{
+    midiAddPending = false;
+    int first = midiAddFirstSlot, last = midiAddFirstSlot + midiAddCount - 1;
+
+    // samples in the way go first (the file manager frees their memory);
+    // fmDeleteInstrumentsEnd in update() comes back here
+    for (int i = first; i <= last; i++)
+    {
+        if (mtProject.instrument[i].isActive)
+        {
+            if (newFileManager.deleteInstruments(first, last))
+            {
+                midiAddWaitsForDelete = true;
+                ip->blockAllInputs();
+            }
+            else
+            {
+                mtPopups.show(0, "Busy - try again");
+            }
+            return;
+        }
+    }
+
+    for (int k = 0; k < midiAddCount; k++)
+    {
+        strProgramSlot& s = mtProject.programs.slot[first + k];
+        s = {};
+        s.type = kProgramMidi;
+        s.midi.channel = uint8_t(midiAddFirstChannel + k);
+    }
+    newFileManager.setProjectStructChanged();
+    mtProject.values.lastUsedInstrument = first;
+
+    if (midiAddNext)
+    {
+        selectedSlot = (last + 1 < kSampleInstrumentsCount) ? last + 1 : kSampleInstrumentsCount - 1;
+        int nextFile = midiAddFirstChannel + midiAddCount;
+        selectedFile = nextFile <= 16 ? nextFile : 16;
+        midiAddNext = false;
+    }
+
+    cancelSelect(listFiles);
+    cancelSelect(listInstruments);
+    listInstrumentSlots();
+    showFilesTree();
+    showInstrumentsList();
+    refreshInstrumentsList();
+    handleMemoryBar();
+    refreshActionButtons();
 }
 
 void cSampleImporter::importSamples()
@@ -1585,7 +1829,8 @@ void cSampleImporter::calculateFileMemUsage()
         // get file selection size
         for (int i = selectionStart; i < (selectionStart + tempSelectionLength); i++)
         {
-            tempSelectMemorySize += estimateFileRamUsage(currentFolderMemoryFileUsage[i]);
+            if (!isVirtualEntry(i) && i < fmCount) // MPDJ
+                tempSelectMemorySize += estimateFileRamUsage(currentFolderMemoryFileUsage[i]);
         }
 
         // get size when pasted on current isntrument slot
@@ -1601,7 +1846,10 @@ void cSampleImporter::calculateFileMemUsage()
     }
     else
     {
-        currentSelectMemorySize = estimateFileRamUsage(currentFolderMemoryFileUsage[selectedFile]);
+        currentSelectMemorySize =
+          (isVirtualEntry(selectedFile) || selectedFile >= fmCount) // MPDJ
+            ? 0
+            : estimateFileRamUsage(currentFolderMemoryFileUsage[selectedFile]);
 
         if (mtProject.instrument[selectedSlot].isActive)
         {
@@ -1770,7 +2018,10 @@ void cSampleImporter::playFromPads(uint8_t pad, uint8_t state, int16_t velo)
 
         switch (placeToSelectPreviewSource)
         {
-            case 0: SI->playSelectedSdFile(0, MAX_16BIT); break;
+            case 0:
+                if (!isVirtualEntry(selectedFile)) // MPDJ: /MIDI has nothing to preview
+                    SI->playSelectedSdFile(0, MAX_16BIT);
+                break;
             case 1: SI->playSampleFromBank(pad, state, velo); break;
         }
     }
@@ -2256,6 +2507,15 @@ static void functDeleteInstrumentConfirm()
         return;
     }
 
+    // MPDJ: ERASE clears MIDI programs right away; samples go through the file manager
+    if (countMidiPrograms(deleteStart, deleteEnd) > 0)
+    {
+        clearMidiPrograms(deleteStart, deleteEnd);
+        SI->listInstrumentSlots();
+        SI->refreshInstrumentsList();
+        SI->refreshActionButtons();
+    }
+
     uint8_t instrToDeleteCount = 0;
     for (uint8_t i = deleteStart; i <= deleteEnd; i++)
     {
@@ -2351,8 +2611,18 @@ static void functDeleteInstrumentDeny()
 
 static void functReplaceInstrumentConfirm()
 {
+    if (SI->midiAddPending) // MPDJ: replacing with MIDI programs
+    {
+        SI->clearInfoPopupHandlerFunctions();
+        SI->hideInfoPopup(); // back to the loader's own screen and buttons
+        SI->applyMidiPrograms();
+        return;
+    }
     if (SI->explorerNames != nullptr && *SI->explorerNames[SI->selectedFile] != '/')
     {
+        int first, last;
+        sampleAddRange(first, last);
+        clearMidiPrograms(first, last); // MPDJ: samples replace MIDI programs
         SI->sampleType = mtSampleTypeWaveFile;
         SI->addNextFlag = SI->addNextOperationWantReplaceInstrument ? 1 : 0;
         SI->importSamples();
@@ -2366,6 +2636,7 @@ static void functReplaceInstrumentConfirm()
 
 static void functReplaceInstrumentDeny()
 {
+    SI->midiAddPending = false; // MPDJ
     SI->clearInfoPopupHandlerFunctions();
     SI->hideInfoPopup();
 

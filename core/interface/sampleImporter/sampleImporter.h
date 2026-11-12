@@ -143,6 +143,29 @@ class cSampleImporter : public ModuleBase
     void listInstrumentSlots();
     uint8_t selectedSlot = 0;
 
+    //--------------------------------------------------------------
+    // MPDJ (step 5a-3): the Program Loader. The file list shows the file
+    // manager's list (fmNames / fmCount) plus a virtual "/MIDI" folder at the
+    // end of the card's root; inside it, "/.." and MIDI channels 1-16. Every
+    // action on those entries is handled here (the file manager never sees them).
+    char** fmNames = nullptr;
+    uint8_t fmCount = 0;
+    bool midiBrowse = false;
+    int midiFolderIdx = -1; // index of "/MIDI" in the root list, or -1
+    void rebuildExplorerView();
+    bool isVirtualEntry(int idx) const; // "/MIDI" or anything inside it
+    void enterMidiFolder();
+    void leaveMidiFolder();
+    void addMidiPrograms(bool addNext);
+    void applyMidiPrograms();
+    // a MIDI add waiting for the replace confirm / for samples to be deleted
+    bool midiAddPending = false;
+    bool midiAddWaitsForDelete = false;
+    uint8_t midiAddFirstSlot = 0;
+    uint8_t midiAddFirstChannel = 1;
+    uint8_t midiAddCount = 0;
+    bool midiAddNext = false;
+
     uint8_t instrUseMap[kSampleInstrumentsCount + 1];
     bool stepDelete;
     void initDeleteUnusedInstruments();

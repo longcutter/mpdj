@@ -148,7 +148,7 @@ void cSampleImporter::initDisplayControls()
 void cSampleImporter::showDefaultScreen()
 {
     titleBar->show();
-    titleBar->setTitle("Sample Loader");
+    titleBar->setTitle("Program Loader"); // MPDJ: loads every program type
 
     display.setControlText(label[0], ""); // Micro SD
     display.setControlText(label[1], "Add next");
@@ -199,10 +199,10 @@ void cSampleImporter::showDefaultScreen()
     display.setControlValue(bgLabel, 255); // 0b11111111
     display.refreshControl(bgLabel);
 
-    display.setControlText(explorerLabelControl, "SD Card");
+    display.setControlText(explorerLabelControl, midiBrowse ? "MIDI" : "SD Card");
     display.setControlShow(explorerLabelControl);
     display.refreshControl(explorerLabelControl);
-    display.setControlText(instrumentLabelControl, "Instruments");
+    display.setControlText(instrumentLabelControl, "Programs");
     display.setControlShow(instrumentLabelControl);
     display.refreshControl(instrumentLabelControl);
 

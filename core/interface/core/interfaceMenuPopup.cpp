@@ -9,7 +9,7 @@ const char* const kModuleNamesList[kMenuModulesCount] = { "Pattern",
                                                           "Sample Playback",
                                                           "Master",
                                                           "Song",
-                                                          "Sample Loader",
+                                                          "Program Loader", // MPDJ
                                                           "File",
                                                           "Config",
                                                           "Perform",

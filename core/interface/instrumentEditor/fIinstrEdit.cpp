@@ -75,11 +75,24 @@ static void onNoteKeyboardHide();
 void cInstrumentEditor::update()
 {
     moduleRefresh = 0;
+
+    // MPDJ (step 5a-3): an empty slot has nothing to edit; open the Program
+    // Loader on it instead (done here, not in start(), so start() runs whole)
+    if (openLoaderPending)
+    {
+        openLoaderPending = false;
+        uint8_t button = interfaceButtonSampleLoad;
+        uint32_t options = mtProject.values.lastUsedInstrument + 1; // focus this slot
+        eventFunct(eventSwitchModule, this, &button, &options);
+    }
 }
 
 void cInstrumentEditor::start(uint32_t options)
 {
     moduleRefresh = 1;
+
+    openLoaderPending = mtProject.values.lastUsedInstrument < kProgramSlots &&
+                        programType(mtProject.values.lastUsedInstrument) == kProgramEmpty;
 
     if (mtProject.values.lastUsedInstrument >= SYNTH_INSTRUMENTS_START_IDX + kSynthParts)
     {
