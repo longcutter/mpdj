@@ -76,6 +76,7 @@ int main()
     }
     MpcAudio::stop();
     EngineHost::stop();
+    platform.input.close(); // controller LEDs off
     printf("Bye.\n");
     return 0;
 }

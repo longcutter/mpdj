@@ -118,6 +118,16 @@ class MpcInput
     void midiOut(uint8_t status, uint8_t d1, uint8_t d2);
     void parseQLinkLeds();
     void setQLinkLeds();
+    // Button LEDs for state (pollButtonLeds)
+    bool buttonLedsEnabled = true;
+    bool noteDown[128] = {};     // MPC button notes held right now
+    uint8_t ledSent[128];        // last value sent per LED CC, 0xFF = unknown
+    uint32_t beatLedMs = 0;      // when TAP TEMPO last flashed
+    uint32_t beatRefMs = 0;      // free-running beat clock while stopped
+    int lastBeatPos = -1;        // sequencer row seen last while playing
+    void pollButtonLeds();
+    void buttonLedsOff();
+    void setButtonLed(uint8_t cc, uint8_t value);
     int qlinkLed[4] = { -1, -1, -1, -1 };
     int ledCount = 0;
     uint8_t ledStatus = 0xB0, ledOn = 127;

@@ -154,12 +154,15 @@ void MpcInput::open(SwitchGroupImpl* b, SwitchGroupImpl* p, EncoderImpl* e, Disp
     openTouch();
     parseQLinkLeds();
     setQLinkLeds();
+    buttonLedsEnabled = envStr("MPDJ_BUTTON_LEDS", "1")[0] != '0';
+    memset(ledSent, 0xFF, sizeof ledSent);
 }
 
 void MpcInput::close()
 {
     qlinkMode = 0; // all Q-Link mode LEDs off
     setQLinkLeds();
+    buttonLedsOff();
     if (midiFd >= 0)
         ::close(midiFd);
     if (touchFd >= 0)
@@ -173,6 +176,7 @@ void MpcInput::poll()
     pollTouch();
     pollSave();
     pollQLinks();
+    pollButtonLeds();
     if (sideloadComboMs && mpcShift &&
         platform.getTimer()->millis() - sideloadComboMs >= Sideload::kComboHoldMs)
     {
@@ -206,6 +210,8 @@ void MpcInput::suspend()
     qlinkMode = 0; // Q-Link mode LEDs off
     setQLinkLeds();
     qlinkMode = mode;
+    buttonLedsOff(); // a sideload gets a dark panel; poll() relights them after resume()
+    memset(noteDown, 0, sizeof noteDown);
     if (touchFd >= 0)
         ::close(touchFd);
     touchFd = -1;
@@ -221,6 +227,7 @@ void MpcInput::resume()
     mpcShift = false;
     openTouch();
     setQLinkLeds();
+    memset(ledSent, 0xFF, sizeof ledSent); // resend every button LED
 }
 
 // SHIFT+BROWSE = SAVE (the MPC's printed shift label), from any screen.
@@ -474,6 +481,7 @@ void MpcInput::tapWithShift(int trackerButton)
 
 void MpcInput::onButton(uint8_t note, bool down)
 {
+    noteDown[note & 127] = down;
     if (down && fxListOpen())
     {
         // The effect list opened by a tap (step 3): ENCODER PUSH keeps the pick,
@@ -1508,6 +1516,92 @@ void MpcInput::setQLinkLeds()
     for (int i = 0; i < ledCount; i++)
         if (qlinkLed[i] >= 0)
             midiOut(ledStatus, (uint8_t)qlinkLed[i], i == qlinkMode - 1 ? ledOn : 0);
+}
+
+// ---------------------------------------------------------------- button LEDs
+// Button LEDs show state (agreed with Mike 2026-11-12): dim = available,
+// bright = active, off = not built yet. Values (hardware map): one-colour
+// LEDs 0 off, 1 dim, 2+ bright; two-colour buttons 1 dim white, 2 dim red,
+// 3 bright white, 4 bright red. Red is kept for destructive or open-editor
+// states (ERASE held, Sample Editor open). Only changes are sent.
+// MPDJ_BUTTON_LEDS=0 leaves them alone.
+namespace
+{
+constexpr uint8_t kLedOff = 0, kLedDim = 1, kLedBright = 3;      // one-colour
+constexpr uint8_t kDimWhite = 1, kBrightWhite = 3, kBrightRed = 4; // two-colour
+constexpr uint32_t kBeatFlashMs = 100;
+// Every button LED MPDJ drives, so they can all be switched off together.
+constexpr uint8_t kButtonLeds[] = { 2, 6, 9, 11, 12, 35, 36, 37, 38, 39, 40, 41, 53, 67, 73, 80, 82 };
+} // namespace
+
+void MpcInput::setButtonLed(uint8_t cc, uint8_t value)
+{
+    if (ledSent[cc] == value)
+        return;
+    ledSent[cc] = value;
+    midiOut(0xB0, cc, value);
+}
+
+void MpcInput::buttonLedsOff()
+{
+    if (!buttonLedsEnabled)
+        return;
+    for (uint8_t cc : kButtonLeds)
+        setButtonLed(cc, kLedOff);
+}
+
+void MpcInput::pollButtonLeds()
+{
+    if (!buttonLedsEnabled || midiFd < 0)
+        return;
+    uint32_t now = platform.getTimer()->millis();
+    bool playing = sequencer.isPlay();
+    bool onPattern = mtInterface.isPatternScreenActive();
+    bool onSong = mtInterface.isSongScreenActive();
+
+    // TAP TEMPO flashes on each beat: on the sequencer's beat rows while playing
+    // (rows per beat = the metronome's setting, as the metronome counts them),
+    // free-running from the tempo while stopped.
+    if (playing)
+    {
+        int pos = sequencer.getActualPos();
+        if (pos != lastBeatPos)
+        {
+            lastBeatPos = pos;
+            int perBeat = sequencer.getMetronomeDenominator();
+            if (perBeat < 1)
+                perBeat = 4;
+            if (pos % perBeat == 0)
+                beatLedMs = beatRefMs = now;
+        }
+    }
+    else
+    {
+        lastBeatPos = -1;
+        float tempo = mtProject.values.globalTempo;
+        uint32_t period = tempo > 1.0f ? (uint32_t)(60000.0f / tempo) : 500;
+        if (now - beatRefMs >= period)
+        {
+            beatRefMs = now - beatRefMs >= 2 * period ? now : beatRefMs + period;
+            beatLedMs = beatRefMs;
+        }
+    }
+
+    bool rec = onSong ? songEditor.editMode : patternEditor.editMode;
+    setButtonLed(82, playing ? kLedBright : kLedDim);                          // PLAY
+    setButtonLed(73, rec ? kLedBright : kLedDim);                              // REC
+    setButtonLed(53, now - beatLedMs < kBeatFlashMs ? kLedBright : kLedDim);  // TAP TEMPO
+    setButtonLed(67, !onPattern ? kLedOff : noteDown[67] ? kLedBright : kLedDim); // UNDO
+    setButtonLed(6, mtInterface.isSampleEditorScreenActive() ? kBrightRed     // SAMPLE EDIT
+                    : mtInterface.isSamplePlayerScreenActive() ? kBrightWhite : kDimWhite);
+    setButtonLed(2, mtInterface.isInstrumentParamsScreenActive() ? kBrightWhite : kDimWhite); // PROGRAM EDIT
+    setButtonLed(9, noteDown[9] ? kBrightRed : kDimWhite);                     // ERASE
+    for (int b = 0; b < 3; b++)                                                // BANK A-C
+        setButtonLed((uint8_t)(kNoteBankA + b), padBank == b ? kBrightWhite : kDimWhite);
+    // Not built yet (milestone 5): BANK D, OVER DUB, NOTE REPEAT, TC, FULL LEVEL,
+    // 16 LEVELS, STEP SEQ stay dark
+    for (uint8_t cc : { 38, 80, 11, 12, 39, 40, 41 })
+        setButtonLed(cc, kLedOff);
 }
 
 // ---------------------------------------------------------------- touchscreen
