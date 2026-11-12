@@ -1,4 +1,5 @@
 #include "FT812.h"
+#include <stdio.h>
 
 #include "display.h"
 #include "displayControls.h"
@@ -289,6 +290,24 @@ void cList::update()
 
             char** row_text = (list->data + rowIdx);
 
+#ifdef PLATFORM_MPC
+            // MPDJ: a row without text (the MCU reads address 0 and draws nothing;
+            // Linux crashes in strlen). Seen on the MPC while saving from the File
+            // screen with the pattern playing (2026-11-12). Skip it, say so once.
+            if (row_text != nullptr && *row_text == nullptr)
+            {
+                static bool reported = false;
+                if (!reported)
+                {
+                    reported = true;
+                    printf("display: list row %u of %u has no text (list data %p)\n",
+                           (unsigned)rowIdx,
+                           (unsigned)list->length,
+                           (void*)list->data);
+                }
+                continue;
+            }
+#endif
             if (row_text != nullptr)
             {
                 char* text = *row_text;

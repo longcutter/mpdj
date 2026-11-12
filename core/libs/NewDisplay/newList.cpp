@@ -493,6 +493,8 @@ void NewList::getRowParamTextScroll(int textSpace,
                                     const char* text)
 {
     int xOffset = 0;
+    if (text == nullptr) // MPDJ: see list.cpp
+        text = "";
     int textLen = strlen(text);
     int textWidth = 0;
     constexpr int kScrollStartDelay = 600;
