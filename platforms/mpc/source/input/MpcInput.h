@@ -94,6 +94,17 @@ class MpcInput
     bool pointScreenTouch(int knob, bool down);
     bool pointScreenZoom(int steps);
     uint32_t pointMsgMs[4] = {};
+
+    // ---- tap the pattern grid (build step 3): a tap moves the cursor to the
+    // cell, selects its column and switches the Q-Links to mode 1; in edit mode
+    // a tap on an FX cell opens the Tracker's effect list, and a tap on a list
+    // row picks that effect
+    void onScreenTap(float x, float y);
+    void tapPatternCell(float x, float y);
+    bool fxListOpen();
+    void closeFxList(bool apply);
+    void setEditParam(int param);
+    bool fxPopupByTap = false;
     uint32_t pointFineMs = 30, pointFastMs = 8; // MPDJ_POINT_FINE_MS / _FAST_MS
     int qlinkMode = 1;
     int qlinkHeld = -1;          // Tracker screen button held for the Q-Links

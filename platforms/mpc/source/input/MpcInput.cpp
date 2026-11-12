@@ -7,6 +7,8 @@
 #include "core/interfaceDefs.h"
 #include "core/interface.h"
 #include "display.h"
+#include "list.h"
+#include "mtConfig.h"
 #include "core/interfacePopups.h"
 #include "fileManager.h"
 #include "mtSequencer.h"
@@ -17,6 +19,7 @@
 #include "samplePlayback/samplePlayback.h"
 #include "songEditor/songEditor.h"
 
+#include <algorithm>
 #include <errno.h>
 #include <math.h>
 #include <fcntl.h>
@@ -470,6 +473,23 @@ void MpcInput::tapWithShift(int trackerButton)
 
 void MpcInput::onButton(uint8_t note, bool down)
 {
+    if (down && fxListOpen())
+    {
+        // The effect list opened by a tap (step 3): ENCODER PUSH keeps the pick,
+        // ERASE / STOP close it unchanged; any other button keeps the pick and
+        // then does its own job (as letting go of FX does on the Tracker+)
+        if (note == 111)
+        {
+            closeFxList(true);
+            return;
+        }
+        if (note == 9 || note == 81)
+        {
+            closeFxList(false);
+            return;
+        }
+        closeFxList(true);
+    }
     if (down && note >= kNoteBankA && note <= kNoteBankC)
     {
         padBank = note - kNoteBankA;
@@ -838,6 +858,17 @@ void MpcInput::onRelative(uint8_t cc, uint8_t value)
     if (cc < kCcQLink1 || cc >= kCcQLink1 + 4)
         return;
     int knob = cc - kCcQLink1;
+    if (fxListOpen())
+    {
+        // the effect list scrolls on Q-Link 2 and 4 (and the main encoder)
+        if (knob == 1 || knob == 3)
+        {
+            steps = divideQLink(knob, steps, knob == 1 ? 1 : 4);
+            if (steps)
+                encoder->turn(steps);
+        }
+        return;
+    }
     if (qlinkMode == 1 && pointScreenTurn(knob, steps))
         return;
     if (qlinkScreenMode())
@@ -1187,6 +1218,134 @@ bool MpcInput::pointScreenZoom(int steps)
     return true;
 }
 
+// ---------------------------------------------------------------- tap the pattern grid (step 3)
+// Mike, 2026-11-09: tapping a pattern cell moves the cursor there, selects its
+// column (Note / Instrument / FX1 / FX2, as Q-Link 3 would) and switches the
+// Q-Links to mode 1; the Tracker's own cursor frame marks the cell. In edit mode
+// a tap on an FX cell opens the Tracker's effect list (the one holding FX shows
+// on the Tracker+): tap a row, or scroll it (main encoder, Q-Link 2 or 4) and
+// press the encoder, to put that effect in the cell; ERASE / STOP or a tap
+// elsewhere closes it unchanged.
+//
+// Geometry follows cTracker::update() (libs/NewDisplay/tracker.cpp, ROW_NUM on):
+// 27 px of row numbers on each side; 4 tracks of 186 px (view 0) or 8 of 93
+// (views showing 1-2 columns); 15 rows of height / 15 from y = 0 (pattern info
+// shown) or 28, the cursor on row 7. Vertical arrangement only.
+namespace
+{
+constexpr int kGridSide = 27;
+constexpr int kListX = 605, kListTop = 44, kListRow = 27, kListRows = 16; // step popup list
+} // namespace
+
+bool MpcInput::fxListOpen()
+{
+    if (fxPopupByTap && mtPopups.getStepPopupState() != stepPopupFx)
+        fxPopupByTap = false; // closed some other way
+    return fxPopupByTap;
+}
+
+void MpcInput::closeFxList(bool apply)
+{
+    fxPopupByTap = false;
+    if (mtPopups.getStepPopupState() != stepPopupFx)
+        return;
+    cPatternEditor& pe = patternEditor;
+    uint8_t keep = pe.insertOnPopupHideDisabled;
+    if (!apply)
+        pe.insertOnPopupHideDisabled = 1; // cancelPopups then only closes it
+    pe.cancelPopups();
+    pe.insertOnPopupHideDisabled = keep;
+    if (trace)
+        printf("input: effect list closed (%s)\n", apply ? "kept" : "unchanged");
+}
+
+void MpcInput::onScreenTap(float x, float y)
+{
+    if (fxListOpen())
+    {
+        cList* list = (cList*)display.mpdjControl(mtPopups.mpdjStepPopupList());
+        if (list && list->list && x >= kListX && y >= kListTop && y < kListTop + kListRow * kListRows)
+        {
+            int idx = list->textListPos + (int)((y - kListTop) / kListRow);
+            if (idx < list->list->length)
+            {
+                mtPopups.setStepPopupValue(idx);
+                if (trace)
+                    printf("input: effect list row %d picked\n", idx);
+                closeFxList(true);
+                return;
+            }
+        }
+        closeFxList(false);
+        return;
+    }
+    if (mtInterface.isPatternScreenActive())
+        tapPatternCell(x, y);
+}
+
+void MpcInput::setEditParam(int p)
+{
+    cPatternEditor& pe = patternEditor;
+    if (p == (int)pe.editParam)
+        return;
+    pe.previousEditParam = pe.editParam;
+    pe.editParam = (uint8_t)p;
+    pe.trackerPattern.selectedParam = (uint8_t)p;
+    display.refreshControl(pe.patternControl);
+    pe.showActualParamOnBar();
+    pe.focusOnPattern();
+}
+
+void MpcInput::tapPatternCell(float x, float y)
+{
+    cPatternEditor& pe = patternEditor;
+    strTrackerPattern& tp = pe.trackerPattern;
+    if (pe.fillState || pe.selectedPlace >= 0 || mtPopups.getStepPopupState() != stepPopupNone ||
+        mtConfig.general.patternArrangement != 0)
+        return;
+    const bool info = mtConfig.general.patternInfo != 0;
+    const int top = info ? 0 : 28, rowH = (info ? 423 : 395) / 15;
+    int row = (int)((y - top) / rowH);
+    if (y < top || row < 0 || row > 14 || tp.track[0].row[row].note[0] == 0)
+        return; // above the grid, or past the pattern's end
+    const int view = pe.patternViewMode;
+    const int trackW = (800 - 2 * kGridSide) / (view ? 8 : 4), cols = view ? 8 : 4;
+    int col = (int)((x - kGridSide) / trackW);
+    if (x < kGridSide || col < 0 || col >= cols)
+        return; // row numbers
+    int track = tp.firstVisibleTrack + col;
+    if (track >= strTrackerPattern::kTrackCount)
+        return;
+    float rel = x - kGridSide - col * trackW;
+    int param;
+    if (!view)
+        param = rel < 43 ? 0 : rel < 77 ? 1 : rel < 131 ? 2 : 3; // fourParamsSelOffset
+    else
+    {
+        int shown[4], n = 0;
+        for (int p = 0; p < 4; p++)
+            if (view & (1 << p))
+                shown[n++] = p;
+        param = n ? shown[std::min(n - 1, (int)(rel * n / trackW))] : 0;
+    }
+
+    for (int dt = track - tp.actualTrack; dt; dt += dt > 0 ? -1 : 1)
+        dt > 0 ? pe.nextTrack() : pe.previousTrack();
+    for (int dr = row - 7; dr; dr += dr > 0 ? -1 : 1)
+        dr > 0 ? pe.nextStep() : pe.previousStep(); // does nothing while playing outside edit mode
+    setEditParam(param);
+    if (qlinkMode != 1)
+        setQLinkMode(1, true);
+    if (trace)
+        printf("input: tap (%.0f, %.0f) -> track %d row %+d param %d\n", x, y, track + 1, row - 7, param);
+
+    if (param >= 2 && pe.editMode && !pe.isMicVolView)
+    {
+        param == 2 ? pe.showFx1Popup() : pe.showFx2Popup();
+        fxPopupByTap = mtPopups.getStepPopupState() == stepPopupFx;
+    }
+}
+
 // ---------------------------------------------------------------- LEDs
 // Controller LEDs are lit with CC messages on channel 1 sent back on the
 // Private port (mapped by Mike with MPDJ_LED_PROBE, 2026-11-10). Button LEDs
@@ -1364,6 +1523,13 @@ void MpcInput::onTouchFrame()
     if (trace)
         printf("touch: raw (%d, %d) panel (%d, %d) screen (%d, %d) tracker (%.0f, %.0f) -> button %d\n",
                rawX, rawY, px, py, sx, sy, nx, ny, target);
+    if (target < 0 && nx >= 0 && nx < 800 && ny >= 0 && ny < kScreenButtonTop)
+    {
+        onScreenTap(nx, ny);
+        return;
+    }
+    if (target >= 0 && fxListOpen())
+        closeFxList(true); // a screen button while the effect list is open: keep the pick
     if (target >= 0)
     {
         touchedButton = target;

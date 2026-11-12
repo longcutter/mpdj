@@ -89,6 +89,7 @@ class InterfacePopups
     };
     void changeStepPopupValue(int16_t value, InterfacePopups::PopupDir dir = kNotSet);
     void setStepPopupValue(int16_t value);
+    hControl mpdjStepPopupList() const { return popupListControl; } // MPDJ: touch hit-testing
 
     enumStepPopups getStepPopupState();
     int16_t getStepPopupValue();

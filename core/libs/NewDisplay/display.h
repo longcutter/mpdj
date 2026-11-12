@@ -88,6 +88,11 @@ class cDisplay
     }
 
     void destroyControl(hControl handle);
+    // MPDJ: read-only access to a control (touch hit-testing on the MPC)
+    cDisplayControl* mpdjControl(hControl handle) const
+    {
+        return (handle >= 0 && handle < (hControl)controlsCount) ? controlsTable[handle] : nullptr;
+    }
     void refreshControl(hControl handle);
     void synchronizeRefresh();
     void resetControlQueue();
