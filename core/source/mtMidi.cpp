@@ -11,6 +11,7 @@
 #include "Platform.h"
 #include "TrackerImpl.h"
 #include "core/interface.h"
+#include "mpdjPrograms.h"
 #include "util_math.h"
 #include <cmath>
 
@@ -681,6 +682,7 @@ void sendMidiNoteOn(uint8_t note, uint8_t velo, uint8_t channel, bool toSynth)
 
     int8_t transp = 12 * (2 - mtConfig.midi.middleC);
     note = clamp(note + transp, 0, 127);
+    mpdjMidiOutTrace(true, note, velo, channel, mtConfig.midi.notesOutMode); // MPDJ
 
     if (mtConfig.midi.notesOutMode == notesOut_mode_usb ||
         mtConfig.midi.notesOutMode == notesOut_mode_usb_and_jack)
@@ -712,6 +714,7 @@ void sendMidiNoteOff(uint8_t note, [[maybe_unused]] uint8_t velo, uint8_t channe
 
     int8_t transp = 12 * (2 - mtConfig.midi.middleC);
     note = clamp(note + transp, 0, 127);
+    mpdjMidiOutTrace(false, note, 0, channel, mtConfig.midi.notesOutMode); // MPDJ
 
     if (mtConfig.midi.notesOutMode == notesOut_mode_usb ||
         mtConfig.midi.notesOutMode == notesOut_mode_usb_and_jack)

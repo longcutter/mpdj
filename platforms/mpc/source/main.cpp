@@ -1,6 +1,7 @@
 // Entry point for the MPC One+ build of Polyend Tracker CE.
 #include "PlatformImpl.h"
 #include "Tracker.h"
+#include "mpdjPrograms.h"
 #include "audio/AudioProbe.h"
 #include "audio/MpcAudio.h"
 #include "input/LedProbe.h"
@@ -44,6 +45,8 @@ int main()
         return AudioProbe::listControls();
     if (envOn("MPDJ_LATENCY_TEST"))
         return AudioProbe::latencyTest();
+    if (int rc = programsSelfTest(); rc >= 0)
+        return rc;
 
     trackerInstance = Tracker::getInstance();
     platform.init();

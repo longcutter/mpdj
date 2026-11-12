@@ -139,6 +139,7 @@ bool cFileManager::loadProjectFileFormFileStruct(strMtProject* project, strProje
 
     memcpy(&project->song, &pFile->projectDataAndHeader.project.song, sizeof(strSong));
     memcpy(&project->values, &pFile->projectDataAndHeader.project.values, sizeof(strMtValues));
+    programsLoadedFromLegacyProject(); // MPDJ: no slot types stored yet (step 5a-2)
     //*proj=pFile.projectDataAndHeader.project;
     // mtProject.values=pFile.projectDataAndHeader.project.values;
     return true;

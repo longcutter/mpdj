@@ -3,6 +3,7 @@
 
 #include "config.h"
 #include "mtEnvelopeGenerator.h"
+#include "mpdjPrograms.h" // MPDJ: typed program slots
 #include <stdint.h>
 
 //=====================================================================
@@ -1002,6 +1003,9 @@ struct strMtProject
     uint16_t perfTracksPatterns[kMaxAllTracksInTrackers] = {
         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
     };
+
+    // MPDJ: a type per program slot (empty / sample / MIDI), mpdjPrograms.h
+    strProgramTable programs;
 };
 
 //----------------------------------------------------------------------------------

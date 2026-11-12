@@ -3782,47 +3782,47 @@ AUDIO_CORE_RAM bool isSampleTrack(int track)
     return (track < kSampleTracks);
 }
 
+// MPDJ (step 5a-1): sample / MIDI come from the program slot's type
+// (mtProject.programs, mpdjPrograms.h) instead of fixed index ranges. A loaded
+// older project gets the Tracker+ layout, so these give the same answers as
+// before for it. Synth indices (FEATURE_SYNTH builds only) stay after the 64 slots.
 AUDIO_CORE_RAM bool isSampleInstrument(int instrument)
 {
     assert(instrument >= 0);
     assert(instrument < kTotalInstrumentsCount);
-    return instrument < kSampleInstrumentsCount;
+    // A slot that isn't MIDI takes samples where there is sample storage
+    return instrument < kSampleInstrumentsCount &&
+           mtProject.programs.slot[instrument].type != kProgramMidi;
 }
 
 AUDIO_CORE_RAM bool isMidiInstrument(int instrument)
 {
     assert(instrument >= 0);
     assert(instrument < kTotalInstrumentsCount);
-    return instrument >= kSampleInstrumentsCount &&
-           instrument < kSampleInstrumentsCount + kMidiInstrumentsCount;
+    return instrument < kProgramSlots && mtProject.programs.slot[instrument].type == kProgramMidi;
 }
 
 AUDIO_CORE_RAM bool isSynthInstrument(int instrument)
 {
     assert(instrument >= 0);
     assert(instrument < kTotalInstrumentsCount);
-    return instrument >= kSampleInstrumentsCount + kMidiInstrumentsCount &&
-           instrument < kSampleInstrumentsCount + kMidiInstrumentsCount + kSynthInstrumentsCount;
+    return instrument >= kProgramSlots &&
+           instrument < kProgramSlots + kSynthInstrumentsCount;
 }
 
 AUDIO_CORE_RAM int instrumentIdxToMidiChannel(int instrument)
 {
     assert(instrument >= 0);
-    if (isSampleInstrument(instrument))
+    if (isMidiInstrument(instrument))
     {
-        return kNoChannel;
-    }
-    else if (isMidiInstrument(instrument))
-    {
-        return instrument - kSampleInstrumentsCount + 1;
+        return mtProject.programs.slot[instrument].midi.channel;
     }
     else if (isSynthInstrument(instrument))
     {
-        return instrument - kSampleInstrumentsCount - kMidiInstrumentsCount + 1;
+        return instrument - kProgramSlots + 1;
     }
 
-    // instrument out of range
-    assert(false);
+    // sample or empty slot, or out of range
     return kNoChannel;
 }
 
