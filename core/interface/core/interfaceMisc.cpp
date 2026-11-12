@@ -101,10 +101,20 @@ void Interface::refreshStartScreen()
 
     startProjectLoadingProgress = newFileManager.getProgress();
 
+#ifdef PLATFORM_MPC
+    // MPDJ: keep the logo up for at least ~5 s (Mike): the bar may reach 100% no
+    // sooner than 125 ticks of 40 ms. The counter stops at 255 so a slow load
+    // can't wrap it back to a low cap
+    if (startProjectLoadingProgress > minStartTimeCounter * 4 / 5)
+        startProjectLoadingProgress = minStartTimeCounter * 4 / 5;
+    if (minStartTimeCounter < 255)
+        minStartTimeCounter++;
+#else
     // spowolnienie jesli start szybciej niz ~ 2 sek
     if (startProjectLoadingProgress > minStartTimeCounter * 2)
         startProjectLoadingProgress = minStartTimeCounter * 2;
     minStartTimeCounter++;
+#endif
 
     if (fileManagerLastProgress == startProjectLoadingProgress && fileManagerLastProgress < 100)
     {
