@@ -61,6 +61,7 @@ int main()
         platform.update();
         Sideload::poll();
         EngineHost::poll();
+        MpcAudio::poll();
         trackerInstance->update();
         frames++;
 

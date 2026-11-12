@@ -1,6 +1,7 @@
 #include "MpcAudio.h"
 
 #include "AlsaPcm.h"
+#include "JackClient.h"
 #include "Tracker.h"
 #include "sideload/EngineHost.h"
 
@@ -206,13 +207,22 @@ void wavHeader(FILE* f, uint32_t dataBytes)
 }
 
 // One 128-frame block: input -> engine (sequencer tick, voices, mix) -> outBuf.
-void renderBlock()
+// auxL/auxR: JACK aux inputs (sideloads routed into MPDJ), mixed like the engine ring.
+void renderBlock(bool haveInput, const float* auxL = nullptr, const float* auxR = nullptr)
 {
     lockForBlock();
-    tracker->updateInputAudioBuffers(in.isOpen() ? inBuf : nullptr, nullptr, kBlock);
+    tracker->updateInputAudioBuffers(haveInput ? inBuf : nullptr, nullptr, kBlock);
     tracker->updateAudioBuffers(blockL, blockR, kBlock);
     unlockForBlock();
     EngineHost::mixBlock(blockL, blockR, kBlock); // engine sideload, if any (S3)
+    if (auxL && auxR)
+        for (unsigned i = 0; i < kBlock; i++)
+        {
+            int l = blockL[i] + (int)lrintf(auxL[i] * 32767.0f);
+            int r = blockR[i] + (int)lrintf(auxR[i] * 32767.0f);
+            blockL[i] = (int16_t)(l > 32767 ? 32767 : l < -32768 ? -32768 : l);
+            blockR[i] = (int16_t)(r > 32767 ? 32767 : r < -32768 ? -32768 : r);
+        }
 
     // Gain ramps across the block so volume changes and mutes don't click.
     float target = (keyMuted || headphoneMuted) ? 0.0f : volumeGain.load();
@@ -276,7 +286,7 @@ void* audioThread(void*)
         }
 
         uint64_t t0 = nowUs();
-        renderBlock();
+        renderBlock(in.isOpen());
         uint64_t dt = nowUs() - t0;
         renderSum += dt;
         if (dt > renderMax)
@@ -340,6 +350,110 @@ void* audioThread(void*)
     return nullptr;
 }
 } // namespace
+
+// ---------------------------------------------------------------- JACK (MPDJ_AUDIO=jack, S3 option A)
+namespace
+{
+bool useJack = false;
+bool jackInput = true;
+std::atomic<uint32_t> jBlocks{ 0 }, jRenderMax{ 0 }, jPeak{ 0 };
+std::atomic<uint64_t> jRenderSum{ 0 };
+uint64_t jLastReport = 0;
+bool jGoneReported = false;
+
+// JACK's process callback: the audio thread is JACK's now. Renders in 128-frame
+// blocks (the engine's block size), so JACK's period must be a multiple of 128.
+void jackProcess(const float* inL, const float* inR, const float* auxL, const float* auxR, float* outL,
+                 float* outR, unsigned frames, void*)
+{
+    isAudioThread = true;
+    if (frames % kBlock)
+    {
+        memset(outL, 0, frames * sizeof(float));
+        memset(outR, 0, frames * sizeof(float));
+        return;
+    }
+    for (unsigned o = 0; o < frames; o += kBlock)
+    {
+        if (jackInput)
+            for (unsigned i = 0; i < kBlock; i++)
+            {
+                auto q = [](float v) { return (int16_t)lrintf((v > 1.0f ? 1.0f : v < -1.0f ? -1.0f : v) * 32767.0f); };
+                inBuf[2 * i] = q(inL[o + i]);
+                inBuf[2 * i + 1] = q(inR[o + i]);
+            }
+        uint64_t t0 = nowUs();
+        renderBlock(jackInput, auxL + o, auxR + o);
+        uint32_t dt = (uint32_t)(nowUs() - t0);
+        jRenderSum.fetch_add(dt, std::memory_order_relaxed);
+        if (dt > jRenderMax.load(std::memory_order_relaxed))
+            jRenderMax.store(dt, std::memory_order_relaxed);
+        jBlocks.fetch_add(1, std::memory_order_relaxed);
+        if ((uint32_t)peakEngine > jPeak.load(std::memory_order_relaxed))
+            jPeak.store((uint32_t)peakEngine, std::memory_order_relaxed);
+        peakEngine = 0;
+        for (unsigned i = 0; i < kBlock; i++)
+        {
+            outL[o + i] = outBuf[2 * i] / 32768.0f;
+            outR[o + i] = outBuf[2 * i + 1] / 32768.0f;
+        }
+    }
+}
+
+bool startJack()
+{
+    jackInput = envInt("MPDJ_AUDIO_IN", 1) != 0;
+    if (!JackClient::open("mpdj", jackProcess, nullptr))
+        return false;
+    unsigned rate = JackClient::sampleRate(), period = JackClient::bufferSize();
+    if (rate != kRate || period % kBlock)
+    {
+        printf("audio: jackd runs at %u Hz, period %u; MPDJ needs %u Hz and a multiple of %u frames\n", rate,
+               period, kRate, kBlock);
+        JackClient::close();
+        return false;
+    }
+    if (!JackClient::activate(jackInput))
+    {
+        JackClient::close();
+        return false;
+    }
+    printf("audio: JACK client \"mpdj\", %u Hz, period %u frames; ports out_1/2 -> system:playback, "
+           "%saux_1/2 for sideloads (jack_connect <port> mpdj:aux_1)\n",
+           rate, period, jackInput ? "in_1/2 <- system:capture, " : "");
+    printf("audio: JACK reports capture %u + playback %u frames on the system ports\n",
+           JackClient::systemLatency(true), JackClient::systemLatency(false));
+    return true;
+}
+} // namespace
+
+void MpcAudio::poll()
+{
+    if (!useJack)
+        return;
+    if (JackClient::serverGone())
+    {
+        if (!jGoneReported)
+            printf("audio: jackd went away; no sound or sequencer clock until MPDJ restarts\n");
+        jGoneReported = true;
+        return;
+    }
+    uint64_t now = nowUs();
+    if (!jLastReport)
+        jLastReport = now;
+    if (now - jLastReport < 5000000)
+        return;
+    jLastReport = now;
+    uint32_t blocks = jBlocks.exchange(0), mx = jRenderMax.exchange(0), pk = jPeak.exchange(0);
+    uint64_t sum = jRenderSum.exchange(0);
+    unsigned xr = JackClient::takeXruns();
+    if (!stats && !xr)
+        return;
+    printf("audio: jack %u blocks, render avg %llu us max %u us (budget %u us), xruns %u, "
+           "DSP load %.1f%%, peak %.1f dBFS\n",
+           blocks, (unsigned long long)(blocks ? sum / blocks : 0), mx, kBlock * 1000000u / kRate, xr,
+           JackClient::cpuLoad(), pk ? 20.0 * log10(pk / 32768.0) : -99.0);
+}
 
 int MpcAudio::codecCard()
 {
@@ -405,6 +519,15 @@ void MpcAudio::start(Tracker* t)
             wavHeader(wav, 0);
         printf("audio: writing %s (no device)\n", wavPath);
     }
+    else if (mode && !strcmp(mode, "jack"))
+    {
+        if (startJack())
+        {
+            useJack = true;
+            return;
+        }
+        printf("audio: JACK failed; running on a timer with no sound\n");
+    }
     else if (mode && !strcmp(mode, "none"))
     {
         printf("audio: none (timer clock)\n");
@@ -446,6 +569,12 @@ void startThread()
 // Sideloads: let go of the codec (the WAV file, if any, stays open) and take it back.
 void MpcAudio::suspend()
 {
+    if (useJack)
+    {
+        JackClient::deactivate();
+        printf("audio: suspended, JACK client deactivated\n");
+        return;
+    }
     if (!threadStarted)
         return;
     running = false;
@@ -461,6 +590,11 @@ void MpcAudio::suspend()
 
 void MpcAudio::resume()
 {
+    if (useJack)
+    {
+        JackClient::activate(jackInput);
+        return;
+    }
     if (threadStarted)
         return;
     if (useDevice)
@@ -470,6 +604,12 @@ void MpcAudio::resume()
 
 void MpcAudio::stop()
 {
+    if (useJack)
+    {
+        JackClient::close();
+        useJack = false;
+        return;
+    }
     if (!threadStarted)
         return;
     running = false;

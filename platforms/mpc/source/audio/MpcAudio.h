@@ -9,6 +9,9 @@
 //   MPDJ_AUDIO_PERIODS     128-frame periods in the ALSA buffer (default 3, ~8.7 ms)
 //   MPDJ_AUDIO_IN=0        leave the input closed (default: open the codec's capture
 //                          side and feed the Tracker input; confirmed clean 2026-11-09)
+//   MPDJ_AUDIO=jack        be a JACK client instead of opening the codec (S3 option A;
+//                          MPDJ must run inside the Debian root next to jackd, see
+//                          JackClient.h). JACK's thread renders; period a multiple of 128
 //   MPDJ_AUDIO_STATS=1     every 5 s: render time and xruns
 #pragma once
 
@@ -18,6 +21,7 @@ namespace MpcAudio
 {
 void start(Tracker* tracker);
 void stop();
+void poll(); // main loop: JACK stats and server loss (nothing in ALSA mode)
 
 // Sideloads: stop the audio thread and close the codec so another program can
 // use it; resume() reopens it (retrying for up to 3 s while it is busy).

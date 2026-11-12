@@ -1,10 +1,12 @@
 #include "AudioProbe.h"
 
 #include "AlsaPcm.h"
+#include "JackClient.h"
 #include "LatencyDetect.h"
 #include "MpcAudio.h"
 
 #include <algorithm>
+#include <atomic>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -64,6 +66,53 @@ void writeWav(const char* path, const std::vector<int16_t>& stereo)
 } // namespace
 
 // ---------------------------------------------------------------- latency
+namespace
+{
+// The probe's output signal at output frame n: chirps at fixed block offsets.
+float probeSample(long n, const std::vector<float>& chirp, int pings, float amp)
+{
+    for (int p = 0; p < pings; p++)
+    {
+        long k = n - (long)(kFirstBlock + p * kIntervalBlocks) * kBlock;
+        if (k >= 0 && k < kChirpLen)
+            return amp * chirp[k];
+    }
+    return 0.0f;
+}
+
+// JACK run (MPDJ_AUDIO=jack): the process callback writes the chirps and keeps
+// the input on the same frame timeline, so the lag found is JACK's round trip,
+// which is what MPDJ sees as a JACK client.
+struct JackProbe
+{
+    const std::vector<float>* chirp;
+    std::vector<int16_t>* cap;
+    int pings;
+    float amp;
+    long frame = 0, total = 0;
+    std::atomic<bool> done{ false };
+};
+
+void jackProbeProcess(const float* inL, const float* inR, const float*, const float*, float* outL,
+                      float* outR, unsigned n, void* user)
+{
+    auto* p = (JackProbe*)user;
+    for (unsigned i = 0; i < n; i++, p->frame++)
+    {
+        float s = p->frame < p->total ? probeSample(p->frame, *p->chirp, p->pings, p->amp) : 0.0f;
+        outL[i] = outR[i] = s;
+        if (p->frame < p->total)
+        {
+            auto q = [](float v) { return (int16_t)lrintf(std::max(-1.0f, std::min(1.0f, v)) * 32767.0f); };
+            (*p->cap)[(size_t)p->frame * 2] = q(inL[i]);
+            (*p->cap)[(size_t)p->frame * 2 + 1] = q(inR[i]);
+        }
+    }
+    if (p->frame >= p->total)
+        p->done = true;
+}
+} // namespace
+
 int AudioProbe::latencyTest()
 {
     const int card = envInt("MPDJ_AUDIO_CARD", MpcAudio::codecCard());
@@ -76,90 +125,132 @@ int AudioProbe::latencyTest()
         pings = 1;
     const int levelDb = envInt("MPDJ_LATENCY_LEVEL", -12);
     const float amp = powf(10.0f, levelDb / 20.0f);
-
-    // Same device setup as the tracker's audio thread, so the measured offset
-    // is the one the resampler will see.
-    AlsaPcm out, in;
-    char err[200];
-    if (!out.open(card, device, false, kRate, 2, kBlock, periods, err, sizeof err))
-    {
-        printf("latency: %s\n", err);
-        return 1;
-    }
-    if (!in.open(card, device, true, kRate, 2, kBlock, periods + 1, err, sizeof err))
-    {
-        printf("latency: input: %s\n", err);
-        return 1;
-    }
-    printf("latency: hw:%d,%d, %u x %u frames out, %d pings at %d dBFS, both channels\n", card,
-           device, out.bufferFrames / out.periodFrames, out.periodFrames, pings, levelDb);
-    printf("latency: patch a cable (or the pedal chain) from the outs to the ins. "
-           "The chirps are audible: turn monitors down.\n");
-
-    sched_param sp = {};
-    sp.sched_priority = 70;
-    if (sched_setscheduler(0, SCHED_FIFO, &sp) != 0)
-        printf("latency: SCHED_FIFO unavailable (%s); xruns may spoil the result\n",
-               strerror(errno));
+    const char* mode = getenv("MPDJ_AUDIO");
+    const bool useJack = mode && !strcmp(mode, "jack");
 
     std::vector<float> chirp(kChirpLen);
     LatencyDetect::makeChirp(chirp.data(), kChirpLen, 500.0f, 8000.0f, (float)kRate);
 
     const unsigned totalBlocks = kFirstBlock + pings * kIntervalBlocks + kIntervalBlocks;
     std::vector<int16_t> cap((size_t)totalBlocks * kBlock * 2);
-    int16_t outBuf[kBlock * 2];
-    static const int16_t silence[kBlock * 2] = {};
     unsigned xruns = 0;
+    char how[160];
 
-    // Prefill exactly as audioThread does, then read-then-write per block.
-    unsigned fill = out.bufferFrames - kBlock;
-    for (unsigned f = 0; f + kBlock <= fill; f += kBlock)
-        out.write(silence, kBlock);
-    in.start();
-
-    for (unsigned b = 0; b < totalBlocks; b++)
+    if (useJack)
     {
-        int16_t* inBlock = &cap[(size_t)b * kBlock * 2];
-        if (in.read(inBlock, kBlock) < 0)
+        JackProbe jp;
+        jp.chirp = &chirp;
+        jp.cap = &cap;
+        jp.pings = pings;
+        jp.amp = amp;
+        jp.total = (long)totalBlocks * kBlock;
+        if (!JackClient::open("mpdj-latency", jackProbeProcess, &jp))
+            return 1;
+        if (JackClient::sampleRate() != kRate)
         {
-            xruns++;
-            memset(inBlock, 0, kBlock * 4);
-            in.prepare();
-            in.start();
-        }
-
-        // Output frame index of this block = b * kBlock, the loop's own timeline.
-        for (unsigned i = 0; i < kBlock; i++)
-        {
-            long n = (long)b * kBlock + i;
-            float s = 0;
-            for (int p = 0; p < pings; p++)
-            {
-                long k = n - (long)(kFirstBlock + p * kIntervalBlocks) * kBlock;
-                if (k >= 0 && k < kChirpLen)
-                    s = amp * chirp[k];
-            }
-            int16_t v = (int16_t)lrintf(s * 32767.0f);
-            outBuf[2 * i] = outBuf[2 * i + 1] = v;
-        }
-
-        int w = out.write(outBuf, kBlock);
-        if (w == -EPIPE)
-        {
-            xruns++;
-            out.prepare();
-            for (unsigned f = 0; f + kBlock <= out.bufferFrames - kBlock; f += kBlock)
-                out.write(silence, kBlock);
-            out.write(outBuf, kBlock);
-        }
-        else if (w < 0)
-        {
-            printf("latency: write failed: %s\n", strerror(-w));
+            printf("latency: jackd runs at %u Hz, not %u\n", JackClient::sampleRate(), kRate);
+            JackClient::close();
             return 1;
         }
+        printf("latency: through JACK, period %u frames, %d pings at %d dBFS, both channels\n",
+               JackClient::bufferSize(), pings, levelDb);
+        printf("latency: patch a cable (or the pedal chain) from the outs to the ins. "
+               "The chirps are audible: turn monitors down.\n");
+        if (!JackClient::activate(true))
+        {
+            JackClient::close();
+            return 1;
+        }
+        unsigned sysCap = JackClient::systemLatency(true), sysPlay = JackClient::systemLatency(false);
+        unsigned period = JackClient::bufferSize();
+        while (!jp.done && !JackClient::serverGone())
+            usleep(20000);
+        xruns = JackClient::takeXruns();
+        JackClient::close();
+        if (!jp.done)
+        {
+            printf("latency: jackd went away during the test\n");
+            return 1;
+        }
+        snprintf(how, sizeof how,
+                 "Offset is JACK's round trip with period %u (JACK itself reports capture %u + playback %u frames)",
+                 period, sysCap, sysPlay);
     }
-    out.drop();
-    in.drop();
+    else
+    {
+        // Same device setup as the tracker's audio thread, so the measured offset
+        // is the one the resampler will see.
+        AlsaPcm out, in;
+        char err[200];
+        if (!out.open(card, device, false, kRate, 2, kBlock, periods, err, sizeof err))
+        {
+            printf("latency: %s\n", err);
+            return 1;
+        }
+        if (!in.open(card, device, true, kRate, 2, kBlock, periods + 1, err, sizeof err))
+        {
+            printf("latency: input: %s\n", err);
+            return 1;
+        }
+        printf("latency: hw:%d,%d, %u x %u frames out, %d pings at %d dBFS, both channels\n", card,
+               device, out.bufferFrames / out.periodFrames, out.periodFrames, pings, levelDb);
+        printf("latency: patch a cable (or the pedal chain) from the outs to the ins. "
+               "The chirps are audible: turn monitors down.\n");
+
+        sched_param sp = {};
+        sp.sched_priority = 70;
+        if (sched_setscheduler(0, SCHED_FIFO, &sp) != 0)
+            printf("latency: SCHED_FIFO unavailable (%s); xruns may spoil the result\n",
+                   strerror(errno));
+
+        int16_t outBuf[kBlock * 2];
+        static const int16_t silence[kBlock * 2] = {};
+
+        // Prefill exactly as audioThread does, then read-then-write per block.
+        unsigned fill = out.bufferFrames - kBlock;
+        for (unsigned f = 0; f + kBlock <= fill; f += kBlock)
+            out.write(silence, kBlock);
+        in.start();
+
+        for (unsigned b = 0; b < totalBlocks; b++)
+        {
+            int16_t* inBlock = &cap[(size_t)b * kBlock * 2];
+            if (in.read(inBlock, kBlock) < 0)
+            {
+                xruns++;
+                memset(inBlock, 0, kBlock * 4);
+                in.prepare();
+                in.start();
+            }
+
+            // Output frame index of this block = b * kBlock, the loop's own timeline.
+            for (unsigned i = 0; i < kBlock; i++)
+            {
+                int16_t v = (int16_t)lrintf(probeSample((long)b * kBlock + i, chirp, pings, amp) * 32767.0f);
+                outBuf[2 * i] = outBuf[2 * i + 1] = v;
+            }
+
+            int w = out.write(outBuf, kBlock);
+            if (w == -EPIPE)
+            {
+                xruns++;
+                out.prepare();
+                for (unsigned f = 0; f + kBlock <= out.bufferFrames - kBlock; f += kBlock)
+                    out.write(silence, kBlock);
+                out.write(outBuf, kBlock);
+            }
+            else if (w < 0)
+            {
+                printf("latency: write failed: %s\n", strerror(-w));
+                return 1;
+            }
+        }
+        out.drop();
+        in.drop();
+        snprintf(how, sizeof how,
+                 "Offset is from the render loop with %d periods; it changes if MPDJ_AUDIO_PERIODS changes",
+                 periods);
+    }
 
     if (const char* wavPath = getenv("MPDJ_LATENCY_WAV"))
         if (*wavPath)
@@ -202,9 +293,8 @@ int AudioProbe::latencyTest()
                name, med, med * 1000.0 / kRate, lags.front(), lags.back(), (int)lags.size(),
                pings, gainDb, inverted * 2 > (int)lags.size() ? ", polarity inverted" : "", qMin);
     }
-    printf("latency: %u xruns%s. Offset is from the render loop with %d periods; "
-           "it changes if MPDJ_AUDIO_PERIODS changes.\n",
-           xruns, xruns ? " (result may be off by a period: run again)" : "", periods);
+    printf("latency: %u xruns%s. %s.\n", xruns,
+           xruns ? " (result may be off by a period: run again)" : "", how);
     return rc;
 }
 
