@@ -128,6 +128,9 @@ class MpcInput
     void pollButtonLeds();
     void buttonLedsOff();
     void setButtonLed(uint8_t cc, uint8_t value);
+    uint8_t qlinkLedValue();     // Q-Link mode LED level, from the Button lights setting
+    bool qlinkLedOnEnv = false;  // MPDJ_QLINK_LED_ON given
+    int lightsModeSent = -1;
     int qlinkLed[4] = { -1, -1, -1, -1 };
     int ledCount = 0;
     uint8_t ledStatus = 0xB0, ledOn = 127;

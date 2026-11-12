@@ -255,6 +255,12 @@ const char displThemeDesc[] = { "Selects the color scheme of the user interface.
 
 const char displFontDesc[] = { "Selects the font of the user interface." };
 
+#ifdef PLATFORM_MPC
+const char* const buttonLightsTexts[4] = { "Off", "Dim", "Bright", "Dynamic" };
+const char* const tapFlashTexts[3] = { "Off", "Dim", "Bright" };
+const char buttonLightsDesc[] = { "MPC button lights. Dim / Bright: active buttons lit at that level, the rest off. Dynamic: available dim, active bright." };
+const char tapFlashDesc[] = { "Flashes TAP TEMPO on each beat." };
+#endif
 const char padsBrightDesc[] = { "Sets the brightness of the pad lights in the grid." };
 
 const char recNotesDesc[] = {

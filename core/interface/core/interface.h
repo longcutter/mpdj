@@ -61,6 +61,8 @@ class Interface
     bool isSampleEditorScreenActive();
     bool isSampleLoaderScreenActive();
     bool isFileScreenActive();
+    bool isConfigScreenActive();
+    bool isSampleRecorderScreenActive();
 
     void handleCardSlotAction(bool state);
     void handlePowerButtonAction(uint8_t state);

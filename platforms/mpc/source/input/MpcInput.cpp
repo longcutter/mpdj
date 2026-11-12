@@ -1485,6 +1485,7 @@ void MpcInput::midiOut(uint8_t s, uint8_t d1, uint8_t d2)
 void MpcInput::parseQLinkLeds()
 {
     const char* v = envStr("MPDJ_QLINK_LEDS", "cc:90,91,92,93");
+    qlinkLedOnEnv = getenv("MPDJ_QLINK_LED_ON") != nullptr;
     ledOn = (uint8_t)atoi(envStr("MPDJ_QLINK_LED_ON", "127"));
     if (!strcmp(v, "off"))
         return;
@@ -1515,24 +1516,63 @@ void MpcInput::setQLinkLeds()
 {
     for (int i = 0; i < ledCount; i++)
         if (qlinkLed[i] >= 0)
-            midiOut(ledStatus, (uint8_t)qlinkLed[i], i == qlinkMode - 1 ? ledOn : 0);
+            midiOut(ledStatus, (uint8_t)qlinkLed[i], i == qlinkMode - 1 ? qlinkLedValue() : 0);
 }
 
 // ---------------------------------------------------------------- button LEDs
-// Button LEDs show state (agreed with Mike 2026-11-12): dim = available,
-// bright = active, off = not built yet. Values (hardware map): one-colour
-// LEDs 0 off, 1 dim, 2+ bright; two-colour buttons 1 dim white, 2 dim red,
-// 3 bright white, 4 bright red. Red is kept for destructive or open-editor
-// states (ERASE held, Sample Editor open). Only changes are sent.
-// MPDJ_BUTTON_LEDS=0 leaves them alone.
+// Button LEDs show state (agreed with Mike 2026-11-12). Each button is Not
+// available (always dark: not built yet, or no use on this screen), Available,
+// Active, or Active in red (destructive or open-editor states: ERASE held,
+// Sample Editor open). Config > General > "Button lights" sets the levels:
+//   Off      everything dark
+//   Dim      active = dim (white or red), the rest dark (default: nothing bright)
+//   Bright   active = bright, the rest dark
+//   Dynamic  available = dim white, active = bright
+// Values (hardware map): one-colour LEDs 0 off, 1 dim, 2+ bright; two-colour
+// buttons 1 dim white, 2 dim red, 3 bright white, 4 bright red, so the same
+// numbers work for both. "Tap tempo flash" (Off / Dim / Bright) flashes TAP
+// TEMPO on each beat. The Q-Link mode LEDs follow the same setting. Only changes
+// are sent; every LED is written once at start, which also clears what the MPC
+// app left lit. MPDJ_BUTTON_LEDS=0 leaves them alone.
 namespace
 {
-constexpr uint8_t kLedOff = 0, kLedDim = 1, kLedBright = 3;      // one-colour
-constexpr uint8_t kDimWhite = 1, kBrightWhite = 3, kBrightRed = 4; // two-colour
+enum class Lit : uint8_t { NotAvailable, Available, Active, ActiveRed };
 constexpr uint32_t kBeatFlashMs = 100;
-// Every button LED MPDJ drives, so they can all be switched off together.
-constexpr uint8_t kButtonLeds[] = { 2, 6, 9, 11, 12, 35, 36, 37, 38, 39, 40, 41, 53, 67, 73, 80, 82 };
+// Every lit button on the One+ (hardware map), so all can be cleared together
+constexpr uint8_t kButtonLeds[] = { 2, 6, 9, 11, 12, 35, 36, 37, 38, 39, 40, 41, 42, 43,
+                                    49, 50, 52, 53, 67, 73, 80, 82, 116, 122, 123, 125 };
+
+int buttonLightsMode()
+{
+    return mtConfig.general.buttonLights; // 0 Off, 1 Dim, 2 Bright, 3 Dynamic
+}
+
+uint8_t ledValue(Lit lit)
+{
+    int mode = buttonLightsMode();
+    bool active = lit == Lit::Active || lit == Lit::ActiveRed;
+    bool red = lit == Lit::ActiveRed;
+    switch (mode)
+    {
+        case 1: return active ? (red ? 2 : 1) : 0;
+        case 2: return active ? (red ? 4 : 3) : 0;
+        case 3: return active ? (red ? 4 : 3) : lit == Lit::Available ? 1 : 0;
+        default: return 0;
+    }
+}
 } // namespace
+
+uint8_t MpcInput::qlinkLedValue()
+{
+    if (qlinkLedOnEnv)
+        return ledOn; // MPDJ_QLINK_LED_ON wins
+    switch (buttonLightsMode())
+    {
+        case 0: return 0;
+        case 1: return 1;
+        default: return 127;
+    }
+}
 
 void MpcInput::setButtonLed(uint8_t cc, uint8_t value)
 {
@@ -1547,7 +1587,7 @@ void MpcInput::buttonLedsOff()
     if (!buttonLedsEnabled)
         return;
     for (uint8_t cc : kButtonLeds)
-        setButtonLed(cc, kLedOff);
+        setButtonLed(cc, 0);
 }
 
 void MpcInput::pollButtonLeds()
@@ -1555,13 +1595,19 @@ void MpcInput::pollButtonLeds()
     if (!buttonLedsEnabled || midiFd < 0)
         return;
     uint32_t now = platform.getTimer()->millis();
+    if (lightsModeSent != buttonLightsMode())
+    {
+        lightsModeSent = buttonLightsMode();
+        setQLinkLeds(); // the mode LEDs follow the setting
+    }
     bool playing = sequencer.isPlay();
     bool onPattern = mtInterface.isPatternScreenActive();
     bool onSong = mtInterface.isSongScreenActive();
+    auto set = [&](uint8_t cc, Lit lit) { setButtonLed(cc, ledValue(lit)); };
+    auto when = [](bool active) { return active ? Lit::Active : Lit::Available; };
 
-    // TAP TEMPO flashes on each beat: on the sequencer's beat rows while playing
-    // (rows per beat = the metronome's setting, as the metronome counts them),
-    // free-running from the tempo while stopped.
+    // TAP TEMPO beat: on the sequencer's beat rows while playing (rows per beat =
+    // the metronome's setting, as the metronome counts them), from the tempo while stopped
     if (playing)
     {
         int pos = sequencer.getActualPos();
@@ -1586,22 +1632,37 @@ void MpcInput::pollButtonLeds()
             beatLedMs = beatRefMs;
         }
     }
+    int flash = mtConfig.general.tapTempoFlash; // 0 Off, 1 Dim, 2 Bright
+    if (flash == 0 || buttonLightsMode() == 0)
+        set(53, Lit::Available);
+    else if (now - beatLedMs < kBeatFlashMs)
+        setButtonLed(53, flash == 1 ? 1 : 3);
+    else // between beats: dark, except dim in Dynamic with a bright flash
+        setButtonLed(53, buttonLightsMode() == 3 && flash == 2 ? 1 : 0);
 
     bool rec = onSong ? songEditor.editMode : patternEditor.editMode;
-    setButtonLed(82, playing ? kLedBright : kLedDim);                          // PLAY
-    setButtonLed(73, rec ? kLedBright : kLedDim);                              // REC
-    setButtonLed(53, now - beatLedMs < kBeatFlashMs ? kLedBright : kLedDim);  // TAP TEMPO
-    setButtonLed(67, !onPattern ? kLedOff : noteDown[67] ? kLedBright : kLedDim); // UNDO
-    setButtonLed(6, mtInterface.isSampleEditorScreenActive() ? kBrightRed     // SAMPLE EDIT
-                    : mtInterface.isSamplePlayerScreenActive() ? kBrightWhite : kDimWhite);
-    setButtonLed(2, mtInterface.isInstrumentParamsScreenActive() ? kBrightWhite : kDimWhite); // PROGRAM EDIT
-    setButtonLed(9, noteDown[9] ? kBrightRed : kDimWhite);                     // ERASE
-    for (int b = 0; b < 3; b++)                                                // BANK A-C
-        setButtonLed((uint8_t)(kNoteBankA + b), padBank == b ? kBrightWhite : kDimWhite);
-    // Not built yet (milestone 5): BANK D, OVER DUB, NOTE REPEAT, TC, FULL LEVEL,
-    // 16 LEVELS, STEP SEQ stay dark
-    for (uint8_t cc : { 38, 80, 11, 12, 39, 40, 41 })
-        setButtonLed(cc, kLedOff);
+    set(82, when(playing));                                                // PLAY
+    set(73, when(rec));                                                    // REC
+    set(67, !onPattern ? Lit::NotAvailable : when(noteDown[67]));          // UNDO
+    set(6, mtInterface.isSampleEditorScreenActive() ? Lit::ActiveRed       // SAMPLE EDIT
+           : when(mtInterface.isSamplePlayerScreenActive()));
+    set(2, when(mtInterface.isInstrumentParamsScreenActive()));            // PROGRAM EDIT
+    set(9, noteDown[9] ? Lit::ActiveRed : Lit::Available);                 // ERASE
+    for (int b = 0; b < 3; b++)                                            // BANK A-C
+        set((uint8_t)(kNoteBankA + b), when(padBank == b));
+    set(52, when(onPattern || onSong));                                    // MAIN
+    set(50, when(mtInterface.isSampleLoaderScreenActive() || mtInterface.isFileScreenActive())); // BROWSE
+    set(123, when(mtInterface.isConfigScreenActive()));                    // MENU
+    set(125, when(mtInterface.isSampleRecorderScreenActive()));            // SAMPLER
+    set(116, when(mtInterface.isMasterScreenActive()));                    // TRACK MIX
+    set(42, when(mtInterface.isPerformanceModeScreenActive()));            // NEXT SEQ (SHIFT = Performance)
+    set(122, when(noteDown[122]));                                         // COPY
+    set(49, when(mpcShift));                                               // SHIFT
+    // Not built yet (milestone 5): BANK D, TRACK MUTE, OVER DUB, NOTE REPEAT, TC,
+    // FULL LEVEL, 16 LEVELS, STEP SEQ. Later, banks: dim when they hold samples,
+    // dark when empty (Mike 2026-11-12)
+    for (uint8_t cc : { 38, 43, 80, 11, 12, 39, 40, 41 })
+        set(cc, Lit::NotAvailable);
 }
 
 // ---------------------------------------------------------------- touchscreen

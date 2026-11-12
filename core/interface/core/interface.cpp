@@ -623,6 +623,16 @@ bool Interface::isFileScreenActive()
     return isOnScreenModule(&projectEditor);
 }
 
+bool Interface::isConfigScreenActive()
+{
+    return isOnScreenModule(&configEditor);
+}
+
+bool Interface::isSampleRecorderScreenActive()
+{
+    return isOnScreenModule(&sampleRecorder);
+}
+
 bool Interface::isOnScreenModule(ModuleBase* module)
 {
     return onScreenModule == module;

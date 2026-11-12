@@ -24,7 +24,7 @@ constexpr uint8_t generalMenuGroupCount = 9;
 #elif defined(PLATFORM_MPC) // no USB group (USB storage / USB audio are Tracker+ hardware)
 constexpr uint8_t baseMenuGroupCount = 6;
 constexpr uint8_t projectMenuGroupCount = 10;
-constexpr uint8_t generalMenuGroupCount = 12;
+constexpr uint8_t generalMenuGroupCount = 14; // + Button lights, Tap tempo flash
 #elif defined(PLATFORM_IMX)
 constexpr uint8_t baseMenuGroupCount = 7;
 constexpr uint8_t projectMenuGroupCount = 10;
@@ -143,6 +143,12 @@ cMenuItem melPadsBright(menuGeneral,
                         padsBrightDesc,
                         menuTypeItemListTextWithAction,
                         &setupPadsBrightness);
+#ifdef PLATFORM_MPC
+const strItemTypeListText setupButtonLights{ &mtConfig.general.buttonLights, 4, buttonLightsTexts };
+const strItemTypeListText setupTapFlash{ &mtConfig.general.tapTempoFlash, 3, tapFlashTexts };
+cMenuItem melButtonLights(menuGeneral, "Button lights", buttonLightsDesc, menuTypeItemListText, &setupButtonLights);
+cMenuItem melTapFlash(menuGeneral, "Tap tempo flash", tapFlashDesc, menuTypeItemListText, &setupTapFlash);
+#endif
 cMenuItem melPadPreview(menuGeneral,
                         "Pads preview",
                         padsPrevDesc,

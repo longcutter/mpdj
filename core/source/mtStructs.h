@@ -1118,6 +1118,13 @@ struct strMtConfig
         uint8_t font;
         uint8_t previewVolume;
         uint8_t recThreshold;
+#ifdef PLATFORM_MPC
+        // MPDJ (2026-11-12): MPC button lights 0 Off / 1 Dim / 2 Bright / 3 Dynamic,
+        // TAP TEMPO beat flash 0 Off / 1 Dim / 2 Bright. Appended, so older config
+        // files load with these defaults
+        uint8_t buttonLights = 1;
+        uint8_t tapTempoFlash = 0;
+#endif
     } general;
 
     struct strInterfaceState
