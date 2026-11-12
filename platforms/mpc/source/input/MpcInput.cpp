@@ -1525,7 +1525,7 @@ void MpcInput::setQLinkLeds()
 // Active, or Active in red (destructive or open-editor states: ERASE held,
 // Sample Editor open). Config > General > "Button lights" sets the levels:
 //   Off      everything dark
-//   Dim      active = dim (white or red), the rest dark (default: nothing bright)
+//   Dim      active = dim (white or red), the rest dark
 //   Bright   active = bright, the rest dark
 //   Dynamic  available = dim white, active = bright (default)
 // Values (hardware map): one-colour LEDs 0 off, 1 dim, 2+ bright; two-colour
