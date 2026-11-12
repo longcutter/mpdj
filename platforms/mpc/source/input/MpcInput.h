@@ -85,6 +85,16 @@ class MpcInput
     bool qlinkScreenMode(); // modes 2-3 and the screen has value buttons
     void updateQLinkBox();
     int boxGroup = -1;      // red box shown: 0 = labels 1-4, 1 = 5-8, -1 none
+
+    // ---- per-screen Q-Link maps (build step 2b): Sample Playback and the Sample
+    // Editor's main screen take over mode 1: one knob per point, turned slowly =
+    // fine (one point unit per message), fast = coarse (screen pixels); touching
+    // a point's knob selects it and centres the view on it; the main encoder zooms
+    bool pointScreenTurn(int knob, int steps);
+    bool pointScreenTouch(int knob, bool down);
+    bool pointScreenZoom(int steps);
+    uint32_t pointMsgMs[4] = {};
+    uint32_t pointFineMs = 30, pointFastMs = 8; // MPDJ_POINT_FINE_MS / _FAST_MS
     int qlinkMode = 1;
     int qlinkHeld = -1;          // Tracker screen button held for the Q-Links
     bool qlinkTouched[4] = {};   // Q-Link touch notes 84-87

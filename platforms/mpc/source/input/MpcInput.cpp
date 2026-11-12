@@ -13,6 +13,8 @@
 #include "mtStructs.h"
 #include "patternEditor/patternEditor.h"
 #include "projectEditor/projectEditor.h"
+#include "sampleEditor/sampleEditor.h"
+#include "samplePlayback/samplePlayback.h"
 #include "songEditor/songEditor.h"
 
 #include <errno.h>
@@ -129,6 +131,10 @@ constexpr float kScreenButtonTop = 400.0f;
 // ---------------------------------------------------------------- setup
 void MpcInput::open(SwitchGroupImpl* b, SwitchGroupImpl* p, EncoderImpl* e, DisplayDriverImpl* d)
 {
+    if (const char* v = getenv("MPDJ_POINT_FINE_MS"))
+        pointFineMs = (uint32_t)atoi(v);
+    if (const char* v = getenv("MPDJ_POINT_FAST_MS"))
+        pointFastMs = (uint32_t)atoi(v);
     buttons = b;
     pads = p;
     encoder = e;
@@ -825,12 +831,15 @@ void MpcInput::onRelative(uint8_t cc, uint8_t value)
         return;
     if (cc == kCcMainEncoder)
     {
-        turnValue(steps);
+        if (!pointScreenZoom(steps))
+            turnValue(steps);
         return;
     }
     if (cc < kCcQLink1 || cc >= kCcQLink1 + 4)
         return;
     int knob = cc - kCcQLink1;
+    if (qlinkMode == 1 && pointScreenTurn(knob, steps))
+        return;
     if (qlinkScreenMode())
     {
         qlinkScreenTurn(knob, steps);
@@ -943,6 +952,8 @@ void MpcInput::releaseQLinkButton()
 
 void MpcInput::qlinkTouch(int knob, bool down)
 {
+    if (qlinkMode == 1 && pointScreenTouch(knob, down))
+        return;
     if (!qlinkScreenMode())
     {
         qlinkTouched[knob] = false;
@@ -1005,6 +1016,150 @@ void MpcInput::pollQLinks()
         disp->overlay().setPopupLabel(-1);
         disp->requestRedraw();
     }
+}
+
+// ---------------------------------------------------------------- per-screen maps (step 2b)
+// Mike, 2026-11-11: on Sample Playback (1-shot and loop play modes) and the
+// Sample Editor's main screen, Q-Link mode 1 is a point map instead of
+// navigation: Q-Link 1 = Start, 2 = Loop start, 3 = Loop end, 4 = End (the
+// editor has no loop points: 1 = Start, 4 = End). The speed of the turn picks
+// the step: messages more than pointFineMs apart move one point unit (1/65536
+// of the sample, the finest the Tracker stores), quicker ones one screen pixel
+// at the current zoom, very quick ones (under pointFastMs) four pixels. Touching
+// a point's knob selects the point and centres the view on it (MPC app style).
+// The main encoder zooms (unless a finger holds a label, or the play mode list
+// / effect list is the selected item, which the encoder keeps scrolling).
+// Modes 2-3 keep working on these screens as before.
+namespace
+{
+struct PointMap
+{
+    int button[4] = { -1, -1, -1, -1 }; // Tracker screen button per knob, -1 = none
+    uint16_t* value[4] = {};            // the point each knob moves
+    int zoomButton = -1;
+    bool* fine = nullptr;               // the screen's mpdjFineStep flag
+    strZoomParams* zoom = nullptr;
+    uint8_t* refreshSpectrum = nullptr;
+    uint8_t* refreshPoints = nullptr;
+    bool listSelected = false;          // play mode / effect list is the selected item
+};
+
+bool pointMap(PointMap& m)
+{
+    if (mtInterface.isSamplePlayerScreenActive())
+    {
+        cSamplePlayback& sp = samplePlayback;
+        strInstrument* ins = sp.editorInstrument;
+        if (!ins || !ins->isActive || sp.loadedInstrumentType != mtSampleTypeWaveFile)
+            return false;
+        bool loop = ins->playMode == playModeLoopForward || ins->playMode == playModeLoopBackward ||
+                    ins->playMode == playModePingpong;
+        if (!loop && ins->playMode != playModeSingleShot)
+            return false; // slice, beat slice, granular, wavetable: keep navigation
+        m.button[0] = interfaceButton1;
+        m.value[0] = &ins->startPoint;
+        if (loop)
+        {
+            m.button[1] = interfaceButton2;
+            m.value[1] = &ins->loopPoint1;
+            m.button[2] = interfaceButton3;
+            m.value[2] = &ins->loopPoint2;
+        }
+        m.button[3] = interfaceButton4;
+        m.value[3] = &ins->endPoint;
+        m.zoomButton = interfaceButton5;
+        m.fine = &sp.mpdjFineStep;
+        m.zoom = &sp.zoom;
+        m.refreshSpectrum = &sp.refreshSpectrum;
+        m.refreshPoints = &sp.refreshPoints;
+        m.listSelected = sp.selectedPlace == 6;
+        return true;
+    }
+    if (mtInterface.isSampleEditorScreenActive())
+    {
+        cSampleEditor& se = sampleEditor;
+        // currentEffect is null while start() is showing a popup instead of the screen
+        if (se.screenType != cSampleEditor::mainScreen || !se.currentEffect || !se.editorInstrument->isActive)
+            return false;
+        m.button[0] = interfaceButton0;
+        m.value[0] = &se.selection.startPoint;
+        m.button[3] = interfaceButton1;
+        m.value[3] = &se.selection.endPoint;
+        m.zoomButton = interfaceButton2;
+        m.fine = &se.mpdjFineStep;
+        m.zoom = &se.zoom;
+        m.refreshSpectrum = &se.needRefreshSpectrum;
+        m.refreshPoints = &se.needRefreshPoints;
+        m.listSelected = se.selectedPlace[cSampleEditor::mainScreen] == cSampleEditor::effectButton;
+        return true;
+    }
+    return false;
+}
+} // namespace
+
+bool MpcInput::pointScreenTurn(int knob, int steps)
+{
+    PointMap m;
+    if (!pointMap(m))
+        return false;
+    if (m.button[knob] < 0)
+        return true; // no point on this knob here (1-shot, editor): do nothing
+    uint32_t now = platform.getTimer()->millis();
+    uint32_t dt = now - pointMsgMs[knob];
+    pointMsgMs[knob] = now;
+
+    holdScreenButton(m.button[knob]);
+    qlinkTurnMs = now;
+    if (dt >= pointFineMs)
+    {
+        *m.fine = true; // one point unit per message
+        turnValue(steps);
+        *m.fine = false;
+    }
+    else
+        turnValue(dt < pointFastMs ? steps * 4 : steps); // screen pixels
+    if (trace)
+        printf("input: point knob %d %+d (%s, %u ms) -> %u\n", knob + 1, steps,
+               dt >= pointFineMs ? "fine" : dt < pointFastMs ? "fast" : "coarse", (unsigned)dt,
+               *m.value[knob]);
+    return true;
+}
+
+bool MpcInput::pointScreenTouch(int knob, bool down)
+{
+    PointMap m;
+    if (!pointMap(m))
+        return false;
+    qlinkTouched[knob] = down && m.button[knob] >= 0;
+    if (m.button[knob] < 0)
+        return true;
+    if (!down)
+    {
+        if (qlinkHeld == m.button[knob])
+            releaseQLinkButton();
+        return true;
+    }
+    holdScreenButton(m.button[knob]); // selects the point, as touching its label does
+    // Centre the view on the point; the spectrum is redrawn around zoomPosition
+    // (a no-op at zoom 1, where the whole sample is in view).
+    m.zoom->zoomPosition = *m.value[knob];
+    m.zoom->lastChangedPoint = 0;
+    *m.refreshSpectrum = 1;
+    *m.refreshPoints = 1;
+    return true;
+}
+
+bool MpcInput::pointScreenZoom(int steps)
+{
+    if (qlinkMode != 1 || touchedButton >= 0)
+        return false; // a finger on a label: the encoder turns that label's value
+    PointMap m;
+    if (!pointMap(m) || m.listSelected)
+        return false;
+    holdScreenButton(m.zoomButton);
+    qlinkTurnMs = platform.getTimer()->millis();
+    turnValue(steps);
+    return true;
 }
 
 // ---------------------------------------------------------------- LEDs

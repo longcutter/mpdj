@@ -157,6 +157,9 @@ class cSamplePlayback : public ModuleBase
     hControl bgLabel;
 
     uint8_t selectedPlace = 6;
+    // MPDJ: while set, start / end / loop point moves step one point unit (1/65536
+    // of the sample) instead of one screen pixel (MPC Q-Links, slow turn = fine)
+    bool mpdjFineStep = false;
 
     //----------------------------------
     // spectrum + points

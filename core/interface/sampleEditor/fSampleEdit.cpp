@@ -1212,7 +1212,7 @@ void cSampleEditor::refreshPlayingProgress()
 // MainScreen
 void cSampleEditor::modStartPoint(int16_t val)
 {
-    uint16_t move_step = zoom.zoomWidth / 600;
+    uint16_t move_step = mpdjFineStep ? 1 : zoom.zoomWidth / 600; // MPDJ: fine step
     val *= move_step;
 
     if (selection.startPoint + val > MAX_16BIT)
@@ -1247,7 +1247,7 @@ void cSampleEditor::modStartPoint(int16_t val)
 
 void cSampleEditor::modEndPoint(int16_t val)
 {
-    uint16_t move_step = zoom.zoomWidth / 600;
+    uint16_t move_step = mpdjFineStep ? 1 : zoom.zoomWidth / 600; // MPDJ: fine step
     val *= move_step;
 
     if (selection.endPoint + val > MAX_16BIT)

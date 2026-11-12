@@ -1930,7 +1930,7 @@ static void changePlayModeSelection(int16_t value)
 static void modStartPoint(int16_t value)
 {
     // obliczenie kroku przesuniecia w zaleznosci od ilosci widzianych probek na wyswietlaczu
-    int32_t move_step = SP->zoom.zoomWidth / 600;
+    int32_t move_step = SP->mpdjFineStep ? 1 : SP->zoom.zoomWidth / 600; // MPDJ: fine step
     int32_t dif;
     int32_t postValue = value * move_step;
 
@@ -1999,7 +1999,7 @@ static void modStartPoint(int16_t value)
 
 static void modEndPoint(int16_t value)
 {
-    uint16_t move_step = SP->zoom.zoomWidth / 600;
+    uint16_t move_step = SP->mpdjFineStep ? 1 : SP->zoom.zoomWidth / 600; // MPDJ: fine step
     uint16_t dif;
     value = value * move_step;
 
@@ -2066,7 +2066,7 @@ static void modEndPoint(int16_t value)
 
 static void modLoopPoint1(int16_t value)
 {
-    uint16_t move_step = SP->zoom.zoomWidth / 600;
+    uint16_t move_step = SP->mpdjFineStep ? 1 : SP->zoom.zoomWidth / 600; // MPDJ: fine step
     value = value * move_step;
 
     if (SP->editorInstrument->loopPoint1 + value < SAMPLE_POINT_POS_MIN)
@@ -2102,7 +2102,7 @@ static void modLoopPoint1(int16_t value)
 
 static void modLoopPoint2(int16_t value)
 {
-    uint16_t move_step = SP->zoom.zoomWidth / 600;
+    uint16_t move_step = SP->mpdjFineStep ? 1 : SP->zoom.zoomWidth / 600; // MPDJ: fine step
     value = value * move_step;
 
     if (SP->editorInstrument->loopPoint2 + value < SAMPLE_POINT_POS_MIN)
