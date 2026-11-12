@@ -1023,9 +1023,10 @@ void MpcInput::pollQLinks()
 // Sample Editor's main screen, Q-Link mode 1 is a point map instead of
 // navigation: Q-Link 1 = Start, 2 = Loop start, 3 = Loop end, 4 = End (the
 // editor has no loop points: 1 = Start, 4 = End). The speed of the turn picks
-// the step: messages more than pointFineMs apart move one point unit (1/65536
-// of the sample, the finest the Tracker stores), quicker ones one screen pixel
-// at the current zoom, very quick ones (under pointFastMs) four pixels. Touching
+// the step: messages more than pointFineMs apart move 1/8 of a screen pixel at
+// the current zoom (at least one point unit, 1/65536 of the sample, the finest
+// the Tracker stores; Mike couldn't see the original one-unit step), quicker
+// ones one pixel, very quick ones (under pointFastMs) four pixels. Touching
 // a point's knob selects the point and centres the view on it (MPC app style).
 // The main encoder zooms (unless a finger holds a label, or the play mode list
 // / effect list is the selected item, which the encoder keeps scrolling).
@@ -1042,6 +1043,7 @@ struct PointMap
     uint8_t* refreshSpectrum = nullptr;
     uint8_t* refreshPoints = nullptr;
     bool listSelected = false;          // play mode / effect list is the selected item
+    uint32_t sampleLength = 0;          // frames, for the zoom steps
 };
 
 bool pointMap(PointMap& m)
@@ -1073,6 +1075,7 @@ bool pointMap(PointMap& m)
         m.refreshSpectrum = &sp.refreshSpectrum;
         m.refreshPoints = &sp.refreshPoints;
         m.listSelected = sp.selectedPlace == 6;
+        m.sampleLength = ins->sample.length;
         return true;
     }
     if (mtInterface.isSampleEditorScreenActive())
@@ -1091,6 +1094,7 @@ bool pointMap(PointMap& m)
         m.refreshSpectrum = &se.needRefreshSpectrum;
         m.refreshPoints = &se.needRefreshPoints;
         m.listSelected = se.selectedPlace[cSampleEditor::mainScreen] == cSampleEditor::effectButton;
+        m.sampleLength = se.editorInstrument->sample.length;
         return true;
     }
     return false;
@@ -1158,7 +1162,28 @@ bool MpcInput::pointScreenZoom(int steps)
         return false;
     holdScreenButton(m.zoomButton);
     qlinkTurnMs = platform.getTimer()->millis();
-    turnValue(steps);
+    // The Tracker zooms in linear steps of the samples-per-pixel resolution
+    // ((max - min) / 100 per click, GP.spectrumChangeZoom), so the first clicks
+    // barely change the view (Mike: too slow). Turn each click into a fixed
+    // ratio instead: x1.25 per click, full view to the deepest zoom in ~20.
+    int value = steps;
+    if (m.sampleLength >= 600)
+    {
+        int32_t maxRes = m.sampleLength / 600, minRes = m.sampleLength / 65535 + 1;
+        int32_t step = (maxRes - minRes) / 100;
+        if (step < 1)
+            step = 1;
+        int32_t res = m.zoom->zoomResolution;
+        if (res < minRes || res > maxRes || m.zoom->zoomValue <= 1.0f)
+            res = m.zoom->zoomResolution = maxRes; // the editor starts with it unset (0)
+        int32_t target = (int32_t)lrintf(res * powf(0.8f, (float)steps)); // steps > 0 = zoom in
+        value = (int)lrintf((float)(res - target) / step);
+        if (value == 0)
+            value = steps > 0 ? 1 : -1;
+    }
+    turnValue(value);
+    if (trace)
+        printf("input: zoom %+d clicks -> %+d steps, %.2fx\n", steps, value, m.zoom->zoomValue);
     return true;
 }
 

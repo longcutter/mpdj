@@ -436,7 +436,7 @@ class cSampleEditor : public ModuleBase
     //********************SPECTRUM PROCESSING
     strSpectrumParams spectrumParams[2];
     strZoomParams zoom;
-    bool mpdjFineStep = false; // MPDJ: start / end move one point unit, not one pixel
+    bool mpdjFineStep = false; // MPDJ: start / end move 1/8 pixel (min 1 unit), not one pixel
 
     struct strSelection
     {
