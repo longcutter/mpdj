@@ -9,9 +9,12 @@
 #include "sideload/Sideload.h"
 
 #include <signal.h>
+#include <sys/prctl.h>
+#include <ucontext.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 PlatformImpl platform;
@@ -29,10 +32,61 @@ int16_t sin_q15(int16_t value)
 // ---------------------------------------------------------------- main
 static void onSignal(int) { g_running = false; }
 
+// On the MPC a crash looks like a freeze or a silent exit. Print where it
+// happened, then die as before. Resolve the addresses on the unstripped build:
+//   addr2line -f -C -i -e platforms/mpc/build/tracker <pc> <lr> <stack words...>
+// (if "image start" differs from the build's __executable_start, subtract the difference)
+extern "C" char __executable_start, etext;
+static void onCrash(int sig, siginfo_t* si, void* ctx)
+{
+    ucontext_t* uc = (ucontext_t*)ctx;
+    char thread[17] = {};
+    prctl(PR_GET_NAME, thread, 0, 0, 0);
+    uintptr_t lo = (uintptr_t)&__executable_start, hi = (uintptr_t)&etext;
+    fprintf(stderr,
+            "\nMPDJ CRASH: signal %d (%s) in thread \"%s\", fault address %p\n"
+            "  pc %#lx  lr %#lx  sp %#lx  image start %#lx (onCrash %p)\n  stack words in code:",
+            sig,
+            strsignal(sig),
+            thread,
+            si->si_addr,
+            (unsigned long)uc->uc_mcontext.arm_pc,
+            (unsigned long)uc->uc_mcontext.arm_lr,
+            (unsigned long)uc->uc_mcontext.arm_sp,
+            (unsigned long)lo,
+            (void*)&onCrash);
+    uintptr_t* sp = (uintptr_t*)uc->uc_mcontext.arm_sp;
+    int shown = 0;
+    for (int i = 0; i < 512 && shown < 24; i++)
+    {
+        uintptr_t v = sp[i];
+        if (v >= lo && v < hi)
+        {
+            fprintf(stderr, " %#lx", (unsigned long)v);
+            shown++;
+        }
+    }
+    fprintf(stderr, "\n");
+    fflush(stderr);
+    signal(sig, SIG_DFL);
+    raise(sig);
+}
+
+static void installCrashReport()
+{
+    struct sigaction sa = {};
+    sa.sa_sigaction = onCrash;
+    sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
+    sigemptyset(&sa.sa_mask);
+    for (int sig : { SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT })
+        sigaction(sig, &sa, nullptr);
+}
+
 int main()
 {
     signal(SIGINT, onSignal);
     signal(SIGTERM, onSignal);
+    installCrashReport();
 
     printf("Tracker CE for MPC One+ starting\n");
     setvbuf(stdout, nullptr, _IOLBF, 0); // line-buffered logs over ssh

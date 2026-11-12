@@ -580,7 +580,7 @@ int FileSystemImpl::createInstrumentsList(const char* path,
                                           uint8_t list_length,
                                           uint32_t* sizeOut)
 {
-    // Project instrument files are named "NN name.pti" (NN = 1-48): list[NN-1] = "name".
+    // Project instrument files are named "NN name.pti" (NN = 1-64, MPDJ): list[NN-1] = "name".
     std::string p = full(path);
     if (!isDir(p))
         return kListError;
@@ -603,7 +603,7 @@ int FileSystemImpl::createInstrumentsList(const char* path,
         if (*q != ' ')
             continue;
         q++;
-        if (idx < 1 || idx > 48 || idx - 1 >= list_length || list[idx - 1] != nullptr)
+        if (idx < 1 || idx - 1 >= list_length || list[idx - 1] != nullptr)
             continue;
 
         size_t len = strlen(q) - 4;
