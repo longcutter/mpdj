@@ -310,6 +310,16 @@ AUDIO_CORE_RAM void Sequencer::play_microStep(int row)
 
         //		playerRow.micromove.isActive = 0;
         playerRow.cancelStep = 0;
+
+        // MPDJ (5b-4a): this row's note was a pad hit that is already sounding
+        if (playerRow.mpdjSkipPos >= 0)
+        {
+            if (playerRow.mpdjSkipPos == playerRow.actual_pos)
+            {
+                stepToSend.note = STEP_NOTE_EMPTY;
+            }
+            playerRow.mpdjSkipPos = -1;
+        }
     }
 
     //	******************************************************************************
@@ -1563,6 +1573,8 @@ void Sequencer::stop(StopContext context)
     player.isPlay = 0;
     player.isStop = 1;
     player.isREC = 0;
+    for (auto& t : player.track)
+        t.mpdjSkipPos = -1; // MPDJ (5b-4a): a pending skip ends with playback
     player.startRecOnExtClk = 0;
 
     player.uStep = 0;
@@ -3143,7 +3155,7 @@ void Sequencer::mpdjPadNoteOn(uint8_t track, uint8_t instrument, uint8_t note, u
         sendMidiNoteOff(t.stepSent.note, 0, instrumentIdxToMidiChannel(t.stepSent.instrument), false);
     }
 
-    int velo = mapClamped<int>(velocity, 0, 127, 0, getInstrumentVelo(instrument));
+    int velo = velocity; // scaled by the caller (padVelocity)
 
     t.noteOpen = 1;
     t.noteLength = -1;
@@ -3192,6 +3204,63 @@ void Sequencer::mpdjPadNoteOff(uint8_t track, int16_t source, bool sendOff)
     t.noteSource = -1;
 }
 
+bool Sequencer::mpdjPadRecWrite(
+  uint8_t track, uint8_t instrument, uint8_t note, uint8_t velocity, MpdjRecWrite* out)
+{
+    if (!isRec() || track >= kAllTracks || !isRecArmedOnTrack(track))
+        return false;
+
+    // count-in: as handleNoteOn, a hit just before beat 1 lands on row 0
+    bool anticipatedBeat1 = false;
+    if (player.preRecMetronomeActive && isSetInternalClock())
+    {
+        uint8_t threshold = std::min<uint8_t>(mtConfig.general.recThreshold, recThreshold_max) * 4;
+        if (threshold > 0)
+        {
+            int preRollLengthStep = getMetronomeDenominator() * getMetronomeNumerator();
+            if (player.extRecMetronomeStep == preRollLengthStep)
+            {
+                int stepTick = timerTicks % kTicksInStep;
+                int uStep = clamp<int>(stepTick / 12 + 1, 1, 48);
+                int microValue = mapClamped<int>(uStep, 1, 48, 0, 100);
+                if (microValue >= (100 - threshold))
+                    anticipatedBeat1 = true;
+            }
+        }
+    }
+    if (player.preRecMetronomeActive && !anticipatedBeat1)
+        return false; // counting in: the pad only plays
+
+    auto& t = player.track[track];
+    uint8_t dest = anticipatedBeat1 ? 0 : getDestRecordingStep(track, !recMicrotiming());
+    strPattern::strTrack::strStep* step = &currentPattern->track[track].step[dest];
+
+    newFileManager.storePatternUndoRevision();
+    step->note = note;
+    step->instrument = instrument;
+    step->volume = velocityToVolume(velocity);
+    step->micromove = (recMicrotiming() && !anticipatedBeat1)
+                        ? clamp<int>(mapClamped<int>(t.uStep, 1, 48, 0, 100),
+                                     getFxMin(fx.FX_TYPE_MICROMOVE),
+                                     getFxMax(fx.FX_TYPE_MICROMOVE))
+                        : -1;
+    t.recNoteOnStepIdx = dest;
+    // written ahead of the playhead (or on row 0 during the count-in): the
+    // pad already plays it, so the sequencer skips it once
+    bool skip = anticipatedBeat1 || dest != t.actual_pos;
+    t.mpdjSkipPos = skip ? dest : -1;
+    newFileManager.setActualPatternStructChanged();
+
+    if (out)
+    {
+        out->row = dest;
+        out->volume = step->volume;
+        out->micromove = step->micromove;
+        out->skipNext = skip;
+    }
+    return true;
+}
+
 void Sequencer::updateTrackLengths(strPattern* pattern)
 {
     for (int trackIdx = 0; trackIdx < kAllTracks; trackIdx++)
@@ -3204,7 +3273,7 @@ void Sequencer::updateTrackLengths(strPattern* pattern)
 uint8_t Sequencer::noMoreRecOpen()
 {
     uint8_t noMore = 1;
-    for (uint8_t a = 0; a < 8; a++)
+    for (uint8_t a = 0; a < kAllTracks; a++) // MPDJ: all 16 tracks (was 8)
     {
         if (player.track[a].recOpen)
         {

@@ -760,7 +760,7 @@ bool MpcInput::padEngineHere() const
 {
     return !padGrid && mtInterface.isPatternScreenActive() &&
            mtPopups.getStepPopupState() == stepPopupNone && !mtPopups.isNoteKeyboardPopupActive() &&
-           !patternEditor.fillState && !patternEditor.editMode && !sequencer.isRec() &&
+           !patternEditor.fillState && !patternEditor.editMode &&
            !cPatternEditor::keyboardManager.getState();
 }
 
@@ -790,6 +790,8 @@ void MpcInput::onPad(uint8_t note, bool down, uint8_t velocity)
         enginePadHeld[note] = (int8_t)pad;
         if (const char* msg = mpdjPadPress(pad, velocity))
             mtPopups.show(0, msg);
+        else if (sequencer.isRec())
+            patternEditor.refreshPattern(); // show the hit just written
         return;
     }
     if (!down)

@@ -4,8 +4,10 @@
 #include "mpdjPrograms.h"
 #include "mtSequencer.h"
 #include "mtStructs.h"
+#include "util_math.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 extern strMtProject mtProject;
@@ -69,9 +71,38 @@ const char* mpdjPadPress(int pad, uint8_t velocity)
         mpdjPadRelease(pad); // a second press before the release (shouldn't happen)
 
     uint8_t note = p->note < 0 ? (uint8_t)Sequencer::STEP_NOTE_DEFAULT : (uint8_t)p->note;
+    uint8_t velo = padVelocity(p->program, velocity ? velocity : 1);
     s_held[pad] = { (int8_t)p->track, padIsGate(pad) };
-    sequencer.mpdjPadNoteOn(p->track, p->program, note, velocity ? velocity : 1, kPadSourceBase + pad);
+    sequencer.mpdjPadNoteOn(p->track, p->program, note, velo, kPadSourceBase + pad);
+
+    // REC + playing (5b-4a): write the hit on the pad's track
+    Sequencer::MpdjRecWrite w;
+    if (sequencer.mpdjPadRecWrite(p->track, p->program, note, velo, &w))
+    {
+#ifdef PLATFORM_MPC
+        static const bool trace = getenv("MPDJ_PAD_REC_TRACE") != nullptr;
+        if (trace)
+            printf("pad rec: %s vel %u -> track %d row %d: %s %02d vol %d micro %d%s\n", name,
+                   velocity, p->track + 1, w.row, mtNotes[note], p->program + 1, w.volume,
+                   w.micromove, w.skipNext ? " (ahead of the playhead)" : "");
+#endif
+    }
+#ifdef PLATFORM_MPC
+    else if (sequencer.isRec() && getenv("MPDJ_PAD_REC_TRACE"))
+    {
+        printf("pad rec: %s -> track %d not written (%s)\n", name, p->track + 1,
+               !sequencer.isRecArmedOnTrack(p->track) ? "track not armed" : "counting in");
+    }
+#endif
     return nullptr;
+}
+
+uint8_t padVelocity(uint8_t program, uint8_t velocity)
+{
+    // 5b-4a: linear, a full hit = the program's own volume (Config curve and
+    // top come with 5b-4d)
+    int v = mapClamped<int>(velocity, 0, 127, 0, sequencer.getInstrumentVelo(program));
+    return (uint8_t)(v > 127 ? 127 : v);
 }
 
 void mpdjPadRelease(int pad)

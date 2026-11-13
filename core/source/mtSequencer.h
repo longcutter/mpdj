@@ -455,6 +455,10 @@ class Sequencer
             bool noteOpen = 0;
             uint8_t recOpen = 0;
             uint8_t recNoteOnStepIdx = 0;
+            // MPDJ (5b-4a): a pad hit written ahead of the playhead (a late hit
+            // rounded to the next row) is already sounding: don't play that row's
+            // note once more when the playhead gets there. -1 = none
+            int16_t mpdjSkipPos = -1;
 
             int16_t noteSource = -1;
 
@@ -905,8 +909,20 @@ class Sequencer
     // program's own volume. NoteOff ends it only if this pad (`source`) still
     // holds the track; sendOff = false (One shot) frees the track but lets the
     // sound ring until the next note on the track cuts it.
+    // velocity: already scaled for the program (padVelocity(), mpdjPads)
     void mpdjPadNoteOn(uint8_t track, uint8_t instrument, uint8_t note, uint8_t velocity, int16_t source);
     void mpdjPadNoteOff(uint8_t track, int16_t source, bool sendOff);
+    // MPDJ (5b-4a): live REC (REC + playing): write a pad hit onto its track
+    // (Overwrite: note, program, volume, micromove; FX columns stay). False
+    // when nothing was written (not recording, track not armed, count-in).
+    struct MpdjRecWrite
+    {
+        int16_t row = -1;
+        int8_t volume = -1;
+        int8_t micromove = -1;
+        bool skipNext = false;
+    };
+    bool mpdjPadRecWrite(uint8_t track, uint8_t instrument, uint8_t note, uint8_t velocity, MpdjRecWrite* out);
     void updateTrackLengths(strPattern* pattern);
 
     uint8_t noMoreRecOpen();

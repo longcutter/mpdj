@@ -67,6 +67,9 @@ void mpdjPadRelease(int pad);
 // Gate or One shot for the pad as it is now (Auto: Gate for MIDI programs and
 // samples that loop or sustain: loop modes, wavetable, granular)
 bool padIsGate(int pad);
+// A pad's velocity 1-127 scaled for its program: a full hit = the program's
+// own volume (velocity setting for MIDI). The pad plays and records this.
+uint8_t padVelocity(uint8_t program, uint8_t velocity);
 
 // Project file: copy the map into / out of the MPDJ block's pad table.
 // Invalid entries read back as that pad's default.
