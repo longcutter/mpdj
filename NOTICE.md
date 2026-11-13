@@ -57,6 +57,8 @@ MPDJ (the `mpc-port` branch) adds the Akai MPC One+ platform layer in `platforms
 
 MPDJ is not affiliated with Polyend, Akai Professional or inMusic Brands. "Polyend" and "Polyend Tracker" are trademarks of Polyend Sp. z o.o.; "MPC" and "Akai Professional" are trademarks of inMusic Brands, Inc.
 
+The default drum kit ("MPDJ Kit") is rendered from scratch by `tools/kitgen` (oscillators, noise and filters, no recorded audio); the kit is MPDJ's own work under the same MIT terms.
+
 Third-party components used by MPDJ:
 
 ## 10. stb_image

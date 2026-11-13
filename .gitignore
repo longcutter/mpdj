@@ -30,3 +30,4 @@ __pycache__/
 # MPDJ build outputs and test binaries
 /out/
 tools/sideload/s3/s3tone
+tools/kitgen/kitgen
