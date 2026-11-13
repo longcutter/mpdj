@@ -14,6 +14,9 @@
 // slots 1-48 and M01-M16 as MIDI programs in slots 49-64 (channels 1-16).
 #pragma once
 
+#include "mpdjPads.h"
+
+#include <stddef.h>
 #include <stdint.h>
 
 static constexpr int kProgramSlots = 64;
@@ -76,10 +79,13 @@ struct strMpdjProjectData
     // tracks 1-8 (mute and names of 9-16 are its midiTrackMute / midiTrackNames)
     uint8_t trackVolumeHi[8]; // tracks 9-16
     uint8_t reservedTracks[24];
+    // version 3 (step 5b-1): the pad map, mpdjPads.h
+    strPadSlot pads[kPads];
 };
 static constexpr size_t kMpdjProjectDataV1Size = 8 + 4 * kProgramSlots; // version 1 ended here
-static_assert(sizeof(strMpdjProjectData) == kMpdjProjectDataV1Size + 32);
-static constexpr uint8_t kMpdjProjectDataVersion = 2;
+static constexpr size_t kMpdjProjectDataV2Size = kMpdjProjectDataV1Size + 32; // version 2 ended here
+static_assert(sizeof(strMpdjProjectData) == kMpdjProjectDataV2Size + 4 * kPads);
+static constexpr uint8_t kMpdjProjectDataVersion = 3;
 
 // Slot types for the current project (mtProject.programs)
 ProgramType programType(int idx);

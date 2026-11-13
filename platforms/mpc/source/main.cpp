@@ -101,6 +101,8 @@ int main()
         return AudioProbe::latencyTest();
     if (int rc = programsSelfTest(); rc >= 0)
         return rc;
+    if (int rc = padsSelfTest(); rc >= 0)
+        return rc;
 
     trackerInstance = Tracker::getInstance();
     platform.init();

@@ -106,9 +106,14 @@ bool cFileManager::loadProjectFileFormFileStruct(strMtProject* project, strProje
     static constexpr size_t kMpdjV1ProjectFileSize =
       offsetof(strProjectFile, projectDataAndHeader.project.mpdj) + kMpdjProjectDataV1Size +
       sizeof(uint32_t);
+    // MPDJ: and with the version 2 block (5a-4 and 5a-5, before the pad map)
+    static constexpr size_t kMpdjV2ProjectFileSize =
+      offsetof(strProjectFile, projectDataAndHeader.project.mpdj) + kMpdjProjectDataV2Size +
+      sizeof(uint32_t);
     if (pFile->projectDataAndHeader.projectHeader.size != sizeof(strProjectFile) &&
         pFile->projectDataAndHeader.projectHeader.size != kTrackerPlusProjectFileSize &&
-        pFile->projectDataAndHeader.projectHeader.size != kMpdjV1ProjectFileSize)
+        pFile->projectDataAndHeader.projectHeader.size != kMpdjV1ProjectFileSize &&
+        pFile->projectDataAndHeader.projectHeader.size != kMpdjV2ProjectFileSize)
     {
         // zmienil sie rozmiar pliku projektu (np. po update)
         // wiec rozjadą sie nazwa i patch projektu
@@ -236,6 +241,7 @@ void cFileManager::getDefaultProject(struct strMtProject* source)
     source->programs = strProgramTable{}; // MPDJ: a new project starts with all slots empty
     for (uint8_t& v : source->trackVolumeHi)
         v = DEFAULT_TRACK_VOLUME; // MPDJ: tracks 9-16
+    source->pads.setDefault(); // MPDJ: the default pad map
     getDefaultSong(&source->song);
     getDefaultValues(&source->values);
 

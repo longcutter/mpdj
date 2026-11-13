@@ -1046,6 +1046,9 @@ struct strMtProject
         DEFAULT_TRACK_VOLUME, DEFAULT_TRACK_VOLUME, DEFAULT_TRACK_VOLUME, DEFAULT_TRACK_VOLUME,
         DEFAULT_TRACK_VOLUME, DEFAULT_TRACK_VOLUME, DEFAULT_TRACK_VOLUME, DEFAULT_TRACK_VOLUME
     };
+
+    // MPDJ (step 5b-1): pad -> program -> track, saved in the MPDJ block; mpdjPads.h
+    strPadMap pads;
 };
 
 //----------------------------------------------------------------------------------
