@@ -64,6 +64,15 @@ const float MIN_WAVE_FLOAT = -1.0;
 const uint32_t EXTERAL_MEMORY_ADDRESS = 0x70000000;
 const uint32_t TOTAL_EXTERNAL_MEMORY = (16 * 1024 * 1024); // 16 MB
 const uint32_t SAMPLE_MEMORY_SIZE = (45 * 256 * 1024);     // 11,25 MB = 133.7469 sec = 2.229 min
+#elif defined(PLATFORM_MPC)
+// MPDJ (step 5a-5): the MPC One+ has 2 GB of RAM (~1.5 GB free with MPDJ
+// running). The array is ordinary zero-filled memory, so Linux only backs the
+// pages samples actually use. Same layout as the Tracker+: the Sample
+// Editor's buffers sit at the end (EDIT_BUFF_OFFSET), the Sample Recorder,
+// MOD import and export use the whole area as scratch and reload afterwards
+const uint32_t EXTERAL_MEMORY_ADDRESS = 0;                    // unused on Linux
+const uint32_t TOTAL_EXTERNAL_MEMORY = (512 * 1024 * 1024);   // unused on Linux
+const uint32_t SAMPLE_MEMORY_SIZE = (384 * 1024 * 1024);      // 384 MB = ~76 min mono / ~38 min stereo
 #else
 // Tmini / Tplus
 const uint32_t EXTERAL_MEMORY_ADDRESS = 0x80000000;
@@ -75,7 +84,14 @@ const uint32_t DELAY_MEMORY_SIZE = (3 * 512 * 1024);               // 1,5 MB
 const uint32_t REVERB_MEMORY_SIZE = 32768;                         // 32 KB
 const uint32_t SHARED_SCRATCH_MEMORY_SIZE = 768 * 1024; // 768 KB shared external scratch (.scratch_memory)
 
+#ifdef PLATFORM_MPC
+// MPDJ (step 5a-5): samples per channel; half holds the sample, half the
+// processed copy, so the Sample Editor takes up to 5 min at 44.1 kHz
+// (was 3,75 M = ~42 s). 2 channels x 2 bytes: ~106 MB at the end of sample memory
+const uint32_t EDIT_BUFF_SIZE = 2 * 5 * 60 * 44100;
+#else
 const uint32_t EDIT_BUFF_SIZE = (15 * 256 * 1024); // 3,75 MB
+#endif
 
 #ifdef PLATFORM_IMX
 constexpr int SAMPLE_CHANNELS = 2;
@@ -84,6 +100,10 @@ constexpr int SAMPLE_CHANNELS = 1;
 #endif
 
 const uint32_t EDIT_BUFF_OFFSET = SAMPLE_MEMORY_SIZE - (2 * SAMPLE_CHANNELS * EDIT_BUFF_SIZE);
+// mtEffect::startLoad moves an overlapping sample to the start of sample
+// memory (SAMPLE_CHANNELS x EDIT_BUFF_SIZE samples): keep that clear of the editor area
+static_assert(SAMPLE_CHANNELS * EDIT_BUFF_SIZE * sizeof(int16_t) <= EDIT_BUFF_OFFSET,
+              "edit buffers and the editor's temporary area overlap");
 
 static constexpr int kSampleTracks = 8;
 static constexpr int kMidiTrackFirstIdx = kSampleTracks;
