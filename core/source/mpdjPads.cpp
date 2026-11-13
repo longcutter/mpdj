@@ -2,11 +2,85 @@
 #include "mpdjPads.h"
 
 #include "mpdjPrograms.h"
+#include "mtSequencer.h"
 #include "mtStructs.h"
 
+#include <stdio.h>
 #include <string.h>
 
 extern strMtProject mtProject;
+extern Sequencer sequencer;
+
+// Note source for the sequencer's held-note bookkeeping: Tracker pads use
+// 0-47, MIDI keys note + 100; MPDJ pads 200-263
+static constexpr int16_t kPadSourceBase = 200;
+
+namespace
+{
+struct Held
+{
+    int8_t track = -1; // -1 = not held by the engine
+    bool gate = false;
+};
+Held s_held[kPads];
+}
+
+bool padIsGate(int pad)
+{
+    const strPadSlot* p = padSlot(pad);
+    if (!p || p->program == kPadNoProgram)
+        return false;
+    if (programType(p->program) == kProgramMidi)
+        return true; // a MIDI note always needs its note off
+    if (p->mode == kPadModeGate)
+        return true;
+    if (p->mode == kPadModeOneShot)
+        return false;
+    switch (mtProject.instrument[p->program].playMode)
+    {
+    case playModeLoopForward:
+    case playModeLoopBackward:
+    case playModePingpong:
+    case playModeWavetable:
+    case playModeGranular: return true;
+    default: return false; // one shot, slices
+    }
+}
+
+const char* mpdjPadPress(int pad, uint8_t velocity)
+{
+    static char msg[32];
+    const strPadSlot* p = padSlot(pad);
+    if (!p)
+        return nullptr;
+    char name[4];
+    padName(pad, name);
+    if (p->program == kPadNoProgram)
+    {
+        snprintf(msg, sizeof msg, "%s: no program", name);
+        return msg;
+    }
+    if (programType(p->program) == kProgramEmpty)
+    {
+        snprintf(msg, sizeof msg, "%s: slot %02d empty", name, p->program + 1);
+        return msg;
+    }
+    if (s_held[pad].track >= 0)
+        mpdjPadRelease(pad); // a second press before the release (shouldn't happen)
+
+    uint8_t note = p->note < 0 ? (uint8_t)Sequencer::STEP_NOTE_DEFAULT : (uint8_t)p->note;
+    s_held[pad] = { (int8_t)p->track, padIsGate(pad) };
+    sequencer.mpdjPadNoteOn(p->track, p->program, note, velocity ? velocity : 1, kPadSourceBase + pad);
+    return nullptr;
+}
+
+void mpdjPadRelease(int pad)
+{
+    if (pad < 0 || pad >= kPads || s_held[pad].track < 0)
+        return;
+    sequencer.mpdjPadNoteOff((uint8_t)s_held[pad].track, kPadSourceBase + pad, s_held[pad].gate);
+    s_held[pad] = {};
+}
 
 const strPadSlot* padSlot(int pad)
 {

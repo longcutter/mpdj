@@ -3119,6 +3119,73 @@ void Sequencer::handleNoteOff(byte channel, // pochodzenie grida np. GRID_OUTSID
     }
 }
 
+// MPDJ (step 5b-3): pad engine notes, modelled on handleNoteOn / Off's play mode
+void Sequencer::mpdjPadNoteOn(uint8_t track, uint8_t instrument, uint8_t note, uint8_t velocity, int16_t source)
+{
+    if (track >= kAllTracks || isTrackEngineMuted(track))
+        return;
+
+    if (!isPlay() && !player.preRecMetronomeActive)
+    {
+        engine.endAllFx(true); // as handleNoteOn: step fxes aren't closed on stop()
+    }
+
+    auto& t = player.track[track];
+    if (t.noteOpen && isMidiInstrument(t.stepSent.instrument))
+    {
+        // one note per track: end the MIDI note still open there
+        sendMidiNoteOff(t.stepSent.note, 0, instrumentIdxToMidiChannel(t.stepSent.instrument), false);
+    }
+
+    int velo = mapClamped<int>(velocity, 0, 127, 0, getInstrumentVelo(instrument));
+
+    t.noteOpen = 1;
+    t.noteLength = -1;
+    t.recOpen = true;
+    t.noteSource = source;
+    t.stepSent.note = note;
+    t.stepSent.instrument = instrument;
+
+    bool isSynth = isSynthInstrument(instrument);
+    if (isMidiInstrument(instrument) || isSynth)
+    {
+        sendMidiNoteOn(note, velo, instrumentIdxToMidiChannel(instrument), isSynth);
+    }
+    else if (isSampleTrack(track))
+    {
+        instrumentPlayer[track].noteOff();
+        instrumentPlayer[track].noteOn(
+          instrument, note, velocityToVolume(velo), fx.FX_TYPE_VOLUME, 0, 0, 0);
+        engine.setLastUsedVoice(track);
+    }
+}
+
+void Sequencer::mpdjPadNoteOff(uint8_t track, int16_t source, bool sendOff)
+{
+    if (track >= kAllTracks)
+        return;
+    auto& t = player.track[track];
+    if (!(t.noteOpen && t.recOpen && t.noteSource == source))
+        return; // another pad or the sequencer has the track now
+
+    if (sendOff)
+    {
+        int instrument = t.stepSent.instrument;
+        bool isSynth = isSynthInstrument(instrument);
+        if (isMidiInstrument(instrument) || isSynth)
+        {
+            sendMidiNoteOff(t.stepSent.note, 0, instrumentIdxToMidiChannel(instrument), isSynth);
+        }
+        else if (isSampleTrack(track))
+        {
+            instrumentPlayer[track].noteOff();
+        }
+        t.noteOpen = 0;
+    }
+    t.recOpen = 0;
+    t.noteSource = -1;
+}
+
 void Sequencer::updateTrackLengths(strPattern* pattern)
 {
     for (int trackIdx = 0; trackIdx < kAllTracks; trackIdx++)

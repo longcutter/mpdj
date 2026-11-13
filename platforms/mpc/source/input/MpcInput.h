@@ -45,7 +45,11 @@ class MpcInput
     void pollMidi();
     void onMidi(uint8_t status, uint8_t d1, uint8_t d2);
     void onButton(uint8_t note, bool down);
-    void onPad(uint8_t note, bool down);
+    void onPad(uint8_t note, bool down, uint8_t velocity);
+    // MPDJ pads (step 5b-3): the pad engine plays the pad map on the Pattern
+    // screen; elsewhere, in popups, while recording / editing, and in grid
+    // mode (16 LEVELS) pads drive the Tracker's 4x12 grid as before
+    bool padEngineHere() const;
     void onRelative(uint8_t cc, uint8_t value);
     void tapButton(int trackerButton, int times);
     void tapWithShift(int trackerButton);
@@ -157,7 +161,9 @@ class MpcInput
     EncoderImpl* encoder = nullptr;
     const FbOutput* fb = nullptr;
     bool trace = false;
-    int padBank = 0;            // 0..2 = Tracker pad columns 0-3, 4-7, 8-11
+    int padBank = 0;            // 0..3 = banks A-D (grid: Tracker pad columns 0-3, 4-7, 8-11; D = C)
+    bool padGrid = false;       // 16 LEVELS: the Pattern screen's pads drive the 4x12 grid
     int8_t padHeld[128];        // MPC pad note -> Tracker pad index sent on press
+    int8_t enginePadHeld[128];  // MPC pad note -> MPDJ pad (0-63) pressed in the pad engine
     int8_t buttonHeld[128];     // MPC button note -> Tracker button sent on press
 };

@@ -57,6 +57,17 @@ const strPadSlot* padSlot(int pad);
 void padName(int pad, char out[4]);
 const char* padModeName(uint8_t mode);
 
+// Pad engine (step 5b-3). Press: the pad plays its program on its track with
+// `velocity` (1-127); returns nullptr, or a short message for the screen when
+// there's nothing to play ("A03: slot 03 empty"). Release ends the note for a
+// Gate pad and frees the track for a One shot pad. The caller decides where
+// pads mean this (MPC: the Pattern screen without popups, not recording).
+const char* mpdjPadPress(int pad, uint8_t velocity);
+void mpdjPadRelease(int pad);
+// Gate or One shot for the pad as it is now (Auto: Gate for MIDI programs and
+// samples that loop or sustain: loop modes, wavetable, granular)
+bool padIsGate(int pad);
+
 // Project file: copy the map into / out of the MPDJ block's pad table.
 // Invalid entries read back as that pad's default.
 void padsWrite(strPadSlot* out);

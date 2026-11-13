@@ -13,6 +13,7 @@
 #include "fileManager.h"
 #include "mtSequencer.h"
 #include "mtStructs.h"
+#include "mpdjPads.h"
 #include "patternEditor/patternEditor.h"
 #include "projectEditor/projectEditor.h"
 #include "sampleEditor/sampleEditor.h"
@@ -66,6 +67,7 @@ enum class Act : uint8_t
     TapTempo,    // tap tempo; SHIFT = lock / unlock the tempo
     EncoderPush, // Pattern screen: paste (Tracker Shift+Copy); elsewhere Enter (Mini middle)
     QLinkMode,   // Q-LINK: Q-Link modes 1 (navigate) > 2 (screen buttons 1-4) > 3 (5-8)
+    PadGrid,     // 16 LEVELS: Pattern screen pads = pad map / the Tracker's 4x12 grid
 };
 
 struct ButtonMap
@@ -98,11 +100,12 @@ const ButtonMap kButtonMap[] = {
     { 53, Act::TapTempo, -1, "TAP TEMPO" },
     { 111, Act::EncoderPush, -1, "ENCODER PUSH" },
     { 0, Act::QLinkMode, -1, "Q-LINK" },
+    { 40, Act::PadGrid, -1, "16 LEVELS" }, // for now (5b-3); later the chromatic mode
     // Not mapped yet: TRACK MUTE, NOTE REPEAT,
-    // FULL LEVEL, 16 LEVELS, STEP SEQ, TC, OVER DUB, bank D (pad work, milestone 5)
+    // FULL LEVEL, STEP SEQ, TC, OVER DUB (pad work, milestone 5)
 };
 
-constexpr uint8_t kNoteBankA = 35, kNoteBankC = 37;
+constexpr uint8_t kNoteBankA = 35, kNoteBankD = 38;
 constexpr uint8_t kNoteShift = 49;
 constexpr uint8_t kNoteMain = 52;
 constexpr uint8_t kNoteErase = 9;
@@ -149,6 +152,7 @@ void MpcInput::open(SwitchGroupImpl* b, SwitchGroupImpl* p, EncoderImpl* e, Disp
     if (qlinkDivider < 1)
         qlinkDivider = 1;
     memset(padHeld, -1, sizeof padHeld);
+    memset(enginePadHeld, -1, sizeof enginePadHeld);
     memset(buttonHeld, -1, sizeof buttonHeld);
     openMidi();
     openTouch();
@@ -195,8 +199,11 @@ void MpcInput::suspend()
             buttons->release(buttonHeld[n]);
         if (padHeld[n] >= 0)
             pads->release(padHeld[n]);
+        if (enginePadHeld[n] >= 0)
+            mpdjPadRelease(enginePadHeld[n]);
     }
     memset(padHeld, -1, sizeof padHeld);
+    memset(enginePadHeld, -1, sizeof enginePadHeld);
     memset(buttonHeld, -1, sizeof buttonHeld);
     if (touchedButton >= 0)
         buttons->release(touchedButton);
@@ -407,7 +414,7 @@ void MpcInput::onMidi(uint8_t status, uint8_t d1, uint8_t d2)
     if (ch == 9) // pads
     {
         if (noteOn || noteOff)
-            onPad(d1, noteOn);
+            onPad(d1, noteOn, noteOn ? d2 : 0);
         // poly aftertouch (0xA9) is ignored for now
         return;
     }
@@ -499,7 +506,7 @@ void MpcInput::onButton(uint8_t note, bool down)
         }
         closeFxList(true);
     }
-    if (down && note >= kNoteBankA && note <= kNoteBankC)
+    if (down && note >= kNoteBankA && note <= kNoteBankD)
     {
         padBank = note - kNoteBankA;
         if (trace)
@@ -664,6 +671,10 @@ void MpcInput::onButton(uint8_t note, bool down)
                 hold = interfaceButtonMiniMiddle; // the Tracker Mini's Enter: open, load, select, confirm
             break;
         case Act::QLinkMode: cycleQLinkMode(); break;
+        case Act::PadGrid:
+            padGrid = !padGrid;
+            mtPopups.show(0, padGrid ? "Pads: Tracker grid" : "Pads: pad map");
+            break;
     }
 
     if (hold >= 0)
@@ -718,8 +729,42 @@ void MpcInput::tapTempo()
         printf("input: tap tempo %.1f BPM (%d taps)\n", bpm, tapCount);
 }
 
-void MpcInput::onPad(uint8_t note, bool down)
+bool MpcInput::padEngineHere() const
 {
+    return !padGrid && mtInterface.isPatternScreenActive() &&
+           mtPopups.getStepPopupState() == stepPopupNone && !mtPopups.isNoteKeyboardPopupActive() &&
+           !patternEditor.fillState && !patternEditor.editMode && !sequencer.isRec() &&
+           !cPatternEditor::keyboardManager.getState();
+}
+
+void MpcInput::onPad(uint8_t note, bool down, uint8_t velocity)
+{
+    if (!down && enginePadHeld[note] >= 0)
+    {
+        mpdjPadRelease(enginePadHeld[note]);
+        enginePadHeld[note] = -1;
+        return;
+    }
+    if (down && padEngineHere())
+    {
+        int n = padNumber(note);
+        if (!n)
+            return;
+        int pad = padIndex(padBank, n);
+        if (trace)
+        {
+            const strPadSlot* p = padSlot(pad);
+            char name[4];
+            padName(pad, name);
+            printf("input: pad %s vel %u -> program %02d, track %d, %s\n", name, velocity,
+                   p->program == kPadNoProgram ? 0 : p->program + 1, p->track + 1,
+                   padIsGate(pad) ? "gate" : "one shot");
+        }
+        enginePadHeld[note] = (int8_t)pad;
+        if (const char* msg = mpdjPadPress(pad, velocity))
+            mtPopups.show(0, msg);
+        return;
+    }
     if (!down)
     {
         if (padHeld[note] >= 0)
@@ -734,7 +779,7 @@ void MpcInput::onPad(uint8_t note, bool down)
         return;
     // MPC pads: 4x4, pad 1 bottom left. Tracker+ pads: 4 rows x 12, index 0 top left.
     int rowFromTop = 3 - (n - 1) / 4;
-    int col = padBank * 4 + (n - 1) % 4;
+    int col = (padBank > 2 ? 2 : padBank) * 4 + (n - 1) % 4; // the grid has 3 banks: D = C
     int idx = rowFromTop * 12 + col;
     if (trace)
         printf("input: pad %d (bank %c) -> tracker pad %d\n", n, 'A' + padBank, idx);
@@ -1648,8 +1693,9 @@ void MpcInput::pollButtonLeds()
            : when(mtInterface.isSamplePlayerScreenActive()));
     set(2, when(mtInterface.isInstrumentParamsScreenActive()));            // PROGRAM EDIT
     set(9, noteDown[9] ? Lit::ActiveRed : Lit::Available);                 // ERASE
-    for (int b = 0; b < 3; b++)                                            // BANK A-C
+    for (int b = 0; b < 4; b++)                                            // BANK A-D
         set((uint8_t)(kNoteBankA + b), when(padBank == b));
+    set(40, !onPattern ? Lit::NotAvailable : when(padGrid));               // 16 LEVELS (grid)
     set(52, when(onPattern || onSong));                                    // MAIN
     set(50, when(mtInterface.isSampleLoaderScreenActive() || mtInterface.isFileScreenActive())); // BROWSE
     set(123, when(mtInterface.isConfigScreenActive()));                    // MENU
@@ -1658,10 +1704,10 @@ void MpcInput::pollButtonLeds()
     set(42, when(mtInterface.isPerformanceModeScreenActive()));            // NEXT SEQ (SHIFT = Performance)
     set(122, when(noteDown[122]));                                         // COPY
     set(49, when(mpcShift));                                               // SHIFT
-    // Not built yet (milestone 5): BANK D, TRACK MUTE, OVER DUB, NOTE REPEAT, TC,
-    // FULL LEVEL, 16 LEVELS, STEP SEQ. Later, banks: dim when they hold samples,
+    // Not built yet (milestone 5): TRACK MUTE, OVER DUB, NOTE REPEAT, TC,
+    // FULL LEVEL, STEP SEQ. Later, banks: dim when they hold samples,
     // dark when empty (Mike 2026-11-12)
-    for (uint8_t cc : { 38, 43, 80, 11, 12, 39, 40, 41 })
+    for (uint8_t cc : { 43, 80, 11, 12, 39, 41 })
         set(cc, Lit::NotAvailable);
 }
 

@@ -899,6 +899,14 @@ class Sequencer
 
     void handleNoteOn(byte channel, byte pitch, int8_t volume, int16_t source);
     void handleNoteOff(byte channel, byte pitch, byte volume, int16_t source);
+    // MPDJ (step 5b-3): a pad plays `instrument` on `track` (the pad map's
+    // destination), with the Tracker's live-play rules: the note holds the
+    // track until released, the velocity is scaled so a full hit gives the
+    // program's own volume. NoteOff ends it only if this pad (`source`) still
+    // holds the track; sendOff = false (One shot) frees the track but lets the
+    // sound ring until the next note on the track cuts it.
+    void mpdjPadNoteOn(uint8_t track, uint8_t instrument, uint8_t note, uint8_t velocity, int16_t source);
+    void mpdjPadNoteOff(uint8_t track, int16_t source, bool sendOff);
     void updateTrackLengths(strPattern* pattern);
 
     uint8_t noMoreRecOpen();
