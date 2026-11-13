@@ -23,8 +23,23 @@ struct Held
 {
     int8_t track = -1; // -1 = not held by the engine
     bool gate = false;
+    bool recorded = false; // the press was written in live REC (5b-4a)
 };
 Held s_held[kPads];
+// The pad whose hit was written last on each track (5b-4b): only that pad's
+// release writes an OFF there (a later hit on the track ends the note anyway)
+int8_t s_lastRecPad[kAllTracks] = { -1, -1, -1, -1, -1, -1, -1, -1,
+                                    -1, -1, -1, -1, -1, -1, -1, -1 };
+
+bool recTrace()
+{
+#ifdef PLATFORM_MPC
+    static const bool trace = getenv("MPDJ_PAD_REC_TRACE") != nullptr;
+    return trace;
+#else
+    return false;
+#endif
+}
 }
 
 bool padIsGate(int pad)
@@ -79,16 +94,17 @@ const char* mpdjPadPress(int pad, uint8_t velocity)
     Sequencer::MpdjRecWrite w;
     if (sequencer.mpdjPadRecWrite(p->track, p->program, note, velo, &w))
     {
+        s_held[pad].recorded = true;
+        s_lastRecPad[p->track] = (int8_t)pad;
 #ifdef PLATFORM_MPC
-        static const bool trace = getenv("MPDJ_PAD_REC_TRACE") != nullptr;
-        if (trace)
+        if (recTrace())
             printf("pad rec: %s vel %u -> track %d row %d: %s %02d vol %d micro %d%s\n", name,
                    velocity, p->track + 1, w.row, mtNotes[note], p->program + 1, w.volume,
                    w.micromove, w.skipNext ? " (ahead of the playhead)" : "");
 #endif
     }
 #ifdef PLATFORM_MPC
-    else if (sequencer.isRec() && getenv("MPDJ_PAD_REC_TRACE"))
+    else if (sequencer.isRec() && recTrace())
     {
         printf("pad rec: %s -> track %d not written (%s)\n", name, p->track + 1,
                !sequencer.isRecArmedOnTrack(p->track) ? "track not armed" : "counting in");
@@ -109,7 +125,27 @@ void mpdjPadRelease(int pad)
 {
     if (pad < 0 || pad >= kPads || s_held[pad].track < 0)
         return;
-    sequencer.mpdjPadNoteOff((uint8_t)s_held[pad].track, kPadSourceBase + pad, s_held[pad].gate);
+    uint8_t track = (uint8_t)s_held[pad].track;
+    sequencer.mpdjPadNoteOff(track, kPadSourceBase + pad, s_held[pad].gate);
+
+    // REC + playing, Gate pad (5b-4b): the release writes an OFF
+    if (s_held[pad].gate && s_held[pad].recorded && s_lastRecPad[track] == pad)
+    {
+        bool hadNote = false;
+        int row = sequencer.mpdjPadRecOff(track, &hadNote);
+#ifdef PLATFORM_MPC
+        if (recTrace())
+        {
+            char name[4];
+            padName(pad, name);
+            if (row >= 0)
+                printf("pad rec: %s release -> track %d row %d: OFF\n", name, track + 1, row);
+            else
+                printf("pad rec: %s release -> track %d: no OFF (%s)\n", name, track + 1,
+                       hadNote ? "a note is on that row" : "not recording");
+        }
+#endif
+    }
     s_held[pad] = {};
 }
 

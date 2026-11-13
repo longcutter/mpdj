@@ -923,6 +923,11 @@ class Sequencer
         bool skipNext = false;
     };
     bool mpdjPadRecWrite(uint8_t track, uint8_t instrument, uint8_t note, uint8_t velocity, MpdjRecWrite* out);
+    // MPDJ (5b-4b): live REC, a Gate pad let go: write an OFF on the release
+    // row, always after the note's row (as the Tracker: a release on the
+    // note's own row writes it on the next one), only into a row without a
+    // note. Returns the row, -1 = not written (*hadNote: a note was there).
+    int mpdjPadRecOff(uint8_t track, bool* hadNote);
     void updateTrackLengths(strPattern* pattern);
 
     uint8_t noMoreRecOpen();

@@ -3261,6 +3261,33 @@ bool Sequencer::mpdjPadRecWrite(
     return true;
 }
 
+int Sequencer::mpdjPadRecOff(uint8_t track, bool* hadNote)
+{
+    if (hadNote)
+        *hadNote = false;
+    if (!isRec() || track >= kAllTracks || !isRecArmedOnTrack(track) ||
+        player.preRecMetronomeActive)
+        return -1;
+
+    auto& t = player.track[track];
+    uint8_t dest = getDestRecordingStep(track, !recMicrotiming(), true);
+    strPattern::strTrack::strStep* step = &currentPattern->track[track].step[dest];
+    if (!step->isNoteEmpty())
+    {
+        if (hadNote)
+            *hadNote = true;
+        return -1; // never replace a note with an OFF
+    }
+    step->note = STEP_NOTE_OFF_DEFAULT;
+    step->micromove = (recMicrotiming() && dest == t.actual_pos)
+                        ? clamp<int>(mapClamped<int>(t.uStep, 1, 48, 0, 100),
+                                     getFxMin(fx.FX_TYPE_MICROMOVE),
+                                     getFxMax(fx.FX_TYPE_MICROMOVE))
+                        : -1;
+    newFileManager.setActualPatternStructChanged();
+    return dest;
+}
+
 void Sequencer::updateTrackLengths(strPattern* pattern)
 {
     for (int trackIdx = 0; trackIdx < kAllTracks; trackIdx++)
