@@ -68,6 +68,9 @@ class MpcInput
     static constexpr int kTaps = 5;
     uint32_t tapTimes[kTaps] = {};
     int tapCount = 0;
+    static constexpr uint32_t kTapHoldMs = 1000;
+    uint32_t tapHoldMs = 0; // TAP TEMPO press time while it may become a hold
+    void pollTapHold();
     int divideQLink(int knob, int steps, int divIdx = -1);
     void songJumpArea(int steps);
     void stepEditParam(int steps);

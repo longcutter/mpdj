@@ -181,6 +181,7 @@ void MpcInput::poll()
     pollSave();
     pollQLinks();
     pollButtonLeds();
+    pollTapHold();
     if (sideloadComboMs && mpcShift &&
         platform.getTimer()->millis() - sideloadComboMs >= Sideload::kComboHoldMs)
     {
@@ -657,11 +658,16 @@ void MpcInput::onButton(uint8_t note, bool down)
         case Act::TapTempo:
             if (mpcShift)
             {
-                songEditor.tempoLocked = !songEditor.tempoLocked;
-                mtPopups.show(0, songEditor.tempoLocked ? "Tempo locked" : "Tempo unlocked");
+                // SHIFT+TAP TEMPO: metronome on / off (Config > Metronome > State)
+                mtConfig.metronome.state = mtConfig.metronome.state ? 0 : 1;
+                saveConfig();
+                mtPopups.show(0, mtConfig.metronome.state ? "Metronome on" : "Metronome off");
             }
             else
+            {
                 tapTempo();
+                tapHoldMs = platform.getTimer()->millis(); // held ~1 s = tempo lock (pollTapHold)
+            }
             break;
 
         case Act::EncoderPush:
@@ -689,6 +695,25 @@ void MpcInput::onButton(uint8_t note, bool down)
     }
 }
 
+// Holding TAP TEMPO for kTapHoldMs locks / unlocks the tempo; the press's tap
+// is dropped so the hold doesn't count towards a tempo
+void MpcInput::pollTapHold()
+{
+    if (!tapHoldMs)
+        return;
+    if (!noteDown[53])
+    {
+        tapHoldMs = 0;
+        return;
+    }
+    if (platform.getTimer()->millis() - tapHoldMs < kTapHoldMs)
+        return;
+    tapHoldMs = 0;
+    tapCount = 0;
+    songEditor.tempoLocked = !songEditor.tempoLocked;
+    mtPopups.show(0, songEditor.tempoLocked ? "Tempo locked" : "Tempo unlocked");
+}
+
 // Average the last few taps; a pause of 2 s starts over. Internal clock only.
 void MpcInput::tapTempo()
 {
@@ -705,7 +730,7 @@ void MpcInput::tapTempo()
         return;
     if (songEditor.tempoLocked)
     {
-        mtPopups.show(0, "Tempo locked (SHIFT+TAP TEMPO)");
+        mtPopups.show(0, "Tempo locked (hold TAP TEMPO)");
         return;
     }
 
