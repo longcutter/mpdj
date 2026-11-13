@@ -266,7 +266,13 @@ AUDIO_CORE_RAM void Sequencer::play_microStep(int row)
     bool forceFirstRollWhenNoNote = 0; // potrzebne jak rolka wchodzi jako efekt bez nuty
     int forceFirstRollWhenNoNote_fxIndex = 0;
 
+#ifdef PLATFORM_MPC
+    // MPDJ: the metronome also clicks while playing, not only while recording
+    // (SHIFT+TAP TEMPO turns it on to play along)
+    if (row == 0 && playerRow.uStep == 1 && (isRec() || isPlay()))
+#else
     if (row == 0 && playerRow.uStep == 1 && isRec())
+#endif
     {
         if (isMetronomeActive() &&
             playerRow.actual_pos % (getMetronomeDenominator() * getMetronomeNumerator()) == 0)

@@ -154,6 +154,9 @@ class audioEngine
     void setLastUsedVoice(uint8_t v);
     uint8_t getLastUsedVoice();
     void makeMetronomeTick(uint8_t);
+    // MPDJ: set the metronome's level ahead of the first tick, so the first
+    // click doesn't start at the mixer's previous (full) gain
+    void setMetronomeGain();
     void setBlockedInstrument(int8_t idx);
     void clearBlockedInstrument(int8_t idx);
     void setBlockedNoteOnFromInstrument(int8_t idx);

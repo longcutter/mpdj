@@ -9,6 +9,7 @@
 #include "display.h"
 #include "list.h"
 #include "mtConfig.h"
+#include "mtAudioEngine.h"
 #include "core/interfacePopups.h"
 #include "fileManager.h"
 #include "mtSequencer.h"
@@ -660,6 +661,7 @@ void MpcInput::onButton(uint8_t note, bool down)
             {
                 // SHIFT+TAP TEMPO: metronome on / off (Config > Metronome > State)
                 mtConfig.metronome.state = mtConfig.metronome.state ? 0 : 1;
+                engine.setMetronomeGain(); // the first click at the set level, not full
                 saveConfig();
                 mtPopups.show(0, mtConfig.metronome.state ? "Metronome on" : "Metronome off");
             }

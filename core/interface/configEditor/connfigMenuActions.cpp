@@ -146,6 +146,7 @@ void setMetronomValues()
 
     // mtConfig.metronome.state;
     // mtConfig.metronome.timeSignature;
+    engine.setMetronomeGain(); // MPDJ: level set before the first tick
 }
 
 void setSlaveClockCompValue()

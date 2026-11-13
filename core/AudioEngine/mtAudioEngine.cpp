@@ -1413,12 +1413,17 @@ uint8_t audioEngine::getLastUsedVoice()
     return lastUsedVoice;
 }
 
-AUDIO_CORE_RAM void audioEngine::makeMetronomeTick(uint8_t accent)
+void audioEngine::setMetronomeGain()
 {
     finalMixer[AudioOutput::OutputChannels::kLeft]->gain(
       AudioOutput::FinalMixInputs::kMetronomeTick, sendsAmpLogValues[mtConfig.metronome.volume]);
     finalMixer[AudioOutput::OutputChannels::kRight]->gain(
       AudioOutput::FinalMixInputs::kMetronomeTick, sendsAmpLogValues[mtConfig.metronome.volume]);
+}
+
+AUDIO_CORE_RAM void audioEngine::makeMetronomeTick(uint8_t accent)
+{
+    setMetronomeGain();
 
     metronomeTick.envelopeSetPassFlag(1);
 
