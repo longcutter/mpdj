@@ -113,6 +113,28 @@ const char* mpdjPadPress(int pad, uint8_t velocity)
     return nullptr;
 }
 
+int mpdjPadStepWrite(int pad, int row, uint8_t velocity)
+{
+    const strPadSlot* p = padSlot(pad);
+    if (!p || p->program == kPadNoProgram || programType(p->program) == kProgramEmpty)
+        return -1;
+    uint8_t note = p->note < 0 ? (uint8_t)Sequencer::STEP_NOTE_DEFAULT : (uint8_t)p->note;
+    uint8_t velo = padVelocity(p->program, velocity ? velocity : 1);
+    int8_t vol = sequencer.mpdjPadStepWrite(p->track, (uint8_t)row, p->program, note, velo);
+    if (vol < 0)
+        return -1;
+#ifdef PLATFORM_MPC
+    if (recTrace())
+    {
+        char name[4];
+        padName(pad, name);
+        printf("pad step: %s vel %u -> track %d row %d: %s %02d vol %d\n", name, velocity,
+               p->track + 1, row, mtNotes[note], p->program + 1, vol);
+    }
+#endif
+    return p->track;
+}
+
 uint8_t padVelocity(uint8_t program, uint8_t velocity)
 {
     // 5b-4a: linear, a full hit = the program's own volume (Config curve and

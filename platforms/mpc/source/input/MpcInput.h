@@ -76,6 +76,7 @@ class MpcInput
     void stepEditParam(int steps);
     void setEditColumn(int param, bool micVol);
     void flipMicVolView();
+    void padStepEntry(int pad, uint8_t velocity);
     bool onFxTypeColumn();
     void stepFxType(int steps);
     int qlinkAcc[5] = {}; // [4] = Q-Link 4 on an FX column (FX type)

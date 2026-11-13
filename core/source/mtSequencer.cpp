@@ -3261,6 +3261,22 @@ bool Sequencer::mpdjPadRecWrite(
     return true;
 }
 
+int8_t Sequencer::mpdjPadStepWrite(
+  uint8_t track, uint8_t row, uint8_t instrument, uint8_t note, uint8_t velocity)
+{
+    strPattern* pattern = getPatternToUI();
+    if (track >= kAllTracks || row >= pattern->track[0].length)
+        return -1;
+    strPattern::strTrack::strStep* step = &pattern->track[track].step[row];
+    newFileManager.storePatternUndoRevision();
+    step->note = note;
+    step->instrument = instrument;
+    step->volume = velocityToVolume(velocity);
+    step->micromove = -1;
+    newFileManager.setActualPatternStructChanged();
+    return step->volume;
+}
+
 int Sequencer::mpdjPadRecOff(uint8_t track, bool* hadNote)
 {
     if (hadNote)

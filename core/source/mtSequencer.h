@@ -928,6 +928,10 @@ class Sequencer
     // note's own row writes it on the next one), only into a row without a
     // note. Returns the row, -1 = not written (*hadNote: a note was there).
     int mpdjPadRecOff(uint8_t track, bool* hadNote);
+    // MPDJ (5b-4c): edit mode (REC + stopped, or REC alone while playing):
+    // write a pad hit at a row (Overwrite: note, program, volume; micromove
+    // cleared; FX columns stay). Returns the volume written.
+    int8_t mpdjPadStepWrite(uint8_t track, uint8_t row, uint8_t instrument, uint8_t note, uint8_t velocity);
     void updateTrackLengths(strPattern* pattern);
 
     uint8_t noMoreRecOpen();

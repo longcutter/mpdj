@@ -760,8 +760,36 @@ bool MpcInput::padEngineHere() const
 {
     return !padGrid && mtInterface.isPatternScreenActive() &&
            mtPopups.getStepPopupState() == stepPopupNone && !mtPopups.isNoteKeyboardPopupActive() &&
-           !patternEditor.fillState && !patternEditor.editMode &&
+           !patternEditor.fillState &&
+           // edit mode (5b-4c): the pad map writes on the Note / Instrument
+           // columns; the FX, volume and micromove columns keep picking values
+           // from the 4x12 grid
+           (!patternEditor.editMode || patternEditor.editParam <= cPatternEditor::EditInstr) &&
            !cPatternEditor::keyboardManager.getState();
+}
+
+// Edit mode (REC + stopped, or REC alone while playing; 5b-4c): the pad's hit
+// goes on its own track at the cursor row, the cursor stays on its column and
+// steps down by the edit step. If the pad's track is off screen the view
+// scrolls just enough to show it (the cursor follows again on a left / right
+// move, as the Tracker's focusOnActual does).
+void MpcInput::padStepEntry(int pad, uint8_t velocity)
+{
+    cPatternEditor& pe = patternEditor;
+    int track = mpdjPadStepWrite(pad, pe.trackerPattern.actualStep, velocity);
+    if (track < 0)
+        return;
+    int columns = pe.patternViewMode > 0 ? 8 : 4;
+    int first = pe.trackerPattern.firstVisibleTrack;
+    if (track < first)
+        first = track;
+    else if (track >= first + columns)
+        first = track - (columns - 1);
+    if (first > kAllTracks - columns)
+        first = kAllTracks - columns;
+    pe.trackerPattern.firstVisibleTrack = (int8_t)(first < 0 ? 0 : first);
+    pe.moveCursorByStep();
+    pe.refreshPattern();
 }
 
 void MpcInput::onPad(uint8_t note, bool down, uint8_t velocity)
@@ -792,6 +820,8 @@ void MpcInput::onPad(uint8_t note, bool down, uint8_t velocity)
             mtPopups.show(0, msg);
         else if (sequencer.isRec())
             patternEditor.refreshPattern(); // show the hit just written
+        else if (patternEditor.editMode)
+            padStepEntry(pad, velocity);
         return;
     }
     if (!down)
