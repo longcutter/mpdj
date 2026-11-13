@@ -77,4 +77,11 @@ template class AudioMixer<10>;
 template class AudioMixer<18>;
 template class AudioMixer<11>;
 template class AudioMixer<21>;
+// MPDJ (step 5a-4): MixerAndFxs<16> = 16 voices (+ synth parts), 2 inputs + 2 x 16 (+ synths)
+template class AudioMixer<16>;
+template class AudioMixer<34>;
+#if defined(FEATURE_SYNTH)
+template class AudioMixer<19>;
+template class AudioMixer<37>;
+#endif
 #endif

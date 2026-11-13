@@ -37,7 +37,7 @@ class Timer;
 class audioEngine
 {
   public:
-    static constexpr int kVoices = 8;
+    static constexpr int kVoices = kAllTracks; // MPDJ (step 5a-4): a voice per track, 16
 
     audioEngine();
 
@@ -223,7 +223,7 @@ class audioEngine
     void restoreMixerValues();
     struct strMixerValuesStore
     {
-        uint8_t trackVolume[8];
+        uint8_t trackVolume[kVoices];
         uint8_t delayVolume;
         uint8_t reverbVolume;
         uint8_t dryMixVolume;
@@ -830,8 +830,9 @@ class playerEngine
 };
 
 extern audioEngine engine;
-extern playerEngine instrumentPlayer[8];
-extern uint8_t isBlockedInstrument[48];
-extern uint8_t isBlockedNoteOn[48];
+extern playerEngine instrumentPlayer[audioEngine::kVoices];
+// MPDJ: one per program slot (was 48; slots 49-64 read past the end)
+extern uint8_t isBlockedInstrument[kSampleInstrumentsCount];
+extern uint8_t isBlockedNoteOn[kSampleInstrumentsCount];
 
 #endif /* SOURCE_MTAUDIOENGINE_H_ */

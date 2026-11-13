@@ -1,3 +1,4 @@
+#include "mpdjTracks.h"
 #include "ampLogarythmicValues.h"
 #include "mtAudioEngine.h"
 #include "mtSequencer.h"
@@ -436,7 +437,7 @@ void playerEngine::handleUpdateRefreshDelay()
         }
 
         if (((muteState == MUTE_DISABLE) && (onlyDelayMuteState == MUTE_DISABLE)) ||
-            ((engine.forceDelaySend == 1) && !mtProject.values.trackMute[nChannel]))
+            ((engine.forceDelaySend == 1) && !trackMuteRef(nChannel)))
         {
             modDelaySend(localDelaySend);
         }
@@ -474,7 +475,7 @@ void playerEngine::handleUpdateRefreshReverb()
         }
 
         if (((muteState == 0) && (onlyReverbMuteState == 0)) ||
-            ((engine.forceReverbSend == 1) && !mtProject.values.trackMute[nChannel]))
+            ((engine.forceReverbSend == 1) && !trackMuteRef(nChannel)))
         {
             modReverbSend(localReverbSend);
         }

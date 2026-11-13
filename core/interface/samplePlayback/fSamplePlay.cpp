@@ -1732,7 +1732,7 @@ static void functPlayAction()
 
     if (sequencer.getSeqState() == Sequencer::SEQ_STATE_STOP)
     {
-        for (uint8_t i = 0; i < 8; i++)
+        for (uint8_t i = 0; i < audioEngine::kVoices; i++)
         {
             instrumentPlayer[i].noteOff(Sequencer::STEP_NOTE_OFF_CUT); // POTRZEBNE TO TU? xxx
         }
@@ -1959,7 +1959,7 @@ static void modStartPoint(int16_t value)
                 SP->editorInstrument->loopPoint2 = SP->editorInstrument->endPoint - 1;
                 SP->editorInstrument->loopPoint1 = SP->editorInstrument->loopPoint2 - dif;
                 SP->editorInstrument->startPoint = SP->editorInstrument->loopPoint1 - 1;
-                for (uint8_t i = 0; i < 8; i++)
+                for (uint8_t i = 0; i < audioEngine::kVoices; i++)
                 {
                     instrumentPlayer[i].setRefreshBit(LP1_MASK);
                     instrumentPlayer[i].setRefreshBit(LP2_MASK);
@@ -1968,7 +1968,7 @@ static void modStartPoint(int16_t value)
             else
             {
                 SP->editorInstrument->loopPoint2 = SP->editorInstrument->loopPoint1 + dif;
-                for (uint8_t i = 0; i < 8; i++)
+                for (uint8_t i = 0; i < audioEngine::kVoices; i++)
                 {
                     instrumentPlayer[i].setRefreshBit(LP2_MASK);
                 }
@@ -2030,7 +2030,7 @@ static void modEndPoint(int16_t value)
                 SP->editorInstrument->loopPoint2 = SP->editorInstrument->loopPoint1 + dif;
                 SP->editorInstrument->endPoint = SP->editorInstrument->loopPoint2 + 1;
 
-                for (uint8_t i = 0; i < 8; i++)
+                for (uint8_t i = 0; i < audioEngine::kVoices; i++)
                 {
                     instrumentPlayer[i].setRefreshBit(LP1_MASK);
                     instrumentPlayer[i].setRefreshBit(LP2_MASK);
@@ -2039,7 +2039,7 @@ static void modEndPoint(int16_t value)
             else
             {
                 SP->editorInstrument->loopPoint1 = SP->editorInstrument->loopPoint2 - dif;
-                for (uint8_t i = 0; i < 8; i++)
+                for (uint8_t i = 0; i < audioEngine::kVoices; i++)
                 {
                     instrumentPlayer[i].setRefreshBit(LP1_MASK);
                 }
@@ -2086,7 +2086,7 @@ static void modLoopPoint1(int16_t value)
                                             SP->editorInstrument->loopPoint1 > SP->zoom.zoomEnd)))
         SP->refreshSpectrum = 1;
 
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(LP1_MASK);
     }
@@ -2122,7 +2122,7 @@ static void modLoopPoint2(int16_t value)
                                             SP->editorInstrument->loopPoint2 > SP->zoom.zoomEnd)))
         SP->refreshSpectrum = 1;
 
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(LP2_MASK);
     }
@@ -2158,7 +2158,7 @@ static void modWavetablePostion(int32_t value)
 
     //	instrumentPlayer[0].instrumentBasedMod.wtPos =
     // SP->editorInstrument->wavetableCurrentWindow;
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(WT_POS_SEND_MASK);
     }
@@ -2475,7 +2475,7 @@ static void modGranularLength(int16_t value)
     if (isParamVisible)
         SP->showGrainLengthValue();
 
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(GRANULAR_LEN_SEND_MASK);
     }
@@ -2498,7 +2498,7 @@ static void modGranularShape(int16_t value)
     if (isParamVisible)
         SP->showShapeText();
 
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(GRANULAR_WAVE_SEND_MASK);
     }
@@ -2521,7 +2521,7 @@ static void modGranularLoopType(int16_t value)
     if (isParamVisible)
         SP->showLoopTypeText();
 
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(GRANULAR_LOOP_SEND_MASK);
     }
@@ -2551,7 +2551,7 @@ static void modGranularPosition(int16_t value)
 
     //	instrumentPlayer[0].instrumentBasedMod.granPos =
     // SP->editorInstrument->granular.currentPosition;
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(GRANULAR_POS_SEND_MASK);
     }
@@ -2719,7 +2719,7 @@ void cSamplePlayback::setDefaultStartPoint()
                 editorInstrument->loopPoint2 = editorInstrument->endPoint - 1;
                 editorInstrument->loopPoint1 = editorInstrument->loopPoint2 - dif;
                 editorInstrument->startPoint = editorInstrument->loopPoint1 - 1;
-                for (uint8_t i = 0; i < 8; i++)
+                for (uint8_t i = 0; i < audioEngine::kVoices; i++)
                 {
                     instrumentPlayer[i].setRefreshBit(LP1_MASK);
                     instrumentPlayer[i].setRefreshBit(LP2_MASK);
@@ -2728,7 +2728,7 @@ void cSamplePlayback::setDefaultStartPoint()
             else
             {
                 editorInstrument->loopPoint2 = editorInstrument->loopPoint1 + dif;
-                for (uint8_t i = 0; i < 8; i++)
+                for (uint8_t i = 0; i < audioEngine::kVoices; i++)
                 {
                     instrumentPlayer[i].setRefreshBit(LP2_MASK);
                 }
@@ -2770,7 +2770,7 @@ void cSamplePlayback::setDefaultLoopPoint1()
                                             SP->editorInstrument->loopPoint1 > SP->zoom.zoomEnd)))
         SP->refreshSpectrum = 1;
 
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(LP1_MASK);
     }
@@ -2798,7 +2798,7 @@ void cSamplePlayback::setDefaultLoopPoint2()
                                             SP->editorInstrument->loopPoint2 > SP->zoom.zoomEnd)))
         SP->refreshSpectrum = 1;
 
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(LP2_MASK);
     }
@@ -2833,7 +2833,7 @@ void cSamplePlayback::setDefaultEndPoint()
                 SP->editorInstrument->loopPoint2 = SP->editorInstrument->loopPoint1 + dif;
                 SP->editorInstrument->endPoint = SP->editorInstrument->loopPoint2 + 1;
 
-                for (uint8_t i = 0; i < 8; i++)
+                for (uint8_t i = 0; i < audioEngine::kVoices; i++)
                 {
                     instrumentPlayer[i].setRefreshBit(LP1_MASK);
                     instrumentPlayer[i].setRefreshBit(LP2_MASK);
@@ -2842,7 +2842,7 @@ void cSamplePlayback::setDefaultEndPoint()
             else
             {
                 SP->editorInstrument->loopPoint1 = SP->editorInstrument->loopPoint2 - dif;
-                for (uint8_t i = 0; i < 8; i++)
+                for (uint8_t i = 0; i < audioEngine::kVoices; i++)
                 {
                     instrumentPlayer[i].setRefreshBit(LP1_MASK);
                 }
@@ -2912,7 +2912,7 @@ void cSamplePlayback::setDefaultWavetablePosition()
 {
     SP->editorInstrument->wavetableCurrentWindow = defaultInstrumentParams.wavetableCurrentWindow;
 
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(WT_POS_SEND_MASK);
     }
@@ -2988,7 +2988,7 @@ void cSamplePlayback::setDefaultGranularPosition()
                                    ? instrumentPlayer[0].getEnvelopeGranPosMod()
                                    : SP->editorInstrument->granular.currentPosition;
     SP->showGranularPositionValue();
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(GRANULAR_POS_SEND_MASK);
     }
@@ -3005,7 +3005,7 @@ void cSamplePlayback::setDefaultGranularLength()
 
     SP->showGrainLengthValue();
 
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(GRANULAR_LEN_SEND_MASK);
     }
@@ -3017,7 +3017,7 @@ void cSamplePlayback::setDefaultGranularShape()
 {
     SP->editorInstrument->granular.shape = defaultInstrumentParams.granular.shape;
     SP->showShapeText();
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(GRANULAR_WAVE_SEND_MASK);
     }
@@ -3028,7 +3028,7 @@ void cSamplePlayback::setDefaultGranularLoop()
 {
     SP->editorInstrument->granular.type = defaultInstrumentParams.granular.type;
     SP->showLoopTypeText();
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(GRANULAR_LOOP_SEND_MASK);
     }

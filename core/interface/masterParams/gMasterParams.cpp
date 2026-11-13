@@ -1,3 +1,4 @@
+#include "mpdjTracks.h"
 #include "ampLogarythmicValues.h"
 #include "mtMasterEnhancer.h"
 #ifdef FEATURE_SYNTH
@@ -267,7 +268,7 @@ void cMasterParams::showMasterScreen()
     }
 
     titleBar->show();
-    titleBar->setTitle("Master 1/3");
+    titleBar->setTitle("Master 1/4"); // MPDJ: two track mixer pages
 
     display.setControlText(label[0], "Volume");
     display.setControlText(label[1], "Reverb");
@@ -1356,42 +1357,39 @@ void cMasterParams::showMixerScreen()
     display.setControlHide(saturationList);
 
     titleBar->show();
-#ifdef FEATURE_SYNTH
-    titleBar->setTitle("Sample Track Mixer 2/3");
-#else
-    titleBar->setTitle("Track Mixer 2/3");
-#endif
+    // MPDJ (step 5a-4): page 1 = tracks 1-8, page 2 = tracks 9-16
+    titleBar->setTitle(mixerPage == 0 ? "Track Mixer 1-8  2/4" : "Track Mixer 9-16  3/4");
 
     if (isSolo)
     {
         for (uint8_t i = 0; i < 8; i++)
         {
-            sprintf(mixerLabel[i], "%s", soloTrack == i ? (char*)"Unsolo" : (char*)"Solo");
+            sprintf(mixerLabel[i], "%s", soloTrack == mixerTrack(i) ? (char*)"Unsolo" : (char*)"Solo");
         }
     }
     else
     {
         for (uint8_t i = 0; i < 8; i++)
         {
-            sprintf(
-              mixerLabel[i], "%s", mtProject.values.trackMute[i] ? (char*)"Unmute" : (char*)"Mute");
+            sprintf(mixerLabel[i], "%s", trackMuteRef(mixerTrack(i)) ? (char*)"Unmute" : (char*)"Mute");
         }
     }
 
     for (uint8_t i = 0; i < 8; i++)
     {
-        mtProject.values.TrackNames[i][7] = 0;
+        char* trackName = trackNameRef(mixerTrack(i));
+        trackName[7] = 0;
 
         showLevelBar(i, &trackLevel[i]);
         showTrackVolumeBar(i);
 
-        display.setControlText(trackNameLabel[i], &mtProject.values.TrackNames[i][0]);
+        display.setControlText(trackNameLabel[i], trackName);
         display.setControlShow(trackNameLabel[i]);
         display.refreshControl(trackNameLabel[i]);
 
         display.setControlValue(label[i], 1);
         display.setControlColors(label[i],
-                                 mtProject.values.trackMute[i]
+                                 trackMuteRef(mixerTrack(i))
                                    ? display.getTheme().inactiveLabelsColors
                                    : display.getTheme().activeLabelsColors);
 
@@ -1425,7 +1423,7 @@ void cMasterParams::showMixerDelayReverbScreen()
     display.setControlHide(saturationList);
 
     titleBar->show();
-    titleBar->setTitle("Global Mixer 3/3");
+    titleBar->setTitle("Global Mixer 4/4");
 
     char* mixerLabelFormat = (char*)"%s";
 
@@ -1700,7 +1698,7 @@ void cMasterParams::showLevelBar(uint8_t n, strTrackLevel* level)
     }
     else
     {
-        if (mtProject.values.trackMute[n])
+        if (trackMuteRef(mixerTrack(n)))
             barData[n].value = display.getTheme().grey_22;
     }
 
@@ -1712,18 +1710,19 @@ void cMasterParams::showLevelBar(uint8_t n, strTrackLevel* level)
 
 void cMasterParams::showTrackVolumeBar(uint8_t n)
 {
-    float trackVolumeInDecybels = calcLevelDecybelValue(mtProject.values.trackVolume[n]);
+    uint8_t track = mixerTrack(n); // MPDJ: n = column on the current page
+    float trackVolumeInDecybels = calcLevelDecybelValue(trackVolumeRef(track));
 
     sprintf(mixerVolumeLabel[n], "%0.2f dB", trackVolumeInDecybels);
 
     display.setControlShow(trackVolumeBar[n]);
 
-    if (mtProject.values.trackMute[n])
+    if (trackMuteRef(track))
         display.setControlColors(trackVolumeBar[n], display.getTheme().inactiveBarColors);
     else
         display.setControlColors(trackVolumeBar[n], display.getTheme().activeBarColors);
 
-    display.setControlValue(trackVolumeBar[n], mtProject.values.trackVolume[n]);
+    display.setControlValue(trackVolumeBar[n], trackVolumeRef(track));
 
     display.setControlText(label[n], mixerVolumeLabel[n]);
 

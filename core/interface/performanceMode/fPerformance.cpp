@@ -1,3 +1,4 @@
+#include "mpdjTracks.h"
 #include "core/interface.h"
 #include "core/interfaceMenuPopup.h"
 #include "core/interfacePopups.h"
@@ -697,16 +698,9 @@ static void functActionButton(uint8_t button, uint8_t state)
     {
         if (PM->buttons->isButtonPressed(interfaceButtonShift))
         {
-            if (isSampleTrack(track))
-            {
-                mtProject.values.trackMute[track] = !mtProject.values.trackMute[track];
-                engine.muteTrack(track, mtProject.values.trackMute[track]);
-            }
-            else
-            {
-                uint8_t midiIdx = track - kSampleTracks;
-                mtProject.values.midiTrackMute[midiIdx] = !mtProject.values.midiTrackMute[midiIdx];
-            }
+            // MPDJ: every track has a voice; mute storage via mpdjTracks.h
+            trackMuteRef(track) = !trackMuteRef(track);
+            engine.muteTrack(track, trackMuteRef(track));
 
             PM->refreshTrackState = 1;
             PM->setProjectSaveFlags();

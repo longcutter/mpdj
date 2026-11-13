@@ -124,6 +124,17 @@ void programsWriteToFile(strMpdjProjectData& out)
         out.programs[i] = mtProject.programs.slot[i];
         out.programs[i].type = programType(i);
     }
+    memcpy(out.trackVolumeHi, mtProject.trackVolumeHi, sizeof(out.trackVolumeHi));
+}
+
+// Tracks 9-16's per-track data: from a version 2 block, else defaults
+static void tracksReadFromFile(const strMpdjProjectData* in)
+{
+    for (int t = 0; t < 8; t++)
+    {
+        uint8_t v = in ? in->trackVolumeHi[t] : DEFAULT_TRACK_VOLUME;
+        mtProject.trackVolumeHi[t] = v > TRACK_VOLUME_MAX ? DEFAULT_TRACK_VOLUME : v;
+    }
 }
 
 bool programsReadFromFile(const strMpdjProjectData& in)
@@ -131,9 +142,11 @@ bool programsReadFromFile(const strMpdjProjectData& in)
     if (memcmp(in.magic, "MPDJ", 4) != 0)
     {
         mtProject.programs.setLegacyLayout();
+        tracksReadFromFile(nullptr);
         s_importNotice = true;
         return false;
     }
+    tracksReadFromFile(in.version >= 2 ? &in : nullptr);
     for (int i = 0; i < kProgramSlots; i++)
     {
         strProgramSlot s = in.programs[i];
@@ -254,11 +267,25 @@ int programsSelfTest()
     check(programStep(50, 1, true) == 51 && programStep(50, -1, true) == 49, "midi: from 51", 50);
     check(programStep(63, 5, true) == 63, "midi: clamps at 64", 63);
 
-    // 4. Save and load the table
+    // 4. Save and load the table (and, version 2, tracks 9-16's volume)
+    uint8_t savedVolumes[8];
+    memcpy(savedVolumes, mtProject.trackVolumeHi, sizeof(savedVolumes));
+    for (int t = 0; t < 8; t++)
+        mtProject.trackVolumeHi[t] = 40 + t;
     strMpdjProjectData file;
     programsWriteToFile(file);
     mtProject.programs = strProgramTable{};
+    memset(mtProject.trackVolumeHi, 0, sizeof(mtProject.trackVolumeHi));
     check(programsReadFromFile(file), "MPDJ block read back", -1);
+    for (int t = 0; t < 8; t++)
+        check(mtProject.trackVolumeHi[t] == 40 + t, "track 9-16 volume after reload", t);
+    file.version = 1; // a version 1 block (before 5a-4) has no volumes: defaults
+    check(programsReadFromFile(file), "version 1 block read", -1);
+    for (int t = 0; t < 8; t++)
+        check(mtProject.trackVolumeHi[t] == DEFAULT_TRACK_VOLUME, "version 1: default volume", t);
+    file.version = kMpdjProjectDataVersion;
+    check(programsReadFromFile(file), "MPDJ block read back again", -1);
+    memcpy(mtProject.trackVolumeHi, savedVolumes, sizeof(savedVolumes));
     check(!programsTakeImportNotice(), "no import notice for an MPDJ project", -1);
     for (int i = 0; i < kProgramSlots; i++)
     {

@@ -72,9 +72,14 @@ struct strMpdjProjectData
     uint8_t version;
     uint8_t reserved[3];
     strProgramSlot programs[kProgramSlots]; // type = programType() when saved
+    // version 2 (step 5a-4): per-track data the Tracker+ part only has for
+    // tracks 1-8 (mute and names of 9-16 are its midiTrackMute / midiTrackNames)
+    uint8_t trackVolumeHi[8]; // tracks 9-16
+    uint8_t reservedTracks[24];
 };
-static_assert(sizeof(strMpdjProjectData) == 8 + 4 * kProgramSlots);
-static constexpr uint8_t kMpdjProjectDataVersion = 1;
+static constexpr size_t kMpdjProjectDataV1Size = 8 + 4 * kProgramSlots; // version 1 ended here
+static_assert(sizeof(strMpdjProjectData) == kMpdjProjectDataV1Size + 32);
+static constexpr uint8_t kMpdjProjectDataVersion = 2;
 
 // Slot types for the current project (mtProject.programs)
 ProgramType programType(int idx);

@@ -91,3 +91,4 @@ AudioAnalyzeRMS* MixerAndFxs<voicesCount>::getSynthRMS(int synthIdx, MixerAndFxC
 #endif
 
 template class MixerAndFxs<8>;
+template class MixerAndFxs<16>; // MPDJ (step 5a-4)

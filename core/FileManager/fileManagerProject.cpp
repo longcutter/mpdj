@@ -102,8 +102,13 @@ bool cFileManager::loadProjectFileFormFileStruct(strMtProject* project, strProje
     // the MPDJ block after it is missing (read as zeros), so its name stays valid
     static constexpr size_t kTrackerPlusProjectFileSize =
       offsetof(strProjectFile, projectDataAndHeader.project.mpdj) + sizeof(uint32_t);
+    // MPDJ: and a file with the version 1 MPDJ block (before step 5a-4)
+    static constexpr size_t kMpdjV1ProjectFileSize =
+      offsetof(strProjectFile, projectDataAndHeader.project.mpdj) + kMpdjProjectDataV1Size +
+      sizeof(uint32_t);
     if (pFile->projectDataAndHeader.projectHeader.size != sizeof(strProjectFile) &&
-        pFile->projectDataAndHeader.projectHeader.size != kTrackerPlusProjectFileSize)
+        pFile->projectDataAndHeader.projectHeader.size != kTrackerPlusProjectFileSize &&
+        pFile->projectDataAndHeader.projectHeader.size != kMpdjV1ProjectFileSize)
     {
         // zmienil sie rozmiar pliku projektu (np. po update)
         // wiec rozjadą sie nazwa i patch projektu
@@ -145,8 +150,17 @@ bool cFileManager::loadProjectFileFormFileStruct(strMtProject* project, strProje
     memcpy(&project->song, &pFile->projectDataAndHeader.project.song, sizeof(strSong));
     memcpy(&project->values, &pFile->projectDataAndHeader.project.values, sizeof(strMtValues));
     // MPDJ: slot types; a Tracker+ project gets M01-M16 in slots 49-64
+    // A shorter file (Tracker+, or an older MPDJ block) ends inside the block:
+    // zero what the file didn't have (its CRC and stale buffer bytes)
     if (pFile->projectDataAndHeader.projectHeader.size < sizeof(strProjectFile))
-        memset(&pFile->projectDataAndHeader.project.mpdj, 0, sizeof(strMpdjProjectData));
+    {
+        uint8_t* block = (uint8_t*)&pFile->projectDataAndHeader.project.mpdj;
+        size_t have = projectDataSize > (size_t)(block - (uint8_t*)pFile)
+                        ? projectDataSize - (size_t)(block - (uint8_t*)pFile)
+                        : 0;
+        if (have < sizeof(strMpdjProjectData))
+            memset(block + have, 0, sizeof(strMpdjProjectData) - have);
+    }
     programsReadFromFile(pFile->projectDataAndHeader.project.mpdj);
     //*proj=pFile.projectDataAndHeader.project;
     // mtProject.values=pFile.projectDataAndHeader.project.values;
@@ -220,6 +234,8 @@ void cFileManager::getDefaultProject(struct strMtProject* source)
     }
 
     source->programs = strProgramTable{}; // MPDJ: a new project starts with all slots empty
+    for (uint8_t& v : source->trackVolumeHi)
+        v = DEFAULT_TRACK_VOLUME; // MPDJ: tracks 9-16
     getDefaultSong(&source->song);
     getDefaultValues(&source->values);
 
@@ -357,7 +373,10 @@ void cFileManager::getDefaultValues(struct strMtValues* source)
 
     for (uint8_t trackIdx = kSampleTracks; trackIdx < kAllTracks; trackIdx++)
     {
-        sprintf(&source->midiTrackNames[trackIdx - kSampleTracks][0], "Midi %d", trackIdx + 1);
+        // MPDJ (step 5a-4): tracks 9-16 play samples too; names fit 7 characters
+        sprintf(&source->midiTrackNames[trackIdx - kSampleTracks][0],
+                trackIdx + 1 < 10 ? "Track %d" : "Track%d",
+                trackIdx + 1);
     }
 
     source->reverbMute = mtAudioEngineConstans::MUTE_DISABLE;

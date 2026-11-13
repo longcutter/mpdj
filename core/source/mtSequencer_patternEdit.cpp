@@ -3,6 +3,7 @@
 #include "mtAudioEngine.h"
 #include "mtSequencer.h"
 #include "mtStructs.h"
+#include "mpdjTracks.h"
 #include "patternEditor/patternEditor.h"
 
 #include "ctype.h"
@@ -2045,6 +2046,5 @@ AUDIO_CORE_RAM uint8_t Sequencer::calcStepLength(uint8_t track, uint8_t step)
 
 AUDIO_CORE_RAM uint8_t Sequencer::isTrackEngineMuted(uint8_t track)
 {
-    return isSampleTrack(track) ? mtProject.values.trackMute[track]
-                                : mtProject.values.midiTrackMute[track % 8];
+    return trackMuteRef(track);
 }

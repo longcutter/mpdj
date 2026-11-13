@@ -11,6 +11,7 @@
 #include "mtMidi.h"
 #include "mtMasterEnhancer.h"
 #include "mtStructs.h"
+#include "mpdjTracks.h"
 #include "sampleRecorder/sampleRecorder.h"
 #include "tempoSyncRateValues.h"
 #include "util.h"
@@ -24,8 +25,8 @@ static_assert(kSdStreamBufferSize <= SHARED_SCRATCH_MEMORY_SIZE,
 playerEngine instrumentPlayer[audioEngine::kVoices];
 audioEngine engine;
 
-uint8_t isBlockedInstrument[48];
-uint8_t isBlockedNoteOn[48];
+uint8_t isBlockedInstrument[kSampleInstrumentsCount];
+uint8_t isBlockedNoteOn[kSampleInstrumentsCount];
 
 #ifdef FEATURE_SYNTH
 const audioEngine::SynthParamBoundaries
@@ -86,7 +87,7 @@ void audioEngine::unblockDelayRefresh()
 }
 AUDIO_CORE_RAM void audioEngine::setPassEnvelope(uint8_t state)
 {
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < kVoices; i++)
     {
         instrumentPlayer[i].setPassEnvelope(state);
     }
@@ -176,7 +177,9 @@ void audioEngine::init(Platform* platform, [[maybe_unused]] Synth* synth)
     radio = platform->getRadio();
     usb = platform->getUsb();
 
-#ifdef PLATFORM_IMX
+#ifdef PLATFORM_MPC
+    AudioMemory(160); // MPDJ (step 5a-4): 16 voices
+#elif defined(PLATFORM_IMX)
     AudioMemory(80);
 #else
     AudioMemory(70);
@@ -188,7 +191,7 @@ void audioEngine::init(Platform* platform, [[maybe_unused]] Synth* synth)
     synthVoice.init(synth);
 #endif
 
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < kVoices; i++)
     {
         instrumentPlayer[i].init(platform->getTimer(), preDelayMixer, prePolyverbMixer);
     }
@@ -296,7 +299,7 @@ AUDIO_CORE_RAM void audioEngine::update()
             setDelayParams(mtProject.values.delayParams);
         }
 
-        for (int i = 0; i < 8; i++)
+        for (int i = 0; i < kVoices; i++)
         {
             instrumentPlayer[i].update();
         }
@@ -394,8 +397,9 @@ void audioEngine::connectVoiceToMixer(AudioVoice* voice, MixerAndFxs<kVoices>* m
 
 void audioEngine::connectInputToMixer(AudioInput* input, MixerAndFxs<kVoices>* mixerAndFxs)
 {
-    constexpr int kLeftInputMixerChannel = 8;
-    constexpr int kRightInputMixerChannel = 9;
+    // MPDJ: the pre-fx mixers' input channels come right after the voices
+    constexpr int kLeftInputMixerChannel = kVoices;
+    constexpr int kRightInputMixerChannel = kVoices + 1;
 
     connections.push_back(
       new AudioConnection(input->getGate(AudioInput::InputChannels::kLeft),
@@ -445,6 +449,11 @@ void audioEngine::connectVoiceToOutput(AudioVoice* voice, AudioOutput* output, i
 #else
 void audioEngine::connectVoiceToOutput(AudioVoice* voice, AudioOutput* output, int idx)
 {
+    // MPDJ (step 5a-4): the limiter's sidechain mux (8 voices + input) and the
+    // USB stream (8 stereo voices + fx) only take tracks 1-8
+    if (idx >= kSampleTracks)
+        return;
+
     connections.push_back(
       new AudioConnection(voice->getAmplifier(AudioVoice::VoiceChannels::kLeft),
                           0,
@@ -804,7 +813,7 @@ AUDIO_CORE_RAM void audioEngine::endAllFx(bool synthOnly)
 {
     if (!synthOnly)
     {
-        for (uint8_t i = 0; i < 8; i++)
+        for (uint8_t i = 0; i < kVoices; i++)
         {
             instrumentPlayer[i].endFx(instrumentPlayer[i].lastSeqFx[0], 0);
             instrumentPlayer[i].endFx(instrumentPlayer[i].lastSeqFx[1], 1);
@@ -824,7 +833,7 @@ AUDIO_CORE_RAM void audioEngine::endAllFx(bool synthOnly)
 
 void audioEngine::performanceModeEndAll()
 {
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < kVoices; i++)
     {
         instrumentPlayer[i].endCutoffPerformanceMode();
         instrumentPlayer[i].endEndPointPerformanceMode();
@@ -873,14 +882,14 @@ void audioEngine::forceUsbGainOutsideTheRecorder()
 
 void audioEngine::refreshTrackVolume()
 {
-    for (uint8_t track = 0; track < 8; track++)
+    for (uint8_t track = 0; track < kVoices; track++)
     {
         instrumentPlayer[track].setRefreshBit(VOLUME_MASK);
     }
 }
 void audioEngine::refreshReverbVolume()
 {
-    for (uint8_t track = 0; track < 8; track++)
+    for (uint8_t track = 0; track < kVoices; track++)
     {
         instrumentPlayer[track].setRefreshBit(REVERB_SEND_MASK);
     }
@@ -890,7 +899,7 @@ void audioEngine::refreshReverbVolume()
 }
 void audioEngine::refreshDelayVolume()
 {
-    for (uint8_t track = 0; track < 8; track++)
+    for (uint8_t track = 0; track < kVoices; track++)
     {
         instrumentPlayer[track].setRefreshBit(DELAY_SEND_MASK);
     }
@@ -954,8 +963,8 @@ void audioEngine::refreshLineInStreamDelaySend()
         gain = 0;
     }
 
-    preDelayMixer->gain(8, gain);
-    preDelayMixer->gain(9, gain);
+    preDelayMixer->gain(kVoices, gain);
+    preDelayMixer->gain(kVoices + 1, gain);
 }
 
 void audioEngine::refreshLineInStreamReverbSend()
@@ -983,8 +992,8 @@ void audioEngine::refreshLineInStreamReverbSend()
         gain = 0;
     }
 
-    prePolyverbMixer->gain(8, gain);
-    prePolyverbMixer->gain(9, gain);
+    prePolyverbMixer->gain(kVoices, gain);
+    prePolyverbMixer->gain(kVoices + 1, gain);
 }
 
 void audioEngine::disableLineInImpact()
@@ -1026,7 +1035,7 @@ void audioEngine::setPreviewVolume(uint8_t value)
 
 void audioEngine::setInterpolationEnable(bool value)
 {
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < kVoices; i++)
     {
         instrumentPlayer[i].setInterpolationEnable(value);
     }
@@ -1581,7 +1590,7 @@ void audioEngine::connectMixerImpact()
 
 void audioEngine::cutAllVolumeEnvelopes()
 {
-    for (uint8_t player = 0; player < 8; player++)
+    for (uint8_t player = 0; player < kVoices; player++)
     {
         instrumentPlayer[player].noteOffCut();
     }
@@ -1633,9 +1642,9 @@ void audioEngine::setInputConfigOutsideRecorderInterfaceModule()
 
 void audioEngine::storeMixerValues()
 {
-    for (uint8_t track = 0; track < 8; track++)
+    for (uint8_t track = 0; track < kVoices; track++)
     {
-        mixerValuesStore.trackVolume[track] = mtProject.values.trackVolume[track];
+        mixerValuesStore.trackVolume[track] = trackVolumeRef(track);
     }
 
     mixerValuesStore.dryMixVolume = mtProject.values.dryMixVolume;
@@ -1645,9 +1654,9 @@ void audioEngine::storeMixerValues()
 
 void audioEngine::resetMixerValues()
 {
-    for (uint8_t track = 0; track < 8; track++)
+    for (uint8_t track = 0; track < kVoices; track++)
     {
-        mtProject.values.trackVolume[track] = DEFAULT_TRACK_VOLUME;
+        trackVolumeRef(track) = DEFAULT_TRACK_VOLUME;
     }
 
     mtProject.values.dryMixVolume = DEFAULT_DRY_MIX_VOLUME;
@@ -1657,9 +1666,9 @@ void audioEngine::resetMixerValues()
 
 void audioEngine::restoreMixerValues()
 {
-    for (uint8_t track = 0; track < 8; track++)
+    for (uint8_t track = 0; track < kVoices; track++)
     {
-        mtProject.values.trackVolume[track] = mixerValuesStore.trackVolume[track];
+        trackVolumeRef(track) = mixerValuesStore.trackVolume[track];
     }
 
     mtProject.values.dryMixVolume = mixerValuesStore.dryMixVolume;
@@ -1765,7 +1774,7 @@ AUDIO_CORE_RAM void playerEngine::modVolume(float value)
 {
     float gain = mtProject.values.dryMixMute
                    ? AMP_MUTED
-                   : value * mixAmpLogValues[mtProject.values.trackVolume[nChannel]] *
+                   : value * mixAmpLogValues[trackVolumeRef(nChannel)] *
                        mixAmpLogValues[mtProject.values.dryMixVolume];
 
     for (int channel = 0; channel < (int)ampPtr.size(); channel++)
@@ -1882,12 +1891,12 @@ AUDIO_CORE_RAM void playerEngine ::modDelaySend(uint8_t value)
     }
     else if (mtProject.values.sendsMode == sendsModePostFader)
     {
-        bool isMute = (mtProject.values.delayMute || mtProject.values.trackMute[nChannel]);
+        bool isMute = (mtProject.values.delayMute || trackMuteRef(nChannel));
         float gainFromDelay =
           sendsAmpLogValues[value] * mixAmpLogValues[mtProject.values.delayVolume];
         float gainFromVolume = getMostSignificantAmount() *
                                ampLogValues[getMostSignificantVolume()] *
-                               mixAmpLogValues[mtProject.values.trackVolume[nChannel]];
+                               mixAmpLogValues[trackVolumeRef(nChannel)];
 
         float gain = isMute ? AMP_MUTED : gainFromDelay * gainFromVolume;
 #ifndef PLATFORM_IMX
@@ -1915,12 +1924,12 @@ AUDIO_CORE_RAM void playerEngine ::modReverbSend(uint8_t value)
     }
     else if (mtProject.values.sendsMode == sendsModePostFader)
     {
-        bool isMute = (mtProject.values.reverbMute || mtProject.values.trackMute[nChannel]);
+        bool isMute = (mtProject.values.reverbMute || trackMuteRef(nChannel));
         float gainFromReverb =
           sendsAmpLogValues[value] * mixAmpLogValues[mtProject.values.reverbVolume];
         float gainFromVolume = getMostSignificantAmount() *
                                ampLogValues[getMostSignificantVolume()] *
-                               mixAmpLogValues[mtProject.values.trackVolume[nChannel]];
+                               mixAmpLogValues[trackVolumeRef(nChannel)];
 
         float gain = isMute ? AMP_MUTED : gainFromReverb * gainFromVolume;
 #ifndef PLATFORM_IMX
@@ -2222,29 +2231,29 @@ uint32_t playerEngine ::getLengthIfPlaying()
 // Na potrzeby eksportu - nie wykorzystywana w mixerze
 void audioEngine::soloTrack(uint8_t channel, uint8_t state)
 {
-    if (channel >= 8)
+    if (channel >= kVoices)
         return;
 
     if (state == 1)
     {
-        for (uint8_t i = 0; i < 8; i++)
+        for (uint8_t i = 0; i < kVoices; i++)
         {
             if (i == channel)
             {
-                if (!mtProject.values.trackMute[i])
+                if (!trackMuteRef(i))
                 {
                     muteDelaySend(i, 1);
                     muteReverbSend(i, 1);
                 }
                 continue;
             }
-            if (!mtProject.values.trackMute[i])
+            if (!trackMuteRef(i))
                 muteTrack(i, 1);
         }
     }
     else if (state == 0)
     {
-        for (uint8_t i = 0; i < 8; i++)
+        for (uint8_t i = 0; i < kVoices; i++)
         {
             if (i == channel)
             {
@@ -2252,7 +2261,7 @@ void audioEngine::soloTrack(uint8_t channel, uint8_t state)
                 muteReverbSend(i, 0);
                 continue;
             }
-            if (!mtProject.values.trackMute[i])
+            if (!trackMuteRef(i))
                 muteTrack(i, 0);
         }
     }
@@ -2264,18 +2273,18 @@ void audioEngine::soloDelaySend(uint8_t state)
     if (state == 1)
     {
         forceDelaySend = 1;
-        for (uint8_t i = 0; i < 8; i++)
+        for (uint8_t i = 0; i < kVoices; i++)
         {
-            if (!mtProject.values.trackMute[i])
+            if (!trackMuteRef(i))
                 muteTrack(i, 1);
         }
     }
     else if (state == 0)
     {
         forceDelaySend = 0;
-        for (uint8_t i = 0; i < 8; i++)
+        for (uint8_t i = 0; i < kVoices; i++)
         {
-            if (!mtProject.values.trackMute[i])
+            if (!trackMuteRef(i))
                 muteTrack(i, 0);
         }
     }
@@ -2286,18 +2295,18 @@ void audioEngine::soloReverbSend(uint8_t state)
     if (state == 1)
     {
         forceReverbSend = 1;
-        for (uint8_t i = 0; i < 8; i++)
+        for (uint8_t i = 0; i < kVoices; i++)
         {
-            if (!mtProject.values.trackMute[i])
+            if (!trackMuteRef(i))
                 muteTrack(i, 1);
         }
     }
     else if (state == 0)
     {
         forceReverbSend = 0;
-        for (uint8_t i = 0; i < 8; i++)
+        for (uint8_t i = 0; i < kVoices; i++)
         {
-            if (!mtProject.values.trackMute[i])
+            if (!trackMuteRef(i))
                 muteTrack(i, 0);
         }
     }
@@ -2306,7 +2315,7 @@ void audioEngine::soloReverbSend(uint8_t state)
 void audioEngine::clearDelay()
 {
     delay->clear();
-    for (uint8_t channel = 0; channel < 8; channel++)
+    for (uint8_t channel = 0; channel < kVoices; channel++)
     {
         instrumentPlayer[channel].modDelaySend(AMP_MUTED);
     }
@@ -2320,7 +2329,7 @@ void audioEngine::clearDelay()
 void audioEngine::clearReverb()
 {
     polyverb->reset();
-    for (uint8_t channel = 0; channel < 8; channel++)
+    for (uint8_t channel = 0; channel < kVoices; channel++)
     {
         instrumentPlayer[channel].modReverbSend(AMP_MUTED);
     }
@@ -2350,7 +2359,7 @@ void audioEngine::resetLimiter()
 
 void audioEngine::muteDelaySend(uint8_t channel, uint8_t state)
 {
-    if (channel >= 8)
+    if (channel >= kVoices)
     {
         return;
     }
@@ -2369,7 +2378,7 @@ void audioEngine::muteDelaySend(uint8_t channel, uint8_t state)
 
 void audioEngine::muteReverbSend(uint8_t channel, uint8_t state)
 {
-    if (channel >= 8)
+    if (channel >= kVoices)
     {
         return;
     }
@@ -2392,7 +2401,7 @@ void audioEngine::muteReverbSend(uint8_t channel, uint8_t state)
 // state = 1 mutuje
 void audioEngine::muteTrack(uint8_t channel, uint8_t state)
 {
-    if (channel >= 8)
+    if (channel >= kVoices)
     {
         return;
     }

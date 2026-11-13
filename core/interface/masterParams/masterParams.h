@@ -99,9 +99,14 @@ class cMasterParams : public ModuleBase
 
     static_assert(screenPositionCount <= 8);
 
+    // MPDJ (step 5a-4): the track mixer shows 16 tracks as two pages of 8;
+    // TRACK MIX (Master) flips to the second page before the Global Mixer
+    uint8_t mixerPage = 0;
+    uint8_t mixerTrack(uint8_t column) const { return column + mixerPage * kTrackPageSize; }
+
     enum
     {
-        delayIsSolo = 10,
+        delayIsSolo = 20, // MPDJ: above the 16 tracks (soloTrack holds a track or these)
         reverbIsSolo,
         dryMixIsSolo,
         lineInIsSolo,

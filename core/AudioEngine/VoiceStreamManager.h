@@ -9,7 +9,7 @@
 class VoiceStreamManager
 {
   public:
-    static constexpr int kVoiceCount = 8;
+    static constexpr int kVoiceCount = 16; // MPDJ (step 5a-4): a voice per track
     static constexpr int kMaxInstruments = kSampleInstrumentsCount; // MPDJ: 64 slots
 #ifdef PLATFORM_IMX
     static constexpr int kMaxChannels = 2;

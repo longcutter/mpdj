@@ -1,4 +1,5 @@
 #include "mtStructs.h"
+#include "mpdjTracks.h"
 #include "patternEditor/patternEditor.h"
 #include <assert.h>
 #include <limits.h>
@@ -617,9 +618,7 @@ void cPatternEditor::refreshPattern()
     for (uint8_t trackIdx = 0; trackIdx < kAllTracks; trackIdx++)
     {
         // sprawdzanie mutow
-        trackerPattern.inactive[trackIdx] = isSampleTrack(trackIdx)
-                                              ? mtProject.values.trackMute[trackIdx]
-                                              : mtProject.values.midiTrackMute[trackIdx % 8];
+        trackerPattern.inactive[trackIdx] = trackMuteRef(trackIdx);
 
         for (uint8_t rowIdx = 0; rowIdx < 15; rowIdx++)
         {
@@ -1393,7 +1392,8 @@ static void functMuteTrack(uint8_t button, uint8_t state)
 {
     if (state == buttonPress)
     {
-        bool midiTrack = !isSampleTrack(PTE->trackerPattern.actualTrack);
+        // MPDJ: the cursor's page of 8 tracks (tracks 9-16 are no longer MIDI-only)
+        bool midiTrack = isUpperTrack(PTE->trackerPattern.actualTrack);
         int trackIdx = midiTrack ? button + 8 : button;
 
         if (trackIdx >= kAllTracks)
@@ -1401,14 +1401,10 @@ static void functMuteTrack(uint8_t button, uint8_t state)
             return;
         }
 
-        auto& mute =
-          midiTrack ? mtProject.values.midiTrackMute[button] : mtProject.values.trackMute[button];
+        auto& mute = trackMuteRef(trackIdx);
 
         mute = !mute;
-        if (!midiTrack)
-        {
-            engine.muteTrack(button, mtProject.values.trackMute[button]);
-        }
+        engine.muteTrack(trackIdx, mute); // MPDJ: every track has a voice
         PTE->trackerPattern.inactive[trackIdx] = mute;
 
         display.refreshControl(PTE->patternControl);
@@ -1423,7 +1419,8 @@ static void functRecArmTrack(uint8_t button, uint8_t state)
 {
     if (state == buttonPress)
     {
-        bool midiTrack = !isSampleTrack(PTE->trackerPattern.actualTrack);
+        // MPDJ: the cursor's page of 8 tracks (tracks 9-16 are no longer MIDI-only)
+        bool midiTrack = isUpperTrack(PTE->trackerPattern.actualTrack);
         int trackIdx = midiTrack ? button + 8 : button;
 
         if (trackIdx >= kAllTracks)
@@ -2082,7 +2079,7 @@ static void functShift(uint8_t state)
         {
             if (PTE->selectedPlace < 0)
             {
-                PTE->showMuteButtons(1, !isSampleTrack(PTE->trackerPattern.actualTrack));
+                PTE->showMuteButtons(1, isUpperTrack(PTE->trackerPattern.actualTrack));
                 PTE->setMuteFunct(1);
             }
         }
@@ -2936,7 +2933,7 @@ static void functRecAction(uint8_t state)
             if (mtPopups.getStepPopupState() ==
                 stepPopupNone) // ukrywa popup nuta...fx jesli jest wyswietlany
             {
-                PTE->showRecordArmingButtons(1, !isSampleTrack(PTE->trackerPattern.actualTrack));
+                PTE->showRecordArmingButtons(1, isUpperTrack(PTE->trackerPattern.actualTrack));
                 PTE->setRecArmingFunct(1);
             }
         }
@@ -4730,9 +4727,8 @@ static void functPads(uint8_t pad, uint8_t state, int16_t velo)
                     {
                         sendSelection();
 
-                        // MPDJ: pad N = the N-th program the track can play
-                        int instrumentToSet =
-                          programFromPad(pad, PTE->isSelectionOrCursorInMidiTracks());
+                        // MPDJ: pad N = program N; every track plays any program (5a-4)
+                        int instrumentToSet = programFromPad(pad, false);
                         if (instrumentToSet >= 0)
                             sequencer.setSelectionInstrument(instrumentToSet);
                     }
@@ -4890,14 +4886,8 @@ void cPatternEditor::showInstrumentPopup()
     PTE->trackerPattern.popupMode |= 2;
     display.refreshControl(PTE->patternControl);
 
-    if (trackerPattern.actualTrack >= kSampleTracks)
-    {
-        mtPopups.showStepPopup(stepPopupOnlySynthAndMidiInstr, mtProject.values.lastUsedInstrument);
-    }
-    else
-    {
-        mtPopups.showStepPopup(stepPopupInstr, mtProject.values.lastUsedInstrument);
-    }
+    // MPDJ (step 5a-4): every track picks from all program slots
+    mtPopups.showStepPopup(stepPopupInstr, mtProject.values.lastUsedInstrument);
 }
 
 void cPatternEditor::showFx1Popup()

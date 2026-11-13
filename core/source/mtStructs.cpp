@@ -10,6 +10,9 @@ void strMtValues::setDefaultTrackName(int trackIdx)
     }
     else
     {
-        sprintf(midiTrackNames[trackIdx - kSampleTracks], "Midi %d", trackIdx + 1);
+        // MPDJ (step 5a-4): tracks 9-16 play samples too; names fit 7 characters
+        sprintf(midiTrackNames[trackIdx - kSampleTracks],
+                trackIdx + 1 < 10 ? "Track %d" : "Track%d",
+                trackIdx + 1);
     }
 }

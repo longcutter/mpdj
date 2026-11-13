@@ -2551,7 +2551,7 @@ void cSampleImporter::initDeleteUnusedInstruments()
             continue;
         }
 
-        for (int trackIdx = 0; trackIdx < kSampleTracks; trackIdx++)
+        for (int trackIdx = 0; trackIdx < kAllTracks; trackIdx++) // MPDJ: all 16 play samples
         {
             for (int stepIdx = 0; stepIdx < pattern->track[trackIdx].length; stepIdx++)
             {

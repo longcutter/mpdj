@@ -89,6 +89,10 @@ static constexpr int kSampleTracks = 8;
 static constexpr int kMidiTrackFirstIdx = kSampleTracks;
 static constexpr int kMidiTracks = 8;
 static constexpr int kAllTracks = kSampleTracks + kMidiTracks;
+// MPDJ (step 5a-4): all 16 tracks have a sample voice and play any program.
+// kSampleTracks / kMidiTracks now only describe the Tracker+ file layout
+// (per-track data for tracks 1-8 vs 9-16); go through mpdjTracks.h for it.
+static constexpr int kTrackPageSize = 8; // screens show tracks as pages of 8
 
 static constexpr int k16TracksPatternSize_v5 = 12336;
 static constexpr int k12TracksPatternSize_v5 = 9260;
@@ -1015,6 +1019,13 @@ struct strMtProject
 
     // MPDJ: a type per program slot (empty / sample / MIDI), mpdjPrograms.h
     strProgramTable programs;
+
+    // MPDJ (step 5a-4): volume of tracks 9-16 (the Tracker+ file has 1-8 in
+    // values.trackVolume); saved in the MPDJ block. Use trackVolumeRef()
+    uint8_t trackVolumeHi[kAllTracks - kSampleTracks] = {
+        DEFAULT_TRACK_VOLUME, DEFAULT_TRACK_VOLUME, DEFAULT_TRACK_VOLUME, DEFAULT_TRACK_VOLUME,
+        DEFAULT_TRACK_VOLUME, DEFAULT_TRACK_VOLUME, DEFAULT_TRACK_VOLUME, DEFAULT_TRACK_VOLUME
+    };
 };
 
 //----------------------------------------------------------------------------------

@@ -57,6 +57,15 @@ class mtAudioExport
         stem_track_6,
         stem_track_7,
         stem_track_8,
+        // MPDJ (step 5a-4): tracks 9-16 have voices too
+        stem_track_9,
+        stem_track_10,
+        stem_track_11,
+        stem_track_12,
+        stem_track_13,
+        stem_track_14,
+        stem_track_15,
+        stem_track_16,
 
 #ifdef FEATURE_SYNTH
         stem_synth_1,

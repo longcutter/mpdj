@@ -423,6 +423,9 @@ uint8_t cProjectEditor::loadProjectValues()
         {
             mtProject.values.midiTrackMute[i] = 0;
         }
+        // MPDJ (step 5a-4): tracks 9-16 have voices too
+        if (kSampleTracks + i < kAllTracks)
+            engine.muteTrack(kSampleTracks + i, mtProject.values.midiTrackMute[i]);
     }
 
     for (uint8_t i = 0; i < 12; i++)

@@ -1224,7 +1224,7 @@ void cInstrumentEditor::changeEnvState(int idx, int16_t value)
         case envFinetune: statusByte = LFO_FINETUNE_SEND_MASK; break;
         default: break;
     }
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(statusByte);
     }
@@ -1338,7 +1338,7 @@ void cInstrumentEditor::changeEnvDecay(int idx, int16_t value)
         case envFinetune: statusByte = LFO_FINETUNE_SEND_MASK; break;
         default: break;
     }
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(statusByte);
     }
@@ -1476,7 +1476,7 @@ void cInstrumentEditor::changeLfoShape(int idx, int16_t value)
         case envFinetune: statusByte = LFO_FINETUNE_SEND_MASK; break;
         default: break;
     }
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(statusByte);
     }
@@ -1524,7 +1524,7 @@ void cInstrumentEditor::changeLfoSpeed(int idx, int16_t value)
         case envFinetune: statusByte = LFO_FINETUNE_SEND_MASK; break;
         default: break;
     }
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(statusByte);
     }
@@ -1569,7 +1569,7 @@ void cInstrumentEditor::changeLfoAmount(int idx, int16_t value)
         case envFinetune: statusByte = LFO_FINETUNE_SEND_MASK; break;
         default: break;
     }
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(statusByte);
     }
@@ -1600,7 +1600,7 @@ static void triggerEnvelopeRefresh(int idx)
         case envFinetune: statusByte = LFO_FINETUNE_SEND_MASK; break;
         default: break;
     }
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(statusByte);
     }
@@ -1803,7 +1803,7 @@ void cInstrumentEditor::changeFilterCutoff(int16_t value)
 
     //	display.setBacklightBrightness(map(editorInstrument->cutOff,MIN_CUTOFF,MAX_CUTOFF,0,128));
     //	instrumentPlayer[0].instrumentBasedMod.cutoff = IE->editorInstrument->cutOff;
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(CUTOFF_MASK);
     }
@@ -1832,7 +1832,7 @@ void cInstrumentEditor::changeFilterResonance(int16_t value)
     else
         IE->editorInstrument->resonance += fVal;
 
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(RESONANCE_MASK);
     }
@@ -1856,7 +1856,7 @@ void cInstrumentEditor::changeParamsVolume(int16_t value)
     else
         IE->editorInstrument->volume += value;
 
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         //		if(instrumentPlayer[i].currentInstrument_idx ==
         // mtProject.values.lastUsedInstrument)
@@ -1886,7 +1886,7 @@ void cInstrumentEditor::changeParamsTune(int16_t value)
     else
         IE->editorInstrument->tune += value;
 
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(TUNE_MASK);
     }
@@ -1910,7 +1910,7 @@ void cInstrumentEditor::changeParamsFineTune(int16_t value)
     else
         IE->editorInstrument->fineTune += value;
 
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(FINETUNE_MASK);
     }
@@ -1934,7 +1934,7 @@ void cInstrumentEditor::changeParamsPanning(int16_t value)
     else
         IE->editorInstrument->panning += value;
 
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(PANNING_MASK);
     }
@@ -1958,7 +1958,7 @@ void cInstrumentEditor::changeParamsDelaySend(int16_t value)
     else
         IE->editorInstrument->delaySend += value;
 
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(DELAY_SEND_MASK);
     }
@@ -1982,7 +1982,7 @@ void cInstrumentEditor::changeParamsReverbSend(int16_t value)
     else
         IE->editorInstrument->reverbSend += value;
 
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(REVERB_SEND_MASK);
     }
@@ -2006,7 +2006,7 @@ void cInstrumentEditor::changeParamsOverdrive(int16_t value)
     else
         IE->editorInstrument->overdrive += value;
 
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(OVERDRIVE_MASK);
     }
@@ -2030,7 +2030,7 @@ void cInstrumentEditor::changeParamsBitDepth(int16_t value)
     else
         IE->editorInstrument->bitDepth += value;
 
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(BIT_DEPTH_MASK);
     }
@@ -3152,7 +3152,7 @@ static void functEffectBack()
 void cInstrumentEditor::setDefaultVolume()
 {
     IE->editorInstrument->volume = defaultInstrumentParams.volume;
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(VOLUME_MASK);
     }
@@ -3163,7 +3163,7 @@ void cInstrumentEditor::setDefaultVolume()
 void cInstrumentEditor::setDefaultPanning()
 {
     IE->editorInstrument->panning = defaultInstrumentParams.panning;
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(PANNING_MASK);
     }
@@ -3174,7 +3174,7 @@ void cInstrumentEditor::setDefaultPanning()
 void cInstrumentEditor::setDefaultTune()
 {
     IE->editorInstrument->tune = defaultInstrumentParams.tune;
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(TUNE_MASK);
     }
@@ -3185,7 +3185,7 @@ void cInstrumentEditor::setDefaultTune()
 void cInstrumentEditor::setDefaultFinetune()
 {
     IE->editorInstrument->fineTune = defaultInstrumentParams.fineTune;
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(FINETUNE_MASK);
     }
@@ -3208,7 +3208,7 @@ void cInstrumentEditor::setDefaultCutoff()
     if (!IE->editorInstrument->filterEnable)
         return;
     IE->editorInstrument->cutOff = defaultInstrumentParams.cutOff;
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(CUTOFF_MASK);
     }
@@ -3221,7 +3221,7 @@ void cInstrumentEditor::setDefaultResonance()
     if (!IE->editorInstrument->filterEnable)
         return;
     IE->editorInstrument->resonance = defaultInstrumentParams.resonance;
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(RESONANCE_MASK);
     }
@@ -3232,7 +3232,7 @@ void cInstrumentEditor::setDefaultResonance()
 void cInstrumentEditor::setDefaultDelaySend()
 {
     IE->editorInstrument->delaySend = defaultInstrumentParams.delaySend;
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(DELAY_SEND_MASK);
     }
@@ -3243,7 +3243,7 @@ void cInstrumentEditor::setDefaultDelaySend()
 void cInstrumentEditor::setDefaultReverbSend()
 {
     IE->editorInstrument->reverbSend = defaultInstrumentParams.reverbSend;
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(REVERB_SEND_MASK);
     }
@@ -3254,7 +3254,7 @@ void cInstrumentEditor::setDefaultReverbSend()
 void cInstrumentEditor::setDefaultOverdrive()
 {
     IE->editorInstrument->overdrive = defaultInstrumentParams.overdrive;
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(OVERDRIVE_MASK);
     }
@@ -3265,7 +3265,7 @@ void cInstrumentEditor::setDefaultOverdrive()
 void cInstrumentEditor::setDefaultBitDepth()
 {
     IE->editorInstrument->bitDepth = defaultInstrumentParams.bitDepth;
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(BIT_DEPTH_MASK);
     }
@@ -3351,7 +3351,7 @@ void cInstrumentEditor::setDefaultLfoShape()
         case envFinetune: statusByte = LFO_FINETUNE_SEND_MASK; break;
         default: break;
     }
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(statusByte);
     }
@@ -3376,7 +3376,7 @@ void cInstrumentEditor::setDefaultLfoSpeed()
         case envFinetune: statusByte = LFO_FINETUNE_SEND_MASK; break;
         default: break;
     }
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(statusByte);
     }
@@ -3403,7 +3403,7 @@ void cInstrumentEditor::setDefaultLfoAmount()
         case envFinetune: statusByte = LFO_FINETUNE_SEND_MASK; break;
         default: break;
     }
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < audioEngine::kVoices; i++)
     {
         instrumentPlayer[i].setRefreshBit(statusByte);
     }

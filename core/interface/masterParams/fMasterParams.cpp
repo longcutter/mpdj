@@ -1,3 +1,4 @@
+#include "mpdjTracks.h"
 #include "mtAudioEngine.h"
 #include "mtConfig.h"
 #include "mtPadBoard.h"
@@ -1121,6 +1122,12 @@ void cMasterParams::switchScreen()
 
     if (displayType == displayMode::masterValues)
     {
+        mixerPage = 0; // MPDJ: tracks 1-8, then 9-16
+        switchToMixer();
+    }
+    else if (displayType == displayMode::mixer && mixerPage == 0)
+    {
+        mixerPage = 1;
         switchToMixer();
     }
     else if (displayType == displayMode::mixerDelayReverb)
@@ -1526,7 +1533,7 @@ static void functEqualizerCancel()
 
 void cMasterParams::calcTrackLevel(uint8_t n)
 {
-    float localTrackLevel = instrumentPlayer[n].getRMSValue();
+    float localTrackLevel = instrumentPlayer[mixerTrack(n)].getRMSValue();
     if (localTrackLevel == -1.0f)
     {
         return;
@@ -1695,7 +1702,9 @@ void cMasterParams::resetMixerLevels()
     for (uint8_t track = 0; track < 8; track++)
     {
         resetLevel(&trackLevel[track]);
-
+    }
+    for (uint8_t track = 0; track < audioEngine::kVoices; track++) // MPDJ: both pages
+    {
         while (instrumentPlayer[track].getRMSValue() != -1.0f)
             ;
     }
@@ -1788,35 +1797,40 @@ static void functSoloMuteTrack(uint8_t n, uint8_t state)
             return;
         }
 
+        // MPDJ (step 5a-4): n = column on the page; solo / mute work on all 16 tracks
+        uint8_t track = MP->mixerTrack(n);
         if (MP->isSolo)
         {
-            if ((uint8_t)MP->soloTrack == n)
+            if ((uint8_t)MP->soloTrack == track)
             {
                 MP->soloTrack = -1;
-                for (uint8_t i = 0; i < 8; i++)
+                for (uint8_t i = 0; i < kAllTracks; i++)
                 {
-                    mtProject.values.trackMute[i] = 0;
+                    trackMuteRef(i) = 0;
                 }
             }
             else
             {
-                for (uint8_t i = 0; i < 8; i++)
+                for (uint8_t i = 0; i < kAllTracks; i++)
                 {
-                    mtProject.values.trackMute[i] = 1;
+                    trackMuteRef(i) = 1;
                 }
-                mtProject.values.trackMute[n] = 0;
-                MP->soloTrack = n;
+                trackMuteRef(track) = 0;
+                MP->soloTrack = track;
             }
         }
         else
         {
-            mtProject.values.trackMute[n] = !mtProject.values.trackMute[n];
+            trackMuteRef(track) = !trackMuteRef(track);
             MP->soloTrack = -1;
         }
 
+        for (uint8_t i = 0; i < kAllTracks; i++)
+        {
+            engine.muteTrack(i, trackMuteRef(i));
+        }
         for (uint8_t i = 0; i < 8; i++)
         {
-            engine.muteTrack(i, mtProject.values.trackMute[i]);
             MP->showLevelBar(i, &MP->trackLevel[i]);
         }
         MP->showMixerScreen();
@@ -2645,12 +2659,13 @@ void cMasterParams::setDefaultEqualizerBandAdjust(uint8_t n)
 // Mixer
 void cMasterParams::changeTrackVolume(int16_t val, uint8_t track)
 {
-    if (mtProject.values.trackVolume[track] + val > TRACK_VOLUME_MAX)
-        mtProject.values.trackVolume[track] = TRACK_VOLUME_MAX;
-    else if (mtProject.values.trackVolume[track] + val < TRACK_VOLUME_MIN)
-        mtProject.values.trackVolume[track] = TRACK_VOLUME_MIN;
+    uint8_t& volume = trackVolumeRef(mixerTrack(track)); // MPDJ: track = column on the page
+    if (volume + val > TRACK_VOLUME_MAX)
+        volume = TRACK_VOLUME_MAX;
+    else if (volume + val < TRACK_VOLUME_MIN)
+        volume = TRACK_VOLUME_MIN;
     else
-        mtProject.values.trackVolume[track] += val;
+        volume += val;
 
     engine.refreshTrackVolume();
     newFileManager.setProjectStructChanged();
@@ -2658,7 +2673,7 @@ void cMasterParams::changeTrackVolume(int16_t val, uint8_t track)
 }
 void cMasterParams::setDefaultTrackVolume(uint8_t track)
 {
-    mtProject.values.trackVolume[track] = DEFAULT_TRACK_VOLUME;
+    trackVolumeRef(mixerTrack(track)) = DEFAULT_TRACK_VOLUME; // MPDJ: column on the page
     engine.refreshTrackVolume();
     newFileManager.setProjectStructChanged();
     showTrackVolumeBar(track);
@@ -2975,11 +2990,11 @@ static void functEditModeToggle()
 
 void cMasterParams::editTrackName(uint8_t button)
 {
-    actualEditingTrackName = button;
+    actualEditingTrackName = mixerTrack(button); // MPDJ: a track 1-16
 
     MP->setKeyboardExportFunctions();
 
-    MP->keyboardManager.fillName(&mtProject.values.TrackNames[button][0]);
+    MP->keyboardManager.fillName(trackNameRef(actualEditingTrackName));
     MP->keyboardManager.activateKeyboard(7);
 
     MP->showKeyboardExport();
@@ -2999,12 +3014,11 @@ static void functCancelEditTrackName()
 // zapisz nazwe tracka
 static void functSaveTrackName()
 {
-    if (MP->actualEditingTrackName < kSampleTracks)
+    if (MP->actualEditingTrackName < kAllTracks) // MPDJ: tracks 9-16 too
     {
-        strncpy(&mtProject.values.TrackNames[MP->actualEditingTrackName][0],
-                MP->keyboardManager.getName(),
-                7);
-        mtProject.values.TrackNames[MP->actualEditingTrackName][7] = 0;
+        char* name = trackNameRef(MP->actualEditingTrackName);
+        strncpy(name, MP->keyboardManager.getName(), 7);
+        name[7] = 0;
     }
 
     newFileManager.setProjectStructChanged();

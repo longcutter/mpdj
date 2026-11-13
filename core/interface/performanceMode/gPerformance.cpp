@@ -1,32 +1,18 @@
 #include "mtSequencer.h"
+#include "mpdjTracks.h"
 #include "performanceEngine.h"
 #include "performanceMode.h"
 
 static char* getPerfTrackName(uint8_t track)
 {
-    if (isSampleTrack(track))
-    {
-        mtProject.values.TrackNames[track][7] = 0;
-        return &mtProject.values.TrackNames[track][0];
-    }
-    else
-    {
-        uint8_t midiIdx = track - kSampleTracks;
-        mtProject.values.midiTrackNames[midiIdx][7] = 0;
-        return &mtProject.values.midiTrackNames[midiIdx][0];
-    }
+    char* name = trackNameRef(track); // MPDJ: tracks 1-8 / 9-16 are stored apart
+    name[7] = 0;
+    return name;
 }
 
 static bool isPerfTrackMuted(uint8_t track)
 {
-    if (isSampleTrack(track))
-    {
-        return mtProject.values.trackMute[track] > 0;
-    }
-    else
-    {
-        return mtProject.values.midiTrackMute[track - kSampleTracks] > 0;
-    }
+    return trackMuteRef(track) > 0;
 }
 
 static const uint16_t framesPlaces[12][4] = {

@@ -3776,7 +3776,7 @@ AUDIO_CORE_RAM bool isPerformanceTrack(int track)
 AUDIO_CORE_RAM bool isSampleTrack(int track)
 {
     assert(track >= 0);
-    return (track < kSampleTracks);
+    return (track < kAllTracks); // MPDJ (step 5a-4): every track has a sample voice
 }
 
 // MPDJ (step 5a-1): sample / MIDI come from the program slot's type
