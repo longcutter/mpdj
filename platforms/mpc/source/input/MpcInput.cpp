@@ -852,23 +852,53 @@ int MpcInput::divideQLink(int knob, int steps, int divIdx)
     return out;
 }
 
-// Pattern screen: select Note / Instrument / FX1 / FX2 (or Volume / Micromove
-// in the Mic/Vol view) in the current track. Same state changes as the
-// Tracker's Note/Instr/FX buttons, without their side effects (view-mode
-// changes, the Mic/Vol toggle on a second Note press, popups while held).
+// Pattern screen: Q-Link 3 steps through the current track's columns as one
+// line: Note > Instrument > FX1 > FX2 > the Mic/Vol view's two columns
+// (5b-4a2, Mike 2026-11-13). The view follows: the FX columns show the FX view,
+// the last two the Mic/Vol view (the Tracker's own, where the FX columns'
+// places hold the step's micromove and volume); on Note / Instrument the view
+// stays as it is. Same state changes as the Tracker's Note/Instr/FX buttons,
+// without their side effects (view-mode changes, popups while held).
 void MpcInput::stepEditParam(int steps)
 {
     cPatternEditor& pe = patternEditor;
-    int p = (int)pe.editParam + steps;
-    p = p < 0 ? 0 : p > (int)cPatternEditor::EditFx2 ? (int)cPatternEditor::EditFx2 : p;
-    if (p == (int)pe.editParam)
+    constexpr int kLast = (int)cPatternEditor::EditFx2 + 2;
+    int pos = (int)pe.editParam + (pe.isMicVolView && pe.editParam >= cPatternEditor::EditFx1 ? 2 : 0);
+    int p = pos + steps;
+    p = p < 0 ? 0 : p > kLast ? kLast : p;
+    if (p == pos)
         return;
-    pe.previousEditParam = pe.editParam;
-    pe.editParam = (uint8_t)p;
-    pe.trackerPattern.selectedParam = (uint8_t)p;
+    bool micVol = p > (int)cPatternEditor::EditFx2 ? true
+                  : p >= (int)cPatternEditor::EditFx1 ? false
+                                                      : pe.isMicVolView;
+    setEditColumn(p > (int)cPatternEditor::EditFx2 ? p - 2 : p, micVol);
+}
+
+void MpcInput::setEditColumn(int param, bool micVol)
+{
+    cPatternEditor& pe = patternEditor;
+    bool viewChanged = micVol != pe.isMicVolView;
+    pe.isMicVolView = micVol;
+    pe.toggledMicVolOnPress = false;
+    if (param != (int)pe.editParam)
+        pe.previousEditParam = pe.editParam;
+    pe.editParam = (uint8_t)param;
+    pe.trackerPattern.selectedParam = (uint8_t)param;
+    if (viewChanged)
+        pe.refreshPattern();
     display.refreshControl(pe.patternControl);
     pe.showActualParamOnBar();
     pe.focusOnPattern();
+}
+
+// SHIFT + touch Q-Link 3 on the Pattern screen: flip FX <-> Mic/Vol view; the
+// cursor stays in the same place (an FX column becomes the Mic/Vol column there).
+void MpcInput::flipMicVolView()
+{
+    cPatternEditor& pe = patternEditor;
+    releaseCoreShift(); // not a Tracker Shift combo (Shift alone shows the mute buttons)
+    setEditColumn(pe.editParam, !pe.isMicVolView);
+    mtPopups.show(0, pe.isMicVolView ? "View: Micromove / Volume" : "View: FX");
 }
 
 void sendSelection(); // fPatternEdit.cpp: hands the cursor/selection to the sequencer
@@ -1098,6 +1128,14 @@ void MpcInput::releaseQLinkButton()
 
 void MpcInput::qlinkTouch(int knob, bool down)
 {
+    if (knob == 2 && down && mpcShift && mtInterface.isPatternScreenActive() &&
+        !patternEditor.fillState && patternEditor.selectedPlace < 0 &&
+        !mtPopups.isNoteKeyboardPopupActive() && mtPopups.getStepPopupState() == stepPopupNone)
+    {
+        flipMicVolView(); // 5b-4a2, every Q-Link mode
+        qlinkTouched[knob] = false;
+        return;
+    }
     if (qlinkMode == 1 && pointScreenTouch(knob, down))
         return;
     if (!qlinkScreenMode())

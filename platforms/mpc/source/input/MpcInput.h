@@ -74,6 +74,8 @@ class MpcInput
     int divideQLink(int knob, int steps, int divIdx = -1);
     void songJumpArea(int steps);
     void stepEditParam(int steps);
+    void setEditColumn(int param, bool micVol);
+    void flipMicVolView();
     bool onFxTypeColumn();
     void stepFxType(int steps);
     int qlinkAcc[5] = {}; // [4] = Q-Link 4 on an FX column (FX type)
