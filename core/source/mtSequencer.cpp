@@ -3178,6 +3178,40 @@ void Sequencer::mpdjPadNoteOn(uint8_t track, uint8_t instrument, uint8_t note, u
     }
 }
 
+uint16_t Sequencer::mpdjChoke(uint8_t track, uint8_t group)
+{
+    if (track >= kAllTracks)
+        return 0;
+    uint16_t cut = 0;
+    if (group != 0)
+    {
+        for (uint8_t t = 0; t < kAllTracks; t++)
+        {
+            auto& o = player.track[t];
+            if (t == track || o.mpdjChokeGroup != group)
+                continue;
+            int instrument = o.stepSent.instrument;
+            bool isSynth = isSynthInstrument(instrument);
+            if (isMidiInstrument(instrument) || isSynth)
+            {
+                if (o.noteOpen)
+                {
+                    sendMidiNoteOff(o.stepSent.note, 0, instrumentIdxToMidiChannel(instrument), isSynth);
+                    o.noteOpen = 0;
+                }
+            }
+            else if (isSampleTrack(t))
+            {
+                engine.chokeTrack(t);
+            }
+            o.mpdjChokeGroup = 0; // nothing left sounding from the group there
+            cut |= uint16_t(1u << t);
+        }
+    }
+    player.track[track].mpdjChokeGroup = group;
+    return cut;
+}
+
 void Sequencer::mpdjPadNoteOff(uint8_t track, int16_t source, bool sendOff)
 {
     if (track >= kAllTracks)

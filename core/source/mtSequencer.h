@@ -459,6 +459,9 @@ class Sequencer
             // rounded to the next row) is already sounding: don't play that row's
             // note once more when the playhead gets there. -1 = none
             int16_t mpdjSkipPos = -1;
+            // MPDJ (5b-5c): the choke group of the last note started on the
+            // track (pad or pattern), 0 = none
+            uint8_t mpdjChokeGroup = 0;
 
             int16_t noteSource = -1;
 
@@ -912,6 +915,12 @@ class Sequencer
     // velocity: already scaled for the program (padVelocity(), mpdjPads)
     void mpdjPadNoteOn(uint8_t track, uint8_t instrument, uint8_t note, uint8_t velocity, int16_t source);
     void mpdjPadNoteOff(uint8_t track, int16_t source, bool sendOff);
+    // MPDJ (5b-5c): choke groups. A note starting on `track` in `group` cuts
+    // every other track whose last note was in that group: sample voices fade
+    // out over 5 ms (engine.chokeTrack), an open MIDI note gets its note off.
+    // Muted tracks cut and get cut. Then `track` remembers the group (0 =
+    // none: nothing is cut). Returns a bit per track cut.
+    uint16_t mpdjChoke(uint8_t track, uint8_t group);
     // MPDJ (5b-4a): live REC (REC + playing): write a pad hit onto its track
     // (Overwrite: note, program, volume, micromove; FX columns stay). False
     // when nothing was written (not recording, track not armed, count-in).

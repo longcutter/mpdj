@@ -34,6 +34,16 @@ Held s_held[kPads];
 int8_t s_lastRecPad[kAllTracks] = { -1, -1, -1, -1, -1, -1, -1, -1,
                                     -1, -1, -1, -1, -1, -1, -1, -1 };
 
+bool chokeTrace()
+{
+#ifdef PLATFORM_MPC
+    static const bool trace = getenv("MPDJ_CHOKE_TRACE") != nullptr;
+    return trace;
+#else
+    return false;
+#endif
+}
+
 bool recTrace()
 {
 #ifdef PLATFORM_MPC
@@ -91,6 +101,23 @@ const char* mpdjPadPress(int pad, uint8_t velocity)
     uint8_t note = p->note < 0 ? (uint8_t)Sequencer::STEP_NOTE_DEFAULT : (uint8_t)p->note;
     uint8_t velo = padVelocity(p->program, velocity ? velocity : 1);
     s_held[pad] = { (int8_t)p->track, padIsGate(pad) };
+
+    // choke groups (5b-5c): the pad's own group cuts the rest of the group,
+    // also when this track is muted
+    uint8_t group = padGroupOf(p->mode);
+    uint16_t cut = sequencer.mpdjChoke(p->track, group);
+#ifdef PLATFORM_MPC
+    if (chokeTrace() && (group || cut))
+    {
+        printf("choke: %s (group %u) on track %d cuts", name, group, p->track + 1);
+        if (!cut)
+            printf(" nothing");
+        for (int t = 0; t < kAllTracks; t++)
+            if (cut & (1u << t))
+                printf(" track %d", t + 1);
+        printf("\n");
+    }
+#endif
     sequencer.mpdjPadNoteOn(p->track, p->program, note, velo, kPadSourceBase + pad);
 
     // REC + playing (5b-4a): write the hit on the pad's track
