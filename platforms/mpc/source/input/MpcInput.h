@@ -178,7 +178,8 @@ class MpcInput
     void showNotesPopup();
     bool levelsHeld = false;   // 16 LEVELS held (5b-8b)
     bool levelsTurned = false; // the encoder turned while it was held
-    void togglePadGrid();
+    void toggleLevels();
+    void pollLevels();
     void turnNotesScale(int steps);
     int8_t padHeld[128];        // MPC pad note -> Tracker pad index sent on press
     int8_t enginePadHeld[128];  // MPC pad note -> MPDJ pad (0-63) pressed in the pad engine

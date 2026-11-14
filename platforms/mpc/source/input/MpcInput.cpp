@@ -190,6 +190,7 @@ void MpcInput::poll()
     pollButtonLeds();
     pollTapHold();
     mpdjPadsPoll(); // Note Repeat hits to record (5b-7c)
+    pollLevels();
     if (sideloadComboMs && mpcShift &&
         platform.getTimer()->millis() - sideloadComboMs >= Sideload::kComboHoldMs)
     {
@@ -536,7 +537,7 @@ void MpcInput::onButton(uint8_t note, bool down)
         {
             levelsHeld = false;
             if (!levelsTurned)
-                togglePadGrid();
+                toggleLevels();
         }
         if (note == kNoteNoteRepeat && repeatHeld)
         {
@@ -709,6 +710,7 @@ void MpcInput::onButton(uint8_t note, bool down)
                 // SHIFT+16 LEVELS: Notes mode on / off (5b-8a)
                 releaseCoreShift();
                 mpdjNotesSet(!mpdjNotesOn());
+                mpdjLevelsSet(false);
                 padGrid = false;
                 showNotesPopup();
                 break;
@@ -749,13 +751,29 @@ void MpcInput::onButton(uint8_t note, bool down)
     }
 }
 
-// 16 LEVELS alone: the pad map <-> the Tracker's 4x12 grid (until 16 Levels, 5b-9)
-void MpcInput::togglePadGrid()
+// 16 LEVELS alone: 16 Levels on / off (5b-9; replaced the 5b-3 grid toggle).
+// Notes mode goes off; 16 Levels ends on 16 LEVELS, SHIFT+16 LEVELS or
+// leaving the Pattern screen (pollLevels)
+void MpcInput::toggleLevels()
 {
-    padGrid = !padGrid;
-    if (padGrid)
-        mpdjNotesSet(false);
-    mtPopups.show(0, padGrid ? "Pads: Tracker grid" : "Pads: pad map");
+    bool on = !mpdjLevelsOn();
+    mpdjLevelsSet(on);
+    mpdjNotesSet(false);
+    padGrid = false;
+    static char msg[40]; // the popup keeps the pointer
+    if (!on)
+        snprintf(msg, sizeof msg, "Pads: pad map");
+    else if (const char* src = mpdjLevelsSourceName())
+        snprintf(msg, sizeof msg, "16 Levels: %s", src);
+    else
+        snprintf(msg, sizeof msg, "16 Levels: hit a pad first");
+    mtPopups.show(0, msg);
+}
+
+void MpcInput::pollLevels()
+{
+    if (mpdjLevelsOn() && !mtInterface.isPatternScreenActive())
+        mpdjLevelsSet(false); // BROWSE, MAIN, any other screen
 }
 
 // Notes mode (5b-8b): 16 LEVELS held + main encoder = the project scale (the
@@ -1946,7 +1964,7 @@ void MpcInput::pollButtonLeds()
     set(9, noteDown[9] ? Lit::ActiveRed : Lit::Available);                 // ERASE
     for (int b = 0; b < 4; b++)                                            // BANK A-D
         set((uint8_t)(kNoteBankA + b), when(padBank == b));
-    set(40, !onPattern ? Lit::NotAvailable : when(padGrid || mpdjNotesOn())); // 16 LEVELS (grid / Notes)
+    set(40, !onPattern ? Lit::NotAvailable : when(mpdjLevelsOn() || mpdjNotesOn())); // 16 LEVELS (16 Levels / Notes)
     set(11, !onPattern ? Lit::NotAvailable : when(repeatHeld || repeatLatched)); // NOTE REPEAT
     set(52, when(onPattern || onSong));                                    // MAIN
     set(50, when(mtInterface.isSampleLoaderScreenActive() || mtInterface.isFileScreenActive())); // BROWSE

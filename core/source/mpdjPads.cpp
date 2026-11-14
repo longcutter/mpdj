@@ -126,6 +126,10 @@ bool slotIsGate(const strPadSlot* p)
 int s_cursorTrack = 0; // the Pattern screen's cursor track (set by the platform)
 int s_lastPad = -1; // the last pad hit in the pad map (5b-8a: Notes mode's default source)
 bool s_notesMode = false;
+bool s_levelsMode = false;   // 16 Levels (5b-9)
+strPadSlot s_lastSlot{};     // what the last hit played (pad map or Notes), 16 Levels' source
+bool s_lastSlotValid = false;
+char s_lastName[8] = "";
 const char* padPress(int pad, const strPadSlot* p, uint8_t velocity);
 }
 
@@ -134,14 +138,80 @@ bool padIsGate(int pad)
     return slotIsGate(padSlot(pad));
 }
 
+// What a press of `pad` plays in the current mode, and with what velocity
+// (16 Levels replaces it); false = nothing (msg says why, if anything)
+static bool resolvePad(int pad, strPadSlot* out, uint8_t* velocity, const char** msg)
+{
+    *msg = nullptr;
+    if (s_levelsMode)
+    {
+        if (!s_lastSlotValid)
+        {
+            *msg = "16 Levels: hit a pad first";
+            return false;
+        }
+        *out = s_lastSlot;
+        *velocity = mpdjLevelsVelocity(pad);
+        return true;
+    }
+    if (s_notesMode)
+    {
+        if (!mpdjNotesSource(out))
+        {
+            *msg = "Notes: no program";
+            return false;
+        }
+        out->note = (int8_t)mpdjNotesNote(pad);
+        return true;
+    }
+    *out = *padSlot(pad);
+    return true;
+}
+
 const char* mpdjPadPress(int pad, uint8_t velocity)
 {
     if (pad < 0 || pad >= kPads)
         return nullptr;
-    if (s_notesMode)
-        return mpdjNotesPress(pad, velocity);
-    s_lastPad = pad;
-    return padPress(pad, padSlot(pad), velocity);
+    strPadSlot slot;
+    const char* msg;
+    if (!resolvePad(pad, &slot, &velocity, &msg))
+        return msg;
+    if (!s_levelsMode)
+    {
+        if (!s_notesMode)
+            s_lastPad = pad;
+        s_lastSlot = slot; // 16 Levels plays this
+        s_lastSlotValid = true;
+        padName(pad, s_lastName);
+        if (s_notesMode)
+        {
+            int n = slot.note < 0 ? Sequencer::STEP_NOTE_DEFAULT : slot.note;
+            snprintf(s_lastName, sizeof s_lastName, "%s", mtNotes[n]);
+        }
+    }
+    return padPress(pad, &slot, velocity);
+}
+
+// ---------------------------------------------------------------- 16 Levels
+void mpdjLevelsSet(bool on)
+{
+    s_levelsMode = on;
+}
+
+bool mpdjLevelsOn()
+{
+    return s_levelsMode;
+}
+
+uint8_t mpdjLevelsVelocity(int pad)
+{
+    int n = pad % kPadsPerBank + 1; // pad 1 softest .. pad 16 a full hit
+    return (uint8_t)((n * 127 + 8) / 16);
+}
+
+const char* mpdjLevelsSourceName()
+{
+    return s_lastSlotValid ? s_lastName : nullptr;
 }
 
 namespace
@@ -402,16 +472,14 @@ void mpdjPadsPoll()
 
 int mpdjPadStepWrite(int pad, int row, uint8_t velocity)
 {
-    const strPadSlot* p = padSlot(pad);
-    strPadSlot notesSlot;
-    if (s_notesMode) // Notes mode (5b-8a): the pad's note on the source's program and track
-    {
-        if (!mpdjNotesSource(&notesSlot))
-            return -1;
-        notesSlot.note = (int8_t)mpdjNotesNote(pad);
-        p = &notesSlot;
-    }
-    if (!p || p->program == kPadNoProgram || programType(p->program) == kProgramEmpty)
+    // Notes mode (5b-8a): the pad's note; 16 Levels (5b-9): the last hit at
+    // the pad's velocity
+    strPadSlot slot;
+    const char* msg;
+    if (pad < 0 || pad >= kPads || !resolvePad(pad, &slot, &velocity, &msg))
+        return -1;
+    const strPadSlot* p = &slot;
+    if ( p->program == kPadNoProgram || programType(p->program) == kProgramEmpty)
         return -1;
     uint8_t note = p->note < 0 ? (uint8_t)Sequencer::STEP_NOTE_DEFAULT : (uint8_t)p->note;
     uint8_t velo = padVelocity(p->program, velocity ? velocity : 1);

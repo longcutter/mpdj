@@ -140,6 +140,16 @@ int mpdjNotesNote(int pad);
 bool mpdjNotesSource(strPadSlot* out); // false: nothing to play
 const char* mpdjNotesPress(int pad, uint8_t velocity);
 void mpdjSetCursorTrack(int track);
+
+// 16 Levels (5b-9; 16 LEVELS): the 16 pads play what the last hit played
+// (a pad-map pad or a Notes-mode note) at 16 velocities, pad 1 softest
+// (8) .. pad 16 a full hit (127), before Config's pad sensitivity. Plays,
+// repeats and records like any pad. Notes mode and 16 Levels exclude each
+// other (the platform switches them)
+void mpdjLevelsSet(bool on);
+bool mpdjLevelsOn();
+uint8_t mpdjLevelsVelocity(int pad);
+const char* mpdjLevelsSourceName(); // "A03" / "D5", nullptr before any hit
 // The Roll value for a division in nanoSteps, 0 = none fits
 uint8_t mpdjRollForPeriod(uint16_t nanoSteps);
 // Gate or One shot for the pad as it is now (Auto: Gate for MIDI programs and
