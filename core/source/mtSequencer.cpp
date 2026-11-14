@@ -3204,8 +3204,8 @@ void Sequencer::mpdjPadNoteOff(uint8_t track, int16_t source, bool sendOff)
     t.noteSource = -1;
 }
 
-bool Sequencer::mpdjPadRecWrite(
-  uint8_t track, uint8_t instrument, uint8_t note, uint8_t velocity, MpdjRecWrite* out)
+bool Sequencer::mpdjPadRecWrite(uint8_t track, uint8_t instrument, uint8_t note, uint8_t velocity,
+                                bool writeVolume, MpdjRecWrite* out)
 {
     if (!isRec() || track >= kAllTracks || !isRecArmedOnTrack(track))
         return false;
@@ -3238,7 +3238,7 @@ bool Sequencer::mpdjPadRecWrite(
     newFileManager.storePatternUndoRevision();
     step->note = note;
     step->instrument = instrument;
-    step->volume = velocityToVolume(velocity);
+    step->volume = writeVolume ? velocityToVolume(velocity) : -1;
     step->micromove = (recMicrotiming() && !anticipatedBeat1)
                         ? clamp<int>(mapClamped<int>(t.uStep, 1, 48, 0, 100),
                                      getFxMin(fx.FX_TYPE_MICROMOVE),
@@ -3261,8 +3261,8 @@ bool Sequencer::mpdjPadRecWrite(
     return true;
 }
 
-int8_t Sequencer::mpdjPadStepWrite(
-  uint8_t track, uint8_t row, uint8_t instrument, uint8_t note, uint8_t velocity)
+int8_t Sequencer::mpdjPadStepWrite(uint8_t track, uint8_t row, uint8_t instrument, uint8_t note,
+                                   uint8_t velocity, bool writeVolume)
 {
     strPattern* pattern = getPatternToUI();
     if (track >= kAllTracks || row >= pattern->track[0].length)
@@ -3271,10 +3271,10 @@ int8_t Sequencer::mpdjPadStepWrite(
     newFileManager.storePatternUndoRevision();
     step->note = note;
     step->instrument = instrument;
-    step->volume = velocityToVolume(velocity);
+    step->volume = writeVolume ? velocityToVolume(velocity) : -1;
     step->micromove = -1;
     newFileManager.setActualPatternStructChanged();
-    return step->volume;
+    return step->volume < 0 ? 0 : step->volume;
 }
 
 int Sequencer::mpdjPadRecOff(uint8_t track, bool* hadNote)

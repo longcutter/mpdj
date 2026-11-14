@@ -260,6 +260,12 @@ const char* const buttonLightsTexts[4] = { "Off", "Dim", "Bright", "Dynamic" };
 const char* const tapFlashTexts[3] = { "Off", "Dim", "Bright" };
 const char buttonLightsDesc[] = { "MPC button lights. Dim / Bright: active buttons lit at that level, the rest off. Dynamic: available dim, active bright." };
 const char tapFlashDesc[] = { "Flashes TAP TEMPO on each beat." };
+const char* const padCurveTexts[3] = { "Soft", "Normal", "Hard" };
+const char* const padTopTexts[39] = { "10%", "15%", "20%", "25%", "30%", "35%", "40%", "45%", "50%", "55%", "60%", "65%", "70%", "75%", "80%", "85%", "90%", "95%", "100%", "105%", "110%", "115%", "120%", "125%", "130%", "135%", "140%", "145%", "150%", "155%", "160%", "165%", "170%", "175%", "180%", "185%", "190%", "195%", "200%" };
+const char* const padVelVolTexts[2] = { "Off", "On" };
+const char padCurveDesc[] = { "How pad velocity maps to level. Soft: light hits come out louder. Hard: you have to hit harder." };
+const char padTopDesc[] = { "A full pad hit's level as a percentage of the program's volume (100%: a full hit plays at the program's volume)." };
+const char padVelVolDesc[] = { "Recording writes each pad hit's velocity into the volume column. Off: the column stays empty and notes play at the program's volume." };
 #endif
 const char padsBrightDesc[] = { "Sets the brightness of the pad lights in the grid." };
 

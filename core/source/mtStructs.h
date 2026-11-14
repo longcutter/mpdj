@@ -1171,6 +1171,12 @@ struct strMtConfig
         // files load with these defaults
         uint8_t buttonLights = 3;  // Dynamic (Mike's default, 2026-11-12)
         uint8_t tapTempoFlash = 1; // Dim
+        // MPDJ (5b-4d): pad velocity curve 0 Soft / 1 Normal / 2 Hard; a full
+        // hit's level as a % of the program's volume, stored as (pct - 10) / 5
+        // (0..38 = 10..200%, 18 = 100%); write velocity into the volume column
+        uint8_t padCurve = 1;
+        uint8_t padTop = 18;
+        uint8_t padVelToVolume = 1;
 #endif
     } general;
 

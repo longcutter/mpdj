@@ -405,6 +405,12 @@ void checkConfig()
         mtConfig.general.buttonLights = 3;
     if (mtConfig.general.tapTempoFlash > 2)
         mtConfig.general.tapTempoFlash = 1;
+    if (mtConfig.general.padCurve > 2)
+        mtConfig.general.padCurve = 1;
+    if (mtConfig.general.padTop > 38)
+        mtConfig.general.padTop = 18;
+    if (mtConfig.general.padVelToVolume > 1)
+        mtConfig.general.padVelToVolume = 1;
 #endif
     if (mtConfig.general.performanceSource > 1)
         mtConfig.general.performanceSource = 0;
@@ -567,6 +573,9 @@ void resetConfig()
 #ifdef PLATFORM_MPC
     mtConfig.general.buttonLights = 3;  // Dynamic (Mike's default, 2026-11-12)
     mtConfig.general.tapTempoFlash = 1; // Dim
+    mtConfig.general.padCurve = 1;       // Normal
+    mtConfig.general.padTop = 18;        // 100%
+    mtConfig.general.padVelToVolume = 1; // On
 #endif
 
     // interface ----------------------------------------

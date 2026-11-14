@@ -24,7 +24,7 @@ constexpr uint8_t generalMenuGroupCount = 9;
 #elif defined(PLATFORM_MPC) // no USB group (USB storage / USB audio are Tracker+ hardware)
 constexpr uint8_t baseMenuGroupCount = 6;
 constexpr uint8_t projectMenuGroupCount = 10;
-constexpr uint8_t generalMenuGroupCount = 14; // + Button lights, Tap tempo flash
+constexpr uint8_t generalMenuGroupCount = 17; // + Button lights, Tap tempo flash, 3 pad settings (5b-4d)
 #elif defined(PLATFORM_IMX)
 constexpr uint8_t baseMenuGroupCount = 7;
 constexpr uint8_t projectMenuGroupCount = 10;
@@ -165,6 +165,15 @@ cMenuItem melRecThreshold(menuGeneral,
                           recThresholdDesc,
                           menuTypeItemListText,
                           &setupRecThreshold);
+#ifdef PLATFORM_MPC
+// MPDJ (5b-4d): pad sensitivity
+const strItemTypeListText setupPadCurve{ &mtConfig.general.padCurve, 3, padCurveTexts };
+const strItemTypeListText setupPadTop{ &mtConfig.general.padTop, 39, padTopTexts };
+const strItemTypeListText setupPadVelVol{ &mtConfig.general.padVelToVolume, 2, padVelVolTexts };
+cMenuItem melPadCurve(menuGeneral, "Pad velocity curve", padCurveDesc, menuTypeItemListText, &setupPadCurve);
+cMenuItem melPadTop(menuGeneral, "Pad full hit", padTopDesc, menuTypeItemListText, &setupPadTop);
+cMenuItem melPadVelVol(menuGeneral, "Pad vel to volume", padVelVolDesc, menuTypeItemListText, &setupPadVelVol);
+#endif
 cMenuItem melHexMode(menuGeneral,
                      "Numbering mode",
                      hexModeDesc,

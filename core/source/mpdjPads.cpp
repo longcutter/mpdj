@@ -5,7 +5,9 @@
 #include "mtSequencer.h"
 #include "mtStructs.h"
 #include "util_math.h"
+#include "mtConfig.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -92,7 +94,7 @@ const char* mpdjPadPress(int pad, uint8_t velocity)
 
     // REC + playing (5b-4a): write the hit on the pad's track
     Sequencer::MpdjRecWrite w;
-    if (sequencer.mpdjPadRecWrite(p->track, p->program, note, velo, &w))
+    if (sequencer.mpdjPadRecWrite(p->track, p->program, note, velo, padVelocityToVolume(), &w))
     {
         s_held[pad].recorded = true;
         s_lastRecPad[p->track] = (int8_t)pad;
@@ -120,9 +122,12 @@ int mpdjPadStepWrite(int pad, int row, uint8_t velocity)
         return -1;
     uint8_t note = p->note < 0 ? (uint8_t)Sequencer::STEP_NOTE_DEFAULT : (uint8_t)p->note;
     uint8_t velo = padVelocity(p->program, velocity ? velocity : 1);
-    int8_t vol = sequencer.mpdjPadStepWrite(p->track, (uint8_t)row, p->program, note, velo);
+    bool writeVol = padVelocityToVolume();
+    int8_t vol = sequencer.mpdjPadStepWrite(p->track, (uint8_t)row, p->program, note, velo, writeVol);
     if (vol < 0)
         return -1;
+    if (!writeVol)
+        vol = -1;
 #ifdef PLATFORM_MPC
     if (recTrace())
     {
@@ -135,12 +140,41 @@ int mpdjPadStepWrite(int pad, int row, uint8_t velocity)
     return p->track;
 }
 
+uint8_t padVelocityScale(uint8_t velocity, uint8_t programVelo, uint8_t curve, int topPercent)
+{
+    // curve: Soft x^0.5, Normal x, Hard x^2 (x = velocity / 127); a full hit
+    // = topPercent of the program's velocity (its volume), capped at 127
+    float x = velocity > 127 ? 1.0f : velocity / 127.0f;
+    if (curve == 0)
+        x = sqrtf(x);
+    else if (curve == 2)
+        x = x * x;
+    float top = programVelo * (topPercent / 100.0f);
+    int v = (int)(x * top + 0.5f);
+    if (velocity > 0 && v < 1)
+        v = 1;
+    return (uint8_t)(v > 127 ? 127 : v);
+}
+
 uint8_t padVelocity(uint8_t program, uint8_t velocity)
 {
-    // 5b-4a: linear, a full hit = the program's own volume (Config curve and
-    // top come with 5b-4d)
-    int v = mapClamped<int>(velocity, 0, 127, 0, sequencer.getInstrumentVelo(program));
-    return (uint8_t)(v > 127 ? 127 : v);
+#ifdef PLATFORM_MPC
+    uint8_t curve = mtConfig.general.padCurve;
+    int top = 10 + 5 * mtConfig.general.padTop;
+#else
+    uint8_t curve = 1;
+    int top = 100;
+#endif
+    return padVelocityScale(velocity, sequencer.getInstrumentVelo(program), curve, top);
+}
+
+bool padVelocityToVolume()
+{
+#ifdef PLATFORM_MPC
+    return mtConfig.general.padVelToVolume != 0;
+#else
+    return true;
+#endif
 }
 
 void mpdjPadRelease(int pad)
@@ -312,6 +346,29 @@ int padsSelfTest()
     mtProject.pads = savedMap;
     mtProject.programs = savedPrograms;
     memcpy(mtProject.trackVolumeHi, savedVolumes, sizeof(savedVolumes));
+
+    // velocity scaling (5b-4d): a program at volume 50 (velocity 63)
+    {
+        const uint8_t pv = 63;
+        check(padVelocityScale(127, pv, 1, 100) == pv, "full hit at 100% = program velocity", 0);
+        check(padVelocityScale(127, pv, 1, 50) == 32, "full hit at 50%", 0);
+        check(padVelocityScale(127, pv, 1, 200) == 126, "full hit at 200%", 0);
+        check(padVelocityScale(127, 127, 1, 200) == 127, "200% capped at 127", 0);
+        check(padVelocityScale(1, pv, 2, 10) == 1, "lightest hit stays audible", 0);
+        for (int c = 0; c < 3; c++)
+            for (int v = 1; v < 127; v++)
+                check(padVelocityScale(v, pv, c, 100) <= padVelocityScale(v + 1, pv, c, 100),
+                      "curve rises with velocity", c * 1000 + v);
+        for (int v = 1; v < 127; v++)
+            check(padVelocityScale(v, pv, 0, 100) >= padVelocityScale(v, pv, 1, 100) &&
+                    padVelocityScale(v, pv, 1, 100) >= padVelocityScale(v, pv, 2, 100),
+                  "Soft >= Normal >= Hard", v);
+        printf("pad velocity -> volume (program volume 50, full hit 100%%):\n  vel   soft normal hard\n");
+        for (int v : { 16, 32, 64, 96, 127 })
+            printf("  %3d   %4d %6d %4d\n", v, sequencer.mpdjVelocityToVolume(padVelocityScale(v, pv, 0, 100)),
+                   sequencer.mpdjVelocityToVolume(padVelocityScale(v, pv, 1, 100)),
+                   sequencer.mpdjVelocityToVolume(padVelocityScale(v, pv, 2, 100)));
+    }
 
     printf("pad map (pad: program -> track):\n");
     for (int i = 0; i < kPads; i++)

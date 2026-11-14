@@ -922,16 +922,20 @@ class Sequencer
         int8_t micromove = -1;
         bool skipNext = false;
     };
-    bool mpdjPadRecWrite(uint8_t track, uint8_t instrument, uint8_t note, uint8_t velocity, MpdjRecWrite* out);
+    // writeVolume false (Config "Pad vel to volume" Off): the volume column is cleared
+    bool mpdjPadRecWrite(uint8_t track, uint8_t instrument, uint8_t note, uint8_t velocity,
+                         bool writeVolume, MpdjRecWrite* out);
     // MPDJ (5b-4b): live REC, a Gate pad let go: write an OFF on the release
     // row, always after the note's row (as the Tracker: a release on the
     // note's own row writes it on the next one), only into a row without a
     // note. Returns the row, -1 = not written (*hadNote: a note was there).
     int mpdjPadRecOff(uint8_t track, bool* hadNote);
+    int8_t mpdjVelocityToVolume(int8_t velocity) { return velocityToVolume(velocity); }
     // MPDJ (5b-4c): edit mode (REC + stopped, or REC alone while playing):
     // write a pad hit at a row (Overwrite: note, program, volume; micromove
     // cleared; FX columns stay). Returns the volume written.
-    int8_t mpdjPadStepWrite(uint8_t track, uint8_t row, uint8_t instrument, uint8_t note, uint8_t velocity);
+    int8_t mpdjPadStepWrite(uint8_t track, uint8_t row, uint8_t instrument, uint8_t note,
+                            uint8_t velocity, bool writeVolume);
     void updateTrackLengths(strPattern* pattern);
 
     uint8_t noMoreRecOpen();
