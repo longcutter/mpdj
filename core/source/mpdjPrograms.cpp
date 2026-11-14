@@ -126,6 +126,7 @@ void programsWriteToFile(strMpdjProjectData& out)
     }
     memcpy(out.trackVolumeHi, mtProject.trackVolumeHi, sizeof(out.trackVolumeHi));
     padsWrite(out.pads);
+    padColoursWrite(out.padColour);
 }
 
 // Tracks 9-16's per-track data: from a version 2 block, else defaults
@@ -145,11 +146,13 @@ bool programsReadFromFile(const strMpdjProjectData& in)
         mtProject.programs.setLegacyLayout();
         tracksReadFromFile(nullptr);
         padsRead(nullptr);
+        padColoursRead(nullptr);
         s_importNotice = true;
         return false;
     }
     tracksReadFromFile(in.version >= 2 ? &in : nullptr);
     padsRead(in.version >= 3 ? in.pads : nullptr);
+    padColoursRead(in.version >= 4 ? in.padColour : nullptr);
     for (int i = 0; i < kProgramSlots; i++)
     {
         strProgramSlot s = in.programs[i];

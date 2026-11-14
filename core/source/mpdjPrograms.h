@@ -81,11 +81,14 @@ struct strMpdjProjectData
     uint8_t reservedTracks[24];
     // version 3 (step 5b-1): the pad map, mpdjPads.h
     strPadSlot pads[kPads];
+    // version 4 (step 5c-2): pad colours (0 = Auto, 1-16 palette)
+    uint8_t padColour[kPads];
 };
 static constexpr size_t kMpdjProjectDataV1Size = 8 + 4 * kProgramSlots; // version 1 ended here
 static constexpr size_t kMpdjProjectDataV2Size = kMpdjProjectDataV1Size + 32; // version 2 ended here
-static_assert(sizeof(strMpdjProjectData) == kMpdjProjectDataV2Size + 4 * kPads);
-static constexpr uint8_t kMpdjProjectDataVersion = 3;
+static constexpr size_t kMpdjProjectDataV3Size = kMpdjProjectDataV2Size + 4 * kPads; // version 3 ended here
+static_assert(sizeof(strMpdjProjectData) == kMpdjProjectDataV3Size + kPads);
+static constexpr uint8_t kMpdjProjectDataVersion = 4;
 
 // Slot types for the current project (mtProject.programs)
 ProgramType programType(int idx);

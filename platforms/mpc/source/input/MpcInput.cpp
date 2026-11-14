@@ -427,13 +427,26 @@ void MpcInput::padLedsOff()
         setPadLed(pad, 0, 0, 0);
 }
 
-// One colour per track until pads get their own (5c-2); 0-127 per channel
-static const uint8_t kTrackColours[16][3] = {
-    { 127, 24, 0 },  { 127, 64, 0 },   { 127, 112, 0 }, { 64, 127, 0 },
-    { 0, 127, 24 },  { 0, 127, 90 },   { 0, 110, 127 }, { 0, 52, 127 },
-    { 24, 0, 127 },  { 72, 0, 127 },   { 127, 0, 127 }, { 127, 0, 64 },
-    { 127, 64, 64 }, { 64, 127, 96 },  { 96, 96, 127 }, { 110, 110, 110 },
-};
+// Hold a pad on the Pattern screen's pad map (not in edit mode / REC) and turn
+// the main encoder: that pad's colour, Auto (its track's) -> 16 palette
+// colours -> Auto (5c-2; saved in the project; Pad Assign sets it later too)
+bool MpcInput::turnHeldPadColour(int steps)
+{
+    if (!mtInterface.isPatternScreenActive() || mpdjNotesOn() || mpdjLevelsOn() || padGrid ||
+        patternEditor.editMode || sequencer.isRec() || lastEngineNote < 0 || enginePadHeld[lastEngineNote] < 0)
+        return false;
+    int pad = enginePadHeld[lastEngineNote];
+    int c = padColour(pad) + (steps > 0 ? 1 : -1);
+    c = c < 0 ? kPadColours : (c > kPadColours ? 0 : c); // wraps
+    setPadColour(pad, (uint8_t)c);
+    newFileManager.setProjectStructChanged();
+    static char msg[40]; // the popup keeps the pointer
+    char name[4];
+    padName(pad, name);
+    snprintf(msg, sizeof msg, "%s colour: %s", name, kPadColourNames[c]);
+    mtPopups.show(0, msg);
+    return true;
+}
 
 // Empty slot = dark; a program = its colour, dim; played (held, or a note of
 // that program on that track from a pad or the pattern) = brighter by its
@@ -490,7 +503,7 @@ void MpcInput::pollPadLights()
             level = trackHitLevel[t] / 50.0f * (1.0f - (now - trackHitMs[t]) / (float)kPadFlashMs);
         level = level > 1 ? 1 : level;
         float k = base + (top - base) * level;
-        const uint8_t* c = kTrackColours[t & 15];
+        const uint8_t* c = notes || levels ? kPadPalette[t & 15] : padColourRgb(pad, t); // 5c-2
         if (notes && slot.note >= 0 && slot.note % 12 == rootPc)
             c = kRootRed; // Notes mode: the key's root pads are red (Mike 2026-11-14)
         if (levels && level == 0)
@@ -1143,6 +1156,7 @@ void MpcInput::onPad(uint8_t note, bool down, uint8_t velocity)
                    padIsGate(pad) ? "gate" : "one shot");
         }
         enginePadHeld[note] = (int8_t)pad;
+        lastEngineNote = note; // hold a pad + main encoder = its colour (5c-2)
         mpdjSetCursorTrack(patternEditor.trackerPattern.actualTrack); // Notes mode's title-bar source
         if (const char* msg = mpdjPadPress(pad, velocity))
             mtPopups.show(0, msg);
@@ -1348,6 +1362,8 @@ void MpcInput::onRelative(uint8_t cc, uint8_t value)
             turnRepeatDivision(steps); // NOTE REPEAT held: the division (5b-7b)
             return;
         }
+        if (turnHeldPadColour(steps))
+            return; // a pad held on the pad map: its colour (5c-2)
         if (levelsHeld && mtInterface.isPatternScreenActive())
         {
             // 16 LEVELS held on the Pattern screen (any pad mode): the project

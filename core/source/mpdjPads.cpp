@@ -734,6 +734,34 @@ void padsWrite(strPadSlot* out)
     memcpy(out, mtProject.pads.pad, sizeof(mtProject.pads.pad));
 }
 
+void padColoursWrite(uint8_t* out)
+{
+    memcpy(out, mtProject.pads.colour, sizeof(mtProject.pads.colour));
+}
+
+void padColoursRead(const uint8_t* in)
+{
+    for (int i = 0; i < kPads; i++)
+        mtProject.pads.colour[i] = (in && in[i] <= kPadColours) ? in[i] : 0;
+}
+
+uint8_t padColour(int pad)
+{
+    return (pad >= 0 && pad < kPads) ? mtProject.pads.colour[pad] : 0;
+}
+
+void setPadColour(int pad, uint8_t colour)
+{
+    if (pad >= 0 && pad < kPads && colour <= kPadColours)
+        mtProject.pads.colour[pad] = colour;
+}
+
+const uint8_t* padColourRgb(int pad, uint8_t track)
+{
+    uint8_t c = padColour(pad);
+    return c ? kPadPalette[c - 1] : kPadPalette[track % kPadColours];
+}
+
 void padsRead(const strPadSlot* in)
 {
     strPadMap def;
@@ -841,7 +869,7 @@ int padsSelfTest()
     mtProject.pads.pad[padIndex(0, 16)] = { 2, 2, -1, kPadModeAuto }; // A16: same pair, no group
     check(padGroupFor(2, 2) == 0, "A16 (no group) comes before B05", -1);
 
-    // 2. Round trip through the MPDJ block (version 3), groups included
+    // 2. Round trip through the MPDJ block (version 4), groups included
     mtProject.pads = def;
     mtProject.pads.pad[0] = { 5, 2, 48, kPadModeGate };          // A01: program 06, track 3, C-3
     mtProject.pads.pad[17] = { kPadNoProgram, 15, -1, kPadModeOneShot }; // B02: nothing, track 16
@@ -849,7 +877,7 @@ int padsSelfTest()
     mtProject.pads.pad[20] = { 20, 4, -1, padModeByte(kPadModeGate, 31) }; // B05: Gate, group 31
     strMpdjProjectData file;
     programsWriteToFile(file);
-    check(file.version == 3, "block version 3", -1);
+    check(file.version == 4, "block version 4", -1);
     mtProject.pads = strPadMap{};
     programsReadFromFile(file);
     check(mtProject.pads.pad[0].program == 5 &&
@@ -865,6 +893,28 @@ int padsSelfTest()
     check(padGroup(2) == 1 && padGroup(3) == 1 && padGroup(11) == 1, "hats' group after reload", -1);
     check(padCutOnRelease(2) && padCutOnRelease(3) && padCutOnRelease(11) && !padCutOnRelease(0),
           "hats' cut on release after reload", -1);
+
+    // 2c. Pad colours (5c-2): round trip; a version 3 block or bad values -> Auto
+    mtProject.pads = def;
+    check(padColour(5) == 0 && padColourRgb(5, 3) == kPadPalette[3], "Auto = the track's colour", 5);
+    setPadColour(5, 7);
+    setPadColour(63, 16);
+    setPadColour(6, 17); // out of range: ignored
+    check(padColour(5) == 7 && padColourRgb(5, 3) == kPadPalette[6] && padColour(6) == 0, "set colour", 5);
+    programsWriteToFile(file);
+    mtProject.pads.colour[5] = mtProject.pads.colour[63] = 0;
+    programsReadFromFile(file);
+    check(padColour(5) == 7 && padColour(63) == 16, "colour round trip", 63);
+    file.padColour[9] = 40;
+    programsReadFromFile(file);
+    check(padColour(9) == 0, "bad colour -> Auto", 9);
+    file.version = 3;
+    programsReadFromFile(file);
+    check(padColour(5) == 0 && padColour(63) == 0, "version 3 block -> Auto", 5);
+    file.version = 4;
+    file.padColour[9] = 0;
+    mtProject.pads = def;
+    programsWriteToFile(file);
 
     // 2b. Cut on release (5b-6a) is kept apart from mode and group
     mtProject.pads.pad[41].mode = padModeByte(kPadModeGate, 9, true);

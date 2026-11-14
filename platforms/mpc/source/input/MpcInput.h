@@ -145,6 +145,8 @@ class MpcInput
     void pollPadLights();
     void setPadLed(int pad, uint8_t r, uint8_t g, uint8_t b);
     void padLedsOff();
+    int lastEngineNote = -1; // the last pad (note) the pad engine took
+    bool turnHeldPadColour(int steps);
     uint32_t beatLedMs = 0;      // when TAP TEMPO last flashed
     uint32_t beatRefMs = 0;      // free-running beat clock while stopped
     int lastBeatPos = -1;        // sequencer row seen last while playing
