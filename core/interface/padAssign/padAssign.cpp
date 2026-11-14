@@ -2,6 +2,7 @@
 #include "padAssign/padAssign.h"
 
 #include "core/interface.h"
+#include "fileManager.h"
 #include "mpdjPads.h"
 #include "mpdjPrograms.h"
 #include "mtStructs.h"
@@ -41,6 +42,10 @@ void functSwitchModule(uint8_t button)
 {
     PA->eventFunct(eventSwitchModule, PA, &button, 0);
 }
+
+void functEncoder(int16_t value) { PA->changeValue(value); }
+
+int clampInt(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
 void functLeft() { PA->moveSelection(-1, 0); }
 void functRight() { PA->moveSelection(1, 0); }
@@ -145,6 +150,7 @@ void cPadAssign::start(uint32_t options)
     ip->setButtonObj(interfaceButtonDown, buttonPress, functDown);
     for (int b = 0; b < 8; b++)
         ip->setButtonObj(interfaceButton0 + b, functActionButton);
+    ip->setPotObj(interfacePot0, functEncoder); // QL4 / main encoder: the value (5d-2)
 
     titleBar->show();
     for (hControl l : label)
@@ -199,6 +205,49 @@ void cPadAssign::selectParam(int p)
 {
     p = p < 0 ? 0 : (p >= ParamCount ? ParamCount - 1 : p);
     param = (uint8_t)p;
+    refresh();
+}
+
+// 5d-2: one step of the selected setting per encoder message; edits go into
+// the project's pad map at once (saved with the project)
+void cPadAssign::changeValue(int steps)
+{
+    if (selPad < 0 || selPad >= kPads || steps == 0)
+        return;
+    strPadSlot& p = mtProject.pads.pad[selPad];
+    int dir = steps > 0 ? 1 : -1;
+    switch (param)
+    {
+    case ParamProgram:
+    {
+        // None, then slots 1-64 (index -1 = None)
+        int v = p.program == kPadNoProgram ? -1 : p.program;
+        v = clampInt(v + steps, -1, kProgramSlots - 1);
+        p.program = v < 0 ? kPadNoProgram : (uint8_t)v;
+        break;
+    }
+    case ParamTrack: p.track = (uint8_t)clampInt(p.track + steps, 0, kAllTracks - 1); break;
+    case ParamTune:
+    {
+        // semitones from the sample's own pitch (C5 = 60); 0 = "own pitch"
+        int st = p.note < 0 ? 0 : p.note - 60;
+        st = clampInt(st + steps, -48, 48);
+        p.note = st == 0 ? kPadNoteDefault : (int8_t)(60 + st);
+        break;
+    }
+    case ParamLevel: break; // 5d-3
+    case ParamMode:
+    {
+        int m = clampInt(padModeOf(p.mode) + dir, 0, kPadModeCount - 1);
+        p.mode = padModeByte((PadMode)m, padGroupOf(p.mode), padCutOf(p.mode));
+        break;
+    }
+    case ParamChoke: setPadGroup(selPad, (uint8_t)clampInt(padGroupOf(p.mode) + steps, 0, kPadGroups)); break;
+    case ParamCut: setPadCutOnRelease(selPad, dir > 0); break;
+    case ParamColour: setPadColour(selPad, (uint8_t)clampInt(padColour(selPad) + dir, 0, kPadColours)); break;
+    default: return;
+    }
+    newFileManager.setProjectStructChanged();
     refresh();
 }
 

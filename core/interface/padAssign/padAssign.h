@@ -42,6 +42,9 @@ class cPadAssign : public ModuleBase
     // QL1 / QL2 (Left / Right / Up / Down) move around the grid
     void moveSelection(int dx, int dy);
 
+    // QL4 / main encoder: change the selected setting of the selected pad (5d-2)
+    void changeValue(int steps);
+
     void refresh();
 
   private:
