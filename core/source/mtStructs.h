@@ -1198,8 +1198,8 @@ struct strMtConfig
         // MPDJ (5f-1): FULL LEVEL in new projects (the project keeps its own)
         uint8_t fullLevelDefault = 0;
         // MPDJ (2026-11-14): how long a popup message stays (index into
-        // kPopupTimesMs: 0.5, 1, 1.5, 2, 3, 4, 5 s; default 1 s)
-        uint8_t popupTime = 1;
+        // kPopupTimesMs: 0.5, 1, 1.5, 2, 3, 4, 5 s; default 0.5 s, Mike)
+        uint8_t popupTime = 0;
 #endif
     } general;
 
