@@ -72,6 +72,7 @@ enum class Act : uint8_t
     QLinkMode,   // Q-LINK: Q-Link modes 1 (navigate) > 2 (screen buttons 1-4) > 3 (5-8)
     PadGrid,     // 16 LEVELS: Pattern screen pads = pad map / the Tracker's 4x12 grid
     NoteRepeat,  // NOTE REPEAT: held = held pads retrigger; SHIFT = latch on / off (5b-7a)
+    Tc,          // TC: timing correct on / off (quantized live REC vs micromoves)
 };
 
 struct ButtonMap
@@ -106,6 +107,7 @@ const ButtonMap kButtonMap[] = {
     { 0, Act::QLinkMode, -1, "Q-LINK" },
     { 40, Act::PadGrid, -1, "16 LEVELS" }, // for now (5b-3); later the chromatic mode
     { 11, Act::NoteRepeat, -1, "NOTE REPEAT" },
+    { 12, Act::Tc, -1, "TC" },
     // Not mapped yet: TRACK MUTE,
     // FULL LEVEL, STEP SEQ, TC, OVER DUB (pad work, milestone 5)
 };
@@ -732,6 +734,20 @@ void MpcInput::onButton(uint8_t note, bool down)
             levelsHeld = true;
             levelsTurned = false;
             break;
+        case Act::Tc:
+        {
+            // TC off records micromoves, so the Pattern screen shows them
+            // (the Mic/Vol view); TC on goes back to the FX view
+            bool on = !mpdjTcOn();
+            mpdjTcSet(on);
+            if (mtInterface.isPatternScreenActive() && !patternEditor.fillState)
+            {
+                int param = patternEditor.editParam;
+                setEditColumn(param, !on);
+            }
+            mtPopups.show(0, on ? "TC on: hits on the row" : "TC off: micromoves recorded");
+            break;
+        }
         case Act::NoteRepeat:
             if (mpcShift)
             {
@@ -1991,10 +2007,11 @@ void MpcInput::pollButtonLeds()
     set(42, when(mtInterface.isPerformanceModeScreenActive()));            // NEXT SEQ (SHIFT = Performance)
     set(122, when(noteDown[122]));                                         // COPY
     set(49, when(mpcShift));                                               // SHIFT
-    // Not built yet (milestone 5): TRACK MUTE, OVER DUB, TC,
+    // Not built yet (milestone 5): TRACK MUTE, OVER DUB,
     // FULL LEVEL, STEP SEQ. Later, banks: dim when they hold samples,
     // dark when empty (Mike 2026-11-12)
-    for (uint8_t cc : { 43, 80, 12, 39, 41 })
+    set(12, mpdjTcOn() ? Lit::Active : Lit::NotAvailable); // TC: lit while on, dark when off
+    for (uint8_t cc : { 43, 80, 39, 41 })
         set(cc, Lit::NotAvailable);
 }
 

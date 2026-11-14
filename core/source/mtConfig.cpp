@@ -413,6 +413,8 @@ void checkConfig()
         mtConfig.general.padVelToVolume = 1;
     if (mtConfig.general.notesSource > 1)
         mtConfig.general.notesSource = 0;
+    if (mtConfig.general.tcDefault > 1)
+        mtConfig.general.tcDefault = 1;
 #endif
     if (mtConfig.general.performanceSource > 1)
         mtConfig.general.performanceSource = 0;
@@ -579,6 +581,7 @@ void resetConfig()
     mtConfig.general.padTop = 18;        // 100%
     mtConfig.general.padVelToVolume = 1; // On
     mtConfig.general.notesSource = 0;    // last pad
+    mtConfig.general.tcDefault = 1;      // TC on
 #endif
 
     // interface ----------------------------------------

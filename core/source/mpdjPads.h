@@ -141,6 +141,12 @@ bool mpdjNotesSource(strPadSlot* out); // false: nothing to play
 const char* mpdjNotesPress(int pad, uint8_t velocity);
 void mpdjSetCursorTrack(int track);
 
+// Timing correct (TC button, 2026-11-14): on = live REC puts hits on the
+// nearest row and writes no micromove; off = micromoves recorded. Starts
+// from Config > General "Timing correct" (on); a change there applies at once
+bool mpdjTcOn();
+void mpdjTcSet(bool on);
+
 // 16 Levels (5b-9; 16 LEVELS): the 16 pads play what the last hit played
 // (a pad-map pad or a Notes-mode note) at 16 velocities, pad 1 softest
 // (8) .. pad 16 a full hit (127), before Config's pad sensitivity. Plays,

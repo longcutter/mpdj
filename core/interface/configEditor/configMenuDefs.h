@@ -266,6 +266,8 @@ const char* const padVelVolTexts[2] = { "Off", "On" };
 const char padCurveDesc[] = { "How pad velocity maps to level. Soft: light hits come out louder. Hard: you have to hit harder." };
 const char padTopDesc[] = { "A full pad hit's level as a percentage of the program's volume (100%: a full hit plays at the program's volume)." };
 const char* const notesSourceTexts[2] = { "Last pad", "Title bar" };
+const char* const tcDefaultTexts[2] = { "Off", "On" };
+const char tcDefaultDesc[] = { "Timing correct (the TC button) when MPDJ starts. On: live recording puts every hit on the nearest row, no micromove. Off: micromoves are recorded. TC switches it until the next start." };
 const char notesSourceDesc[] = { "What Notes mode (SHIFT+16 LEVELS) plays. Last pad: the program of the last pad you hit, on its track. Title bar: the program in the title bar, on the cursor's track." };
 const char padVelVolDesc[] = { "Recording writes each pad hit's velocity into the volume column. Off: the column stays empty and notes play at the program's volume." };
 #endif

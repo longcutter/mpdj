@@ -2609,6 +2609,9 @@ uint8_t Sequencer::getDestRecordingStep(uint8_t track, bool quantize, bool noteO
 
 uint8_t Sequencer::recMicrotiming()
 {
+#ifdef PLATFORM_MPC
+    return !mpdjTcOn(); // MPDJ: the TC button decides (TC on = quantized, no micromove)
+#endif
     return mtConfig.general.recOptions == recOptions_microtimingAndVelocity ||
            mtConfig.general.recOptions == recOptions_microtiming;
 }

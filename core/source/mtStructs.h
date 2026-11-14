@@ -1180,6 +1180,9 @@ struct strMtConfig
         // MPDJ (5b-8a): what Notes mode plays: 0 = the last pad hit (its
         // program on its track), 1 = the title bar's program on the cursor's track
         uint8_t notesSource = 0;
+        // MPDJ (TC, 2026-11-14): Timing correct when MPDJ starts: 1 = on (live
+        // REC quantizes to the row, no micromove), 0 = off; TC toggles it per session
+        uint8_t tcDefault = 1;
 #endif
     } general;
 

@@ -293,6 +293,33 @@ const char* padPress(int pad, const strPadSlot* p, uint8_t velocity)
 }
 }
 
+// ---------------------------------------------------------------- TC
+namespace
+{
+int s_tc = -1;            // -1 = not read yet
+uint8_t s_tcConfig = 0xFF; // the Config value last seen
+}
+
+bool mpdjTcOn()
+{
+#ifdef PLATFORM_MPC
+    if (mtConfig.general.tcDefault != s_tcConfig) // start, or changed in Config
+    {
+        s_tcConfig = mtConfig.general.tcDefault;
+        s_tc = s_tcConfig ? 1 : 0;
+    }
+    return s_tc == 1;
+#else
+    return false;
+#endif
+}
+
+void mpdjTcSet(bool on)
+{
+    mpdjTcOn(); // read the Config value first, so it doesn't override this later
+    s_tc = on ? 1 : 0;
+}
+
 // ---------------------------------------------------------------- Notes mode
 void mpdjSetCursorTrack(int track)
 {
