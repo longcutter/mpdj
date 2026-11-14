@@ -173,6 +173,15 @@ const char* mpdjErasePadDown(int pad);
 void mpdjErasePadUp(int pad);
 void mpdjEraseEnd(); // ERASE released
 void mpdjEraseTick(int row); // audio thread, before the row plays
+
+// STEP SEQ (5f-4): an x0x step sequencer for one sound = a pad-map pad (the
+// last pad hit until one is picked). Toggle = add the sound at `row` (one
+// undo step; velocity as a pad hit, FULL LEVEL applies), or remove it if the
+// row holds a note of its program. Returns 1 added, 0 removed, -1 nothing.
+int mpdjStepSeqPad();
+void mpdjStepSeqSetPad(int pad);
+int mpdjStepSeqToggle(int row, uint8_t velocity);
+bool mpdjStepSeqHas(int row); // the row holds the sound's program on its track
 // Live REC (5b-7c): a pad pressed with Note Repeat on writes its note with a
 // Roll at the division when the Roll has it (1/16, 1/32, 1/32T) and an OFF
 // (CUT with cut on release) at its release; at other divisions, or for a pad

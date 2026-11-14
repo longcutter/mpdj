@@ -79,6 +79,7 @@ enum class Act : uint8_t
     TrackMute,   // TRACK MUTE: the Track Mute screen (5e-1)
     FullLevel,   // FULL LEVEL: pads at the full-hit level, per project (5f-1)
     Overdub,     // OVER DUB: latch; live REC replaces and clears ahead (5f-2)
+    StepSeq,     // STEP SEQ: x0x step sequencer on the Pattern screen (5f-4)
 };
 
 struct ButtonMap
@@ -117,6 +118,7 @@ const ButtonMap kButtonMap[] = {
     { 43, Act::TrackMute, -1, "TRACK MUTE" },
     { 39, Act::FullLevel, -1, "FULL LEVEL" },
     { 80, Act::Overdub, -1, "OVER DUB" },
+    { 41, Act::StepSeq, -1, "STEP SEQ" },
     // Not mapped yet:
     //, STEP SEQ, TC, OVER DUB (pad work, milestone 5)
 };
@@ -524,6 +526,30 @@ void MpcInput::pollPadLights()
         }
         return;
     }
+    if (stepSeq && mtInterface.isPatternScreenActive())
+    {
+        // STEP SEQ (5f-4): the 16 rows of this page: the sound's color bright
+        // where it has a hit, dim where empty, white on the playhead's row,
+        // dark past the pattern's end
+        float base = setting == 1 ? 0.05f : 0.10f, top = setting == 1 ? 0.40f : 1.0f;
+        const strPadSlot* p = padSlot(mpdjStepSeqPad());
+        int len = sequencer.getPatternToUI()->track[0].length;
+        int head = sequencer.isPlay() ? sequencer.getActualPos() : -1;
+        static const uint8_t kHead[3] = { 110, 110, 110 };
+        for (int n = 0; n < 16; n++)
+        {
+            int row = padBank * 16 + n;
+            if (setting == 0 || !p || row > len)
+            {
+                setPadLed(n, 0, 0, 0);
+                continue;
+            }
+            const uint8_t* c = row == head ? kHead : padColorRgb(mpdjStepSeqPad(), p->track);
+            float k = row == head ? top * 0.6f : mpdjStepSeqHas(row) ? top * 0.8f : base;
+            setPadLed(n, (uint8_t)(c[0] * k + 0.5f), (uint8_t)(c[1] * k + 0.5f), (uint8_t)(c[2] * k + 0.5f));
+        }
+        return;
+    }
     bool onAssign = mtInterface.isPadAssignScreenActive(); // 5d-1: the plain pad map there
     bool show = setting != 0 && (mtInterface.isPatternScreenActive() || onAssign);
     float base = setting == 1 ? 0.05f : 0.10f, top = setting == 1 ? 0.40f : 1.0f;
@@ -727,6 +753,8 @@ void MpcInput::onButton(uint8_t note, bool down)
             printf("input: pad bank %c\n", 'A' + padBank);
         if (mtInterface.isPadAssignScreenActive())
             padAssign.showBank(padBank); // 5d-1
+        if (stepSeq && mtInterface.isPatternScreenActive())
+            showStepSeqPopup(); // 5f-4: the bank is the page of 16 rows
         return;
     }
 
@@ -936,6 +964,7 @@ void MpcInput::onButton(uint8_t note, bool down)
                 releaseCoreShift();
                 mpdjNotesSet(!mpdjNotesOn());
                 mpdjLevelsSet(false);
+                stepSeq = false;
                 // Notes mode starts on bank B (the sample's own pitch; Mike
                 // 2026-11-14); leaving it returns to the bank used before
                 if (mpdjNotesOn())
@@ -957,6 +986,31 @@ void MpcInput::onButton(uint8_t note, bool down)
             levelsHeld = true;
             levelsTurned = false;
             break;
+        case Act::StepSeq:
+            if (!onPattern)
+                break;
+            stepSeq = !stepSeq;
+            if (stepSeq)
+            {
+                // Notes mode / 16 Levels give way (their pads mean something else)
+                if (mpdjLevelsOn())
+                    mpdjLevelsSet(false);
+                if (mpdjNotesOn())
+                {
+                    mpdjNotesSet(false);
+                    if (bankBeforeNotes >= 0)
+                    {
+                        padBank = bankBeforeNotes;
+                        bankBeforeNotes = -1;
+                    }
+                }
+                padBank = 0; // rows 1-16
+                showStepSeqPopup();
+            }
+            else
+                mtPopups.show(0, "Step Seq off");
+            break;
+
         case Act::Overdub:
             mpdjOverdubSet(!mpdjOverdubOn());
             mtPopups.show(0, mpdjOverdubOn() ? "Over Dub on: replace" : "Over Dub off: add");
@@ -1025,6 +1079,7 @@ void MpcInput::toggleLevels()
 {
     bool on = !mpdjLevelsOn();
     mpdjLevelsSet(on);
+    stepSeq = false;
     if (mpdjNotesOn() && bankBeforeNotes >= 0)
     {
         padBank = bankBeforeNotes; // Notes mode ends here too
@@ -1042,8 +1097,22 @@ void MpcInput::toggleLevels()
     mtPopups.show(0, msg);
 }
 
+void MpcInput::showStepSeqPopup()
+{
+    static char msg[48]; // the popup keeps the pointer
+    int pad = mpdjStepSeqPad();
+    char name[4];
+    padName(pad, name);
+    const strPadSlot* p = padSlot(pad);
+    snprintf(msg, sizeof msg, "Step Seq: %s on track %d, rows %d-%d", name, p ? p->track + 1 : 0,
+             padBank * 16 + 1, padBank * 16 + 16);
+    mtPopups.show(0, msg);
+}
+
 void MpcInput::pollLevels()
 {
+    if (stepSeq && !mtInterface.isPatternScreenActive())
+        stepSeq = false; // leaving the Pattern screen ends STEP SEQ (as 16 Levels)
     if (mpdjLevelsOn() && !mtInterface.isPatternScreenActive())
         mpdjLevelsSet(false); // BROWSE, MAIN, any other screen
 }
@@ -1236,6 +1305,39 @@ void MpcInput::onPad(uint8_t note, bool down, uint8_t velocity)
     {
         mpdjErasePadUp(erasePadHeld[note & 127]);
         erasePadHeld[note & 127] = -1;
+        return;
+    }
+    if (stepSeq && mtInterface.isPatternScreenActive())
+    {
+        // STEP SEQ (5f-4): pad N = row (bank * 16 + N) of the sound's track;
+        // SHIFT + pad = that pad-map pad becomes the sound
+        if (!down)
+            return;
+        int n = padNumber(note);
+        if (!n)
+            return;
+        if (mpcShift)
+        {
+            mpdjStepSeqSetPad(padIndex(padBank, n));
+            showStepSeqPopup();
+            return;
+        }
+        int row = padBank * 16 + n - 1;
+        if (mpdjStepSeqToggle(row, velocity) >= 0)
+        {
+            cPatternEditor& pe = patternEditor;
+            const strPadSlot* p = padSlot(mpdjStepSeqPad());
+            int columns = pe.patternViewMode > 0 ? 8 : 4;
+            int first = pe.trackerPattern.firstVisibleTrack, track = p ? p->track : 0;
+            if (track < first)
+                first = track;
+            else if (track >= first + columns)
+                first = track - (columns - 1);
+            if (first > kAllTracks - columns)
+                first = kAllTracks - columns;
+            pe.trackerPattern.firstVisibleTrack = (int8_t)(first < 0 ? 0 : first);
+            pe.refreshPattern();
+        }
         return;
     }
     if (down && noteDown[kNoteErase] && mtInterface.isPatternScreenActive())
@@ -2340,8 +2442,7 @@ void MpcInput::pollButtonLeds()
     // FULL LEVEL, STEP SEQ. Later, banks: dim when they hold samples,
     // dark when empty (Mike 2026-11-12)
     set(12, mpdjTcOn() ? Lit::Active : Lit::NotAvailable); // TC: lit while on, dark when off
-    for (uint8_t cc : { 41 })
-        set(cc, Lit::NotAvailable);
+    set(41, stepSeq ? Lit::Active : (mtInterface.isPatternScreenActive() ? Lit::Available : Lit::NotAvailable)); // STEP SEQ (5f-4)
 }
 
 // ---------------------------------------------------------------- touchscreen

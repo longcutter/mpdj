@@ -1198,3 +1198,45 @@ void mpdjEraseTick(int row)
             s_odErased.store(true); // the UI marks the pattern changed (mpdjOverdubPoll)
     }
 }
+
+// ---- STEP SEQ (5f-4) -----------------------------------------------------------
+static int s_stepPad = -1;
+
+int mpdjStepSeqPad() { return s_stepPad >= 0 ? s_stepPad : (s_lastPad >= 0 ? s_lastPad : 0); }
+
+void mpdjStepSeqSetPad(int pad)
+{
+    if (pad >= 0 && pad < kPads)
+        s_stepPad = pad;
+}
+
+bool mpdjStepSeqHas(int row)
+{
+    const strPadSlot* p = padSlot(mpdjStepSeqPad());
+    Sequencer::strPattern* pt = sequencer.getPatternToUI();
+    if (!p || p->program == kPadNoProgram || !pt || row < 0 || row > pt->track[0].length)
+        return false;
+    const auto& st = pt->track[p->track].step[row];
+    return st.note >= 0 && st.instrument == p->program;
+}
+
+int mpdjStepSeqToggle(int row, uint8_t velocity)
+{
+    const strPadSlot* p = padSlot(mpdjStepSeqPad());
+    Sequencer::strPattern* pt = sequencer.getPatternToUI();
+    if (!p || p->program == kPadNoProgram || programType(p->program) == kProgramEmpty || !pt || row < 0 ||
+        row > pt->track[0].length)
+        return -1;
+    if (mpdjStepSeqHas(row))
+    {
+        newFileManager.storePatternUndoRevision();
+        sequencer.mpdjEraseHit(pt, p->track, row, p->program, -1);
+        newFileManager.setActualPatternStructChanged();
+        return 0;
+    }
+    uint8_t note = p->note < 0 ? (uint8_t)Sequencer::STEP_NOTE_DEFAULT : (uint8_t)p->note;
+    if (mtProject.mpdjFullLevel)
+        velocity = 127;
+    uint8_t velo = padVelocity(p->program, velocity ? velocity : 1);
+    return sequencer.mpdjPadStepWrite(p->track, (uint8_t)row, p->program, note, velo, padVelocityToVolume()) < 0 ? -1 : 1;
+}
