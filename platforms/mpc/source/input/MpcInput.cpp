@@ -824,15 +824,17 @@ void MpcInput::turnNotesScale(int steps)
         root = (uint8_t)(root - root % 12 + pc);
         if (root > 36)
             root -= 12;
-        snprintf(msg, sizeof msg, "Notes root: %s", mtNotes[60 + pc]);
     }
     else
     {
         uint8_t& scale = mtProject.values.padBoardScale;
         int s = scale + dir;
         scale = (uint8_t)(s < 0 ? 0 : (s > MAX_SCALE ? MAX_SCALE : s));
-        snprintf(msg, sizeof msg, "Notes scale: %s", scaleNames[scale]);
     }
+    // "Key: D Minor" (the note name without its octave)
+    static const char* const kPitch[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+    snprintf(msg, sizeof msg, "Key: %s %s", kPitch[mtProject.values.padBoardRootNote % 12],
+             scaleNames[mtProject.values.padBoardScale]);
     setPadBoardValues();
     mtPopups.show(0, msg);
 }
@@ -1215,9 +1217,11 @@ void MpcInput::onRelative(uint8_t cc, uint8_t value)
             turnRepeatDivision(steps); // NOTE REPEAT held: the division (5b-7b)
             return;
         }
-        if (levelsHeld && mpdjNotesOn())
+        if (levelsHeld && mtInterface.isPatternScreenActive())
         {
-            turnNotesScale(steps); // 16 LEVELS held in Notes mode: scale; + SHIFT: root (5b-8b)
+            // 16 LEVELS held on the Pattern screen (any pad mode): the project
+            // scale; + SHIFT: the root, i.e. the key (5b-8b, Mike 2026-11-14)
+            turnNotesScale(steps);
             return;
         }
         if (!pointScreenZoom(steps))
