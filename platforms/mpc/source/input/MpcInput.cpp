@@ -478,6 +478,7 @@ void MpcInput::pollPadLights()
     bool notes = mpdjNotesOn(), levels = mpdjLevelsOn();
     int rootPc = mtProject.values.padBoardRootNote % 12;
     static const uint8_t kRootRed[3] = { 127, 0, 0 };
+    static const uint8_t kNoteWhite[3] = { 110, 110, 110 };
     for (int n = 0; n < 16; n++)
     {
         int pad = padBank * 16 + n;
@@ -503,9 +504,11 @@ void MpcInput::pollPadLights()
             level = trackHitLevel[t] / 50.0f * (1.0f - (now - trackHitMs[t]) / (float)kPadFlashMs);
         level = level > 1 ? 1 : level;
         float k = base + (top - base) * level;
-        const uint8_t* c = notes || levels ? kPadPalette[t & 15] : padColourRgb(pad, t); // 5c-2
+        // Notes mode: roots red, the other notes white, not the pad's colour;
+        // 16 Levels: the source's track colour (Mike 2026-11-14)
+        const uint8_t* c = notes ? kNoteWhite : levels ? kPadPalette[t & 15] : padColourRgb(pad, t);
         if (notes && slot.note >= 0 && slot.note % 12 == rootPc)
-            c = kRootRed; // Notes mode: the key's root pads are red (Mike 2026-11-14)
+            c = kRootRed;
         if (levels && level == 0)
             k = base + (top - base) * 0.4f * (n + 1) / 16.0f; // 16 Levels: a ramp, pad 1 dimmest
         setPadLed(n, (uint8_t)(c[0] * k + 0.5f), (uint8_t)(c[1] * k + 0.5f), (uint8_t)(c[2] * k + 0.5f));

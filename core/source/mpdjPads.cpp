@@ -147,8 +147,7 @@ static bool resolvePad(int pad, strPadSlot* out, uint8_t* velocity, const char**
     {
         if (!s_lastSlotValid)
         {
-            *msg = "16 Levels: hit a pad first";
-            return false;
+            return false; // nothing to play yet (the 16 LEVELS popup says so)
         }
         *out = s_lastSlot;
         *velocity = mpdjLevelsVelocity(pad);
@@ -158,7 +157,7 @@ static bool resolvePad(int pad, strPadSlot* out, uint8_t* velocity, const char**
     {
         if (!mpdjNotesSource(out))
         {
-            *msg = "Notes: no program";
+            // nothing to play (the SHIFT+16 LEVELS popup says so)
             return false;
         }
         out->note = (int8_t)mpdjNotesNote(pad);
@@ -220,21 +219,14 @@ namespace
 // what Notes mode makes of it)
 const char* padPress(int pad, const strPadSlot* p, uint8_t velocity)
 {
-    static char msg[32];
     if (!p)
         return nullptr;
     char name[4];
     padName(pad, name);
-    if (p->program == kPadNoProgram)
-    {
-        snprintf(msg, sizeof msg, "%s: no program", name);
-        return msg;
-    }
-    if (programType(p->program) == kProgramEmpty)
-    {
-        snprintf(msg, sizeof msg, "%s: slot %02d empty", name, p->program + 1);
-        return msg;
-    }
+    // an empty pad plays nothing and says nothing: its light is dark (Mike
+    // 2026-11-14, the popup went with the pad lights)
+    if (p->program == kPadNoProgram || programType(p->program) == kProgramEmpty)
+        return nullptr;
     if (s_held[pad].track >= 0)
         mpdjPadRelease(pad); // a second press before the release (shouldn't happen)
 
@@ -417,7 +409,7 @@ const char* mpdjNotesPress(int pad, uint8_t velocity)
 {
     strPadSlot slot;
     if (!mpdjNotesSource(&slot))
-        return "Notes: no program";
+        return nullptr;
     slot.note = (int8_t)mpdjNotesNote(pad);
     return padPress(pad, &slot, velocity);
 }
