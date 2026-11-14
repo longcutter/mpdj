@@ -19,6 +19,8 @@
 #include "mpdjPads.h"
 #include "patternEditor/patternEditor.h"
 #include "padAssign/padAssign.h"
+#include "trackMute/trackMute.h"
+#include "mpdjTracks.h"
 #include "projectEditor/projectEditor.h"
 #include "sampleEditor/sampleEditor.h"
 #include "samplePlayback/samplePlayback.h"
@@ -74,6 +76,7 @@ enum class Act : uint8_t
     PadGrid,     // 16 LEVELS: Pattern screen pads = pad map / the Tracker's 4x12 grid
     NoteRepeat,  // NOTE REPEAT: held = held pads retrigger; SHIFT = latch on / off (5b-7a)
     Tc,          // TC: timing correct on / off (quantized live REC vs micromoves)
+    TrackMute,   // TRACK MUTE: the Track Mute screen (5e-1)
 };
 
 struct ButtonMap
@@ -109,7 +112,8 @@ const ButtonMap kButtonMap[] = {
     { 40, Act::PadGrid, -1, "16 LEVELS" }, // for now (5b-3); later the chromatic mode
     { 11, Act::NoteRepeat, -1, "NOTE REPEAT" },
     { 12, Act::Tc, -1, "TC" },
-    // Not mapped yet: TRACK MUTE,
+    { 43, Act::TrackMute, -1, "TRACK MUTE" },
+    // Not mapped yet:
     // FULL LEVEL, STEP SEQ, TC, OVER DUB (pad work, milestone 5)
 };
 
@@ -476,6 +480,38 @@ void MpcInput::pollPadLights()
         }
     }
     uint8_t setting = mtConfig.general.padLights; // 0 Off, 1 Dim, 2 Bright
+    if (mtInterface.isTrackMuteScreenActive())
+    {
+        // Track Mute (5e-1): pad N = track N: playing tracks in their color,
+        // brighter as they play; muted tracks dim red
+        float base = setting == 1 ? 0.05f : 0.10f, top = setting == 1 ? 0.40f : 1.0f;
+        static const uint8_t kMutedRed[3] = { 127, 0, 0 };
+        for (int t = 0; t < 16; t++)
+        {
+            if (setting == 0)
+            {
+                setPadLed(t, 0, 0, 0);
+                continue;
+            }
+            const uint8_t* c = kPadPalette[t];
+            float k;
+            if (trackMuteRef(t))
+            {
+                c = kMutedRed;
+                k = base;
+            }
+            else
+            {
+                float level = 0;
+                if (trackHitCount[t] && now - trackHitMs[t] < kPadFlashMs)
+                    level = trackHitLevel[t] / 50.0f * (1.0f - (now - trackHitMs[t]) / (float)kPadFlashMs);
+                level = level > 1 ? 1 : level;
+                k = base + (top - base) * (0.35f + 0.65f * level);
+            }
+            setPadLed(t, (uint8_t)(c[0] * k + 0.5f), (uint8_t)(c[1] * k + 0.5f), (uint8_t)(c[2] * k + 0.5f));
+        }
+        return;
+    }
     bool onAssign = mtInterface.isPadAssignScreenActive(); // 5d-1: the plain pad map there
     bool show = setting != 0 && (mtInterface.isPatternScreenActive() || onAssign);
     float base = setting == 1 ? 0.05f : 0.10f, top = setting == 1 ? 0.40f : 1.0f;
@@ -907,6 +943,11 @@ void MpcInput::onButton(uint8_t note, bool down)
             levelsHeld = true;
             levelsTurned = false;
             break;
+        case Act::TrackMute:
+            releaseCoreShift();
+            mtInterface.mpdjToggleTrackMute();
+            break;
+
         case Act::Tc:
         {
             // TC off records micromoves, so the Pattern screen shows them
@@ -1167,6 +1208,13 @@ void MpcInput::onPad(uint8_t note, bool down, uint8_t velocity)
     {
         mpdjPadRelease(enginePadHeld[note]);
         enginePadHeld[note] = -1;
+        return;
+    }
+    if (down && mtInterface.isTrackMuteScreenActive())
+    {
+        // Track Mute (5e-1): pad N mutes / unmutes track N, whatever the bank
+        if (int n = padNumber(note))
+            trackMute.toggle(n - 1);
         return;
     }
     if (down && mtInterface.isPadAssignScreenActive())
@@ -1958,6 +2006,8 @@ void MpcInput::onScreenTap(float x, float y)
         tapPatternCell(x, y);
     else if (mtInterface.isPadAssignScreenActive())
         padAssign.selectPad(padAssign.padAt(x, y)); // select only, no sound (Mike 2026-11-14)
+    else if (mtInterface.isTrackMuteScreenActive())
+        trackMute.toggle(trackMute.trackAt(x, y)); // 5e-1
 }
 
 void MpcInput::setEditParam(int p)
@@ -2236,11 +2286,12 @@ void MpcInput::pollButtonLeds()
     set(42, when(mtInterface.isPerformanceModeScreenActive()));            // NEXT SEQ (SHIFT = Performance)
     set(122, when(noteDown[122]));                                         // COPY
     set(49, when(mpcShift));                                               // SHIFT
-    // Not built yet (milestone 5): TRACK MUTE, OVER DUB,
+    set(43, when(mtInterface.isTrackMuteScreenActive()));                 // TRACK MUTE (5e-1)
+    // Not built yet (milestone 5): OVER DUB,
     // FULL LEVEL, STEP SEQ. Later, banks: dim when they hold samples,
     // dark when empty (Mike 2026-11-12)
     set(12, mpdjTcOn() ? Lit::Active : Lit::NotAvailable); // TC: lit while on, dark when off
-    for (uint8_t cc : { 43, 80, 39, 41 })
+    for (uint8_t cc : { 80, 39, 41 })
         set(cc, Lit::NotAvailable);
 }
 

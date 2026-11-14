@@ -14,6 +14,7 @@
 #include "masterParams/masterParams.h"
 #include "patternEditor/patternEditor.h"
 #include "padAssign/padAssign.h" // MPDJ
+#include "trackMute/trackMute.h" // MPDJ
 #include "performanceMode/performanceMode.h"
 #include "projectEditor/projectEditor.h"
 #include "sampleEditor/sampleEditor.h"
@@ -607,6 +608,25 @@ void Interface::mpdjTogglePadAssign()
     if (onScreenModule != nullptr)
         deactivateModule(onScreenModule);
     activateModule(&padAssign, 0);
+}
+
+bool Interface::isTrackMuteScreenActive()
+{
+    return isOnScreenModule(&trackMute);
+}
+
+// MPDJ 5e-1: TRACK MUTE opens the Track Mute screen; again = back
+void Interface::mpdjToggleTrackMute()
+{
+    if (onScreenModule == &trackMute)
+    {
+        if (previousModule != nullptr && previousModule != &trackMute)
+            switchModuleToPrevious(&trackMute, 0);
+        return;
+    }
+    if (onScreenModule != nullptr)
+        deactivateModule(onScreenModule);
+    activateModule(&trackMute, 0);
 }
 
 bool Interface::isPerformanceModeScreenActive()

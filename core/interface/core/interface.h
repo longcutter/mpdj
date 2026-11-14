@@ -58,6 +58,8 @@ class Interface
     // screen it was opened from
     bool isPadAssignScreenActive();
     void mpdjTogglePadAssign();
+    bool isTrackMuteScreenActive(); // MPDJ 5e
+    void mpdjToggleTrackMute();
     bool isPerformanceModeScreenActive();
     bool isMasterScreenActive();
     bool isInstrumentParamsScreenActive();
