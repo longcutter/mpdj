@@ -13,6 +13,7 @@
 #include "instrumentEditor/instrumentEditor.h"
 #include "masterParams/masterParams.h"
 #include "patternEditor/patternEditor.h"
+#include "padAssign/padAssign.h" // MPDJ
 #include "performanceMode/performanceMode.h"
 #include "projectEditor/projectEditor.h"
 #include "sampleEditor/sampleEditor.h"
@@ -588,6 +589,24 @@ bool Interface::isSongScreenActive()
 bool Interface::isPatternScreenActive()
 {
     return isOnScreenModule(&patternEditor);
+}
+
+bool Interface::isPadAssignScreenActive()
+{
+    return isOnScreenModule(&padAssign);
+}
+
+void Interface::mpdjTogglePadAssign()
+{
+    if (onScreenModule == &padAssign)
+    {
+        if (previousModule != nullptr && previousModule != &padAssign)
+            switchModuleToPrevious(&padAssign, 0);
+        return;
+    }
+    if (onScreenModule != nullptr)
+        deactivateModule(onScreenModule);
+    activateModule(&padAssign, 0);
 }
 
 bool Interface::isPerformanceModeScreenActive()

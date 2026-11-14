@@ -18,6 +18,7 @@
 #include "configEditor/configMenuActions.h"
 #include "mpdjPads.h"
 #include "patternEditor/patternEditor.h"
+#include "padAssign/padAssign.h"
 #include "projectEditor/projectEditor.h"
 #include "sampleEditor/sampleEditor.h"
 #include "samplePlayback/samplePlayback.h"
@@ -116,6 +117,7 @@ constexpr uint8_t kNoteBankA = 35, kNoteBankD = 38;
 constexpr uint8_t kNoteShift = 49;
 constexpr uint8_t kNoteNoteRepeat = 11;
 constexpr uint8_t kNote16Levels = 40;
+constexpr uint8_t kNoteProgramEdit = 2;
 constexpr uint8_t kNoteMain = 52;
 constexpr uint8_t kNoteErase = 9;
 
@@ -473,9 +475,10 @@ void MpcInput::pollPadLights()
         }
     }
     uint8_t setting = mtConfig.general.padLights; // 0 Off, 1 Dim, 2 Bright
-    bool show = setting != 0 && mtInterface.isPatternScreenActive();
+    bool onAssign = mtInterface.isPadAssignScreenActive(); // 5d-1: the plain pad map there
+    bool show = setting != 0 && (mtInterface.isPatternScreenActive() || onAssign);
     float base = setting == 1 ? 0.05f : 0.10f, top = setting == 1 ? 0.40f : 1.0f;
-    bool notes = mpdjNotesOn(), levels = mpdjLevelsOn();
+    bool notes = mpdjNotesOn() && !onAssign, levels = mpdjLevelsOn() && !onAssign;
     int rootPc = mtProject.values.padBoardRootNote % 12;
     static const uint8_t kRootRed[3] = { 127, 0, 0 };
     static const uint8_t kNoteWhite[3] = { 110, 110, 110 };
@@ -484,7 +487,10 @@ void MpcInput::pollPadLights()
         int pad = padBank * 16 + n;
         strPadSlot slot;
         uint8_t vel;
-        if (!show || !mpdjPadLightSlot(pad, &slot, &vel) || slot.program == kPadNoProgram ||
+        bool have = onAssign ? (padSlot(pad) != nullptr) : mpdjPadLightSlot(pad, &slot, &vel);
+        if (onAssign && have)
+            slot = *padSlot(pad);
+        if (!show || !have || slot.program == kPadNoProgram ||
             programType(slot.program) == kProgramEmpty)
         {
             setPadLed(n, 0, 0, 0);
@@ -670,6 +676,8 @@ void MpcInput::onButton(uint8_t note, bool down)
         padBank = note - kNoteBankA;
         if (trace)
             printf("input: pad bank %c\n", 'A' + padBank);
+        if (mtInterface.isPadAssignScreenActive())
+            padAssign.showBank(padBank); // 5d-1
         return;
     }
 
@@ -750,6 +758,15 @@ void MpcInput::onButton(uint8_t note, bool down)
         case Act::Forward:
             if (note == kNoteShift)
                 mpcShift = true;
+            if (note == kNoteProgramEdit && mpcShift)
+            {
+                // SHIFT+PROGRAM EDIT: Pad Assign, or back to the screen before (5d-1)
+                releaseCoreShift();
+                mtInterface.mpdjTogglePadAssign();
+                if (mtInterface.isPadAssignScreenActive())
+                    padAssign.showBank(padBank);
+                break;
+            }
             hold = m->trackerButton;
             break;
 
@@ -1143,6 +1160,24 @@ void MpcInput::onPad(uint8_t note, bool down, uint8_t velocity)
         enginePadHeld[note] = -1;
         return;
     }
+    if (down && mtInterface.isPadAssignScreenActive())
+    {
+        // Pad Assign (5d-1): a hit selects the pad and plays it
+        int n = padNumber(note);
+        if (!n)
+            return;
+        int pad = padIndex(padBank, n);
+        padAssign.selectPad(pad);
+        enginePadHeld[note] = (int8_t)pad;
+        lastEngineNote = note;
+        bool notes = mpdjNotesOn(), levels = mpdjLevelsOn();
+        mpdjNotesSet(false); // the pad map's own pad, whatever the Pattern screen's mode
+        mpdjLevelsSet(false);
+        mpdjPadPress(pad, velocity);
+        mpdjNotesSet(notes);
+        mpdjLevelsSet(levels);
+        return;
+    }
     if (down && padEngineHere())
     {
         int n = padNumber(note);
@@ -1420,7 +1455,9 @@ void MpcInput::onRelative(uint8_t cc, uint8_t value)
             break;
         }
         case 2:
-            if (mtInterface.isPatternScreenActive() && patternEditor.fillState == 0 &&
+            if (mtInterface.isPadAssignScreenActive())
+                padAssign.moveParam(steps); // the setting (5d-1)
+            else if (mtInterface.isPatternScreenActive() && patternEditor.fillState == 0 &&
                 patternEditor.selectedPlace < 0)
                 stepEditParam(steps);
             else if (song)
@@ -2147,12 +2184,13 @@ void MpcInput::pollButtonLeds()
     set(67, !onPattern ? Lit::NotAvailable : when(noteDown[67]));          // UNDO
     set(6, mtInterface.isSampleEditorScreenActive() ? Lit::ActiveRed       // SAMPLE EDIT
            : when(mtInterface.isSamplePlayerScreenActive()));
-    set(2, when(mtInterface.isInstrumentParamsScreenActive()));            // PROGRAM EDIT
+    set(2, when(mtInterface.isInstrumentParamsScreenActive() || mtInterface.isPadAssignScreenActive())); // PROGRAM EDIT
     set(9, noteDown[9] ? Lit::ActiveRed : Lit::Available);                 // ERASE
     // BANK A-D (5c-4): the selected bank bright; on the Pattern screen's pad
     // map a bank whose pads hold programs is dim and an empty one dark (Notes
     // mode / 16 Levels: every bank plays, so all dim)
-    bool padMapHere = onPattern && !padGrid && !mpdjNotesOn() && !mpdjLevelsOn();
+    bool padMapHere = (onPattern && !padGrid && !mpdjNotesOn() && !mpdjLevelsOn()) ||
+                      mtInterface.isPadAssignScreenActive();
     for (int b = 0; b < 4; b++)
     {
         Lit lit = when(padBank == b);

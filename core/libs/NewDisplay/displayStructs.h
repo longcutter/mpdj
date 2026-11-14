@@ -170,6 +170,7 @@ typedef enum enControlId
     controlIdImgGrid,
     controlIdSimpleBox,
     controlIdNotesKeyboardLabel,
+    controlIdMpdjPadGrid, // MPDJ: Pad Assign's 4x4 grid (padGridControl.h)
 
     /*
      *

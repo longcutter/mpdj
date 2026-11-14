@@ -24,6 +24,7 @@
 #include "notePopoutControl.h"
 #include "notesKeyboard.h"
 #include "paramValueList.h"
+#include "padGridControl.h" // MPDJ
 #include "pointsControl.h"
 #include "progressCursorControl.h"
 #include "simpleBox.h"

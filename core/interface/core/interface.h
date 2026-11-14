@@ -54,6 +54,10 @@ class Interface
     void toggleActiveModule(uint8_t state);
     bool isSongScreenActive();
     bool isPatternScreenActive();
+    // MPDJ (5d-1): Pad Assign (SHIFT+PROGRAM EDIT): open it, or back to the
+    // screen it was opened from
+    bool isPadAssignScreenActive();
+    void mpdjTogglePadAssign();
     bool isPerformanceModeScreenActive();
     bool isMasterScreenActive();
     bool isInstrumentParamsScreenActive();
