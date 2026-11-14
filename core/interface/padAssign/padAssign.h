@@ -34,6 +34,8 @@ class cPadAssign : public ModuleBase
     // From the platform: a pad hit on this screen selects it (0-63); a bank
     // button shows that bank (the same pad number there)
     void selectPad(int pad);
+    int padAt(float x, float y) const; // touch -> pad, -1 off the grid
+    static constexpr int kGridX = 6, kGridY = 34, kGridW = 470, kGridH = 382;
     void showBank(int bank);
     int selectedPad() const { return selPad; }
     // Q-Link 3: the setting

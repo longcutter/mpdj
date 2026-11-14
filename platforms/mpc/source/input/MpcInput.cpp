@@ -1939,6 +1939,8 @@ void MpcInput::onScreenTap(float x, float y)
     }
     if (mtInterface.isPatternScreenActive())
         tapPatternCell(x, y);
+    else if (mtInterface.isPadAssignScreenActive())
+        padAssign.selectPad(padAssign.padAt(x, y)); // select only, no sound (Mike 2026-11-14)
 }
 
 void MpcInput::setEditParam(int p)

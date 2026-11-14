@@ -7,6 +7,7 @@
 #include "mpdjPrograms.h"
 #include "mtStructs.h"
 #include "mtSequencer.h"
+#include "mtAudioEngine.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -63,6 +64,25 @@ void functPlayAction()
 
 int clampInt(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
+// 5d-3 (Mike 2026-11-14, option A): Tune and Level belong to the program, not
+// the pad: the program's instrument Tune (semitones) and Volume (0-100), the
+// same values as the Instrument Editor, so the pattern follows too. Per-step
+// tune effects still apply on top. nullptr for no program / MIDI / empty.
+strInstrument* sampleProgram(const strPadSlot* p)
+{
+    if (!p || p->program == kPadNoProgram || p->program >= kSampleInstrumentsCount)
+        return nullptr;
+    if (programType(p->program) != kProgramSample)
+        return nullptr;
+    return &mtProject.instrument[p->program];
+}
+
+void refreshVoices(uint32_t mask)
+{
+    for (uint8_t i = 0; i < audioEngine::kVoices; i++)
+        instrumentPlayer[i].setRefreshBit(mask);
+}
+
 void functLeft() { PA->moveSelection(-1, 0); }
 void functRight() { PA->moveSelection(1, 0); }
 void functUp() { PA->moveSelection(0, 1); }
@@ -81,10 +101,10 @@ void functActionButton(uint8_t button, uint8_t state)
 void cPadAssign::initDisplayControls()
 {
     strControlProperties prop;
-    prop.x = 6;
-    prop.y = 34;
-    prop.w = 470;
-    prop.h = 382;
+    prop.x = kGridX;
+    prop.y = kGridY;
+    prop.w = kGridW;
+    prop.h = kGridH;
     prop.style = controlStyleShow;
     prop.data = &gridData;
     grid = display.createControl<cPadGrid>(&prop);
@@ -195,6 +215,15 @@ void cPadAssign::selectPad(int pad)
     refresh();
 }
 
+// A touch on the grid (Tracker 800x480 coordinates): the pad under it, -1 if none
+int cPadAssign::padAt(float x, float y) const
+{
+    if (x < kGridX || x >= kGridX + kGridW || y < kGridY || y >= kGridY + kGridH)
+        return -1;
+    int col = (int)((x - kGridX) * 4 / kGridW), row = 3 - (int)((y - kGridY) * 4 / kGridH);
+    return (selPad / kPadsPerBank) * kPadsPerBank + row * 4 + col;
+}
+
 void cPadAssign::showBank(int bank)
 {
     if (bank < 0 || bank >= kPadBanks)
@@ -245,14 +274,25 @@ void cPadAssign::changeValue(int steps)
     }
     case ParamTrack: p.track = (uint8_t)clampInt(p.track + steps, 0, kAllTracks - 1); break;
     case ParamTune:
+    case ParamLevel:
     {
-        // semitones from the sample's own pitch (C5 = 60); 0 = "own pitch"
-        int st = p.note < 0 ? 0 : p.note - 60;
-        st = clampInt(st + steps, -48, 48);
-        p.note = st == 0 ? kPadNoteDefault : (int8_t)(60 + st);
+        strInstrument* in = sampleProgram(&p);
+        if (!in)
+            return;
+        if (param == ParamTune)
+        {
+            in->tune = (int8_t)clampInt(in->tune + steps, MIN_INSTRUMENT_TUNE, MAX_INSTRUMENT_TUNE);
+            refreshVoices(TUNE_MASK);
+        }
+        else
+        {
+            in->volume = (uint8_t)clampInt(in->volume + steps, 0, MAX_INSTRUMENT_VOLUME);
+            refreshVoices(VOLUME_MASK);
+        }
+        p.note = kPadNoteDefault; // the 5d-2 build's per-pad tune: back to the program's pitch
+        newFileManager.setInstrumentStructChanged(p.program);
         break;
     }
-    case ParamLevel: break; // 5d-3
     case ParamMode:
     {
         int m = clampInt(padModeOf(p.mode) + dir, 0, kPadModeCount - 1);
@@ -275,14 +315,17 @@ void cPadAssign::fillValues()
         return;
     programName(p->program, paramValues[ParamProgram], sizeof paramValues[0]);
     snprintf(paramValues[ParamTrack], sizeof paramValues[0], "Track %d", p->track + 1);
-    if (p->note < 0)
-        snprintf(paramValues[ParamTune], sizeof paramValues[0], "0 (own pitch)");
+    const strInstrument* in = sampleProgram(p);
+    if (in)
+    {
+        snprintf(paramValues[ParamTune], sizeof paramValues[0], in->tune ? "%+d st" : "0 st", in->tune);
+        snprintf(paramValues[ParamLevel], sizeof paramValues[0], "%u", in->volume);
+    }
     else
     {
-        int st = p->note - 60; // C5 = the sample's own pitch
-        snprintf(paramValues[ParamTune], sizeof paramValues[0], "%+d st", st);
+        snprintf(paramValues[ParamTune], sizeof paramValues[0], "-");
+        snprintf(paramValues[ParamLevel], sizeof paramValues[0], "-");
     }
-    snprintf(paramValues[ParamLevel], sizeof paramValues[0], "100%%"); // per-pad level: 5d-3
     snprintf(paramValues[ParamMode], sizeof paramValues[0], "%s%s", padModeName(p->mode),
              padModeOf(p->mode) == kPadModeAuto ? (padIsGate(selPad) ? " (gate)" : " (one shot)") : "");
     uint8_t g = padGroupOf(p->mode);
@@ -304,8 +347,16 @@ void cPadAssign::fillValues()
     else
         snprintf(labelValues[ParamProgram], sizeof labelValues[0], "%02d", p->program + 1);
     snprintf(labelValues[ParamTrack], sizeof labelValues[0], "%d", p->track + 1);
-    snprintf(labelValues[ParamTune], sizeof labelValues[0], "%+d", p->note < 0 ? 0 : p->note - 60);
-    snprintf(labelValues[ParamLevel], sizeof labelValues[0], "100%%");
+    if (in)
+    {
+        snprintf(labelValues[ParamTune], sizeof labelValues[0], in->tune ? "%+d" : "0", in->tune);
+        snprintf(labelValues[ParamLevel], sizeof labelValues[0], "%u", in->volume);
+    }
+    else
+    {
+        snprintf(labelValues[ParamTune], sizeof labelValues[0], "-");
+        snprintf(labelValues[ParamLevel], sizeof labelValues[0], "-");
+    }
     snprintf(labelValues[ParamMode], sizeof labelValues[0], "%s", padModeName(p->mode));
     snprintf(labelValues[ParamChoke], sizeof labelValues[0], "%s", g ? paramValues[ParamChoke] : "Off");
     snprintf(labelValues[ParamCut], sizeof labelValues[0], "%s", paramValues[ParamCut]);
