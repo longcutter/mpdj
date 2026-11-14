@@ -1,3 +1,4 @@
+#include "mtConfig.h"
 #include "fileManagerDefs.h"
 #include "mtStructs.h"
 
@@ -247,6 +248,9 @@ void cFileManager::getDefaultProject(struct strMtProject* source)
     for (uint8_t& v : source->trackVolumeHi)
         v = DEFAULT_TRACK_VOLUME; // MPDJ: tracks 9-16
     source->pads.setDefault(); // MPDJ: the default pad map
+#ifdef PLATFORM_MPC
+    source->mpdjFullLevel = mtConfig.general.fullLevelDefault; // MPDJ 5f-1: Config default
+#endif
     getDefaultSong(&source->song);
     getDefaultValues(&source->values);
 

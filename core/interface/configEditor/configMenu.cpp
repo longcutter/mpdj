@@ -179,6 +179,8 @@ const strItemTypeListText setupTcDefault{ &mtConfig.general.tcDefault, 2, tcDefa
 cMenuItem melTcDefault(menuGeneral, "Timing correct", tcDefaultDesc, menuTypeItemListText, &setupTcDefault);
 const strItemTypeListText setupPadLights{ &mtConfig.general.padLights, 3, padLightsTexts };
 cMenuItem melPadLights(menuGeneral, "Pad lights", padLightsDesc, menuTypeItemListText, &setupPadLights);
+const strItemTypeListText setupFullLevel{ &mtConfig.general.fullLevelDefault, 2, fullLevelTexts };
+cMenuItem melFullLevel(menuGeneral, "Full level default", fullLevelDesc, menuTypeItemListText, &setupFullLevel);
 #endif
 cMenuItem melHexMode(menuGeneral,
                      "Numbering mode",

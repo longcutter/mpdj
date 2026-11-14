@@ -3,6 +3,7 @@
 
 #include "mtSequencer.h"
 #include "mtStructs.h"
+#include "mtConfig.h"
 
 #include <string.h>
 
@@ -125,8 +126,19 @@ void programsWriteToFile(strMpdjProjectData& out)
         out.programs[i].type = programType(i);
     }
     memcpy(out.trackVolumeHi, mtProject.trackVolumeHi, sizeof(out.trackVolumeHi));
+    out.flags = mtProject.mpdjFullLevel ? 1 : 0;
     padsWrite(out.pads);
     padColorsWrite(out.padColor);
+}
+
+// FULL LEVEL for a project that doesn't say (5f-1): Config's default
+static uint8_t fullLevelDefault()
+{
+#ifdef PLATFORM_MPC
+    return mtConfig.general.fullLevelDefault ? 1 : 0;
+#else
+    return 0;
+#endif
 }
 
 // Tracks 9-16's per-track data: from a version 2 block, else defaults
@@ -147,9 +159,12 @@ bool programsReadFromFile(const strMpdjProjectData& in)
         tracksReadFromFile(nullptr);
         padsRead(nullptr);
         padColorsRead(nullptr);
+        mtProject.mpdjFullLevel = fullLevelDefault();
         s_importNotice = true;
         return false;
     }
+    // FULL LEVEL: saved since version 5; older files take the Config default
+    mtProject.mpdjFullLevel = in.version >= 5 ? (in.flags & 1) : fullLevelDefault();
     tracksReadFromFile(in.version >= 2 ? &in : nullptr);
     padsRead(in.version >= 3 ? in.pads : nullptr);
     padColorsRead(in.version >= 4 ? in.padColor : nullptr);
@@ -285,6 +300,17 @@ int programsSelfTest()
     check(programsReadFromFile(file), "MPDJ block read back", -1);
     for (int t = 0; t < 8; t++)
         check(mtProject.trackVolumeHi[t] == 40 + t, "track 9-16 volume after reload", t);
+    // 4b. FULL LEVEL (version 5 flags): round trip; an older block -> Config default (Off)
+    mtProject.mpdjFullLevel = 1;
+    programsWriteToFile(file);
+    check(file.flags == 1, "FULL LEVEL written", -1);
+    mtProject.mpdjFullLevel = 0;
+    check(programsReadFromFile(file) && mtProject.mpdjFullLevel == 1, "FULL LEVEL read back", -1);
+    file.version = 4;
+    programsReadFromFile(file);
+    check(mtProject.mpdjFullLevel == 0, "version 4 block -> FULL LEVEL default (Off)", -1);
+    mtProject.mpdjFullLevel = 0;
+    programsWriteToFile(file);
     file.version = 1; // a version 1 block (before 5a-4) has no volumes: defaults
     check(programsReadFromFile(file), "version 1 block read", -1);
     for (int t = 0; t < 8; t++)

@@ -1047,6 +1047,10 @@ struct strMtProject
         DEFAULT_TRACK_VOLUME, DEFAULT_TRACK_VOLUME, DEFAULT_TRACK_VOLUME, DEFAULT_TRACK_VOLUME
     };
 
+    // MPDJ (step 5f-1): FULL LEVEL on (pads play / record at the full-hit
+    // level, velocity ignored; not 16 Levels); saved in the MPDJ block (v5)
+    uint8_t mpdjFullLevel = 0;
+
     // MPDJ (step 5b-1): pad -> program -> track, saved in the MPDJ block; mpdjPads.h
     strPadMap pads;
 };
@@ -1191,6 +1195,8 @@ struct strMtConfig
         // MPDJ (5e-3): when a Track Mute press takes effect while playing:
         // 0 Now, 1 next bar (the metronome's bar), 2 next pattern start
         uint8_t trackMuteTiming = 0;
+        // MPDJ (5f-1): FULL LEVEL in new projects (the project keeps its own)
+        uint8_t fullLevelDefault = 0;
 #endif
     } general;
 

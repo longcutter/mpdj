@@ -77,6 +77,7 @@ enum class Act : uint8_t
     NoteRepeat,  // NOTE REPEAT: held = held pads retrigger; SHIFT = latch on / off (5b-7a)
     Tc,          // TC: timing correct on / off (quantized live REC vs micromoves)
     TrackMute,   // TRACK MUTE: the Track Mute screen (5e-1)
+    FullLevel,   // FULL LEVEL: pads at the full-hit level, per project (5f-1)
 };
 
 struct ButtonMap
@@ -113,8 +114,9 @@ const ButtonMap kButtonMap[] = {
     { 11, Act::NoteRepeat, -1, "NOTE REPEAT" },
     { 12, Act::Tc, -1, "TC" },
     { 43, Act::TrackMute, -1, "TRACK MUTE" },
+    { 39, Act::FullLevel, -1, "FULL LEVEL" },
     // Not mapped yet:
-    // FULL LEVEL, STEP SEQ, TC, OVER DUB (pad work, milestone 5)
+    //, STEP SEQ, TC, OVER DUB (pad work, milestone 5)
 };
 
 constexpr uint8_t kNoteBankA = 35, kNoteBankD = 38;
@@ -948,6 +950,12 @@ void MpcInput::onButton(uint8_t note, bool down)
             levelsHeld = true;
             levelsTurned = false;
             break;
+        case Act::FullLevel:
+            mtProject.mpdjFullLevel = !mtProject.mpdjFullLevel;
+            newFileManager.setProjectStructChanged();
+            mtPopups.show(0, mtProject.mpdjFullLevel ? "Full Level on" : "Full Level off");
+            break;
+
         case Act::TrackMute:
             releaseCoreShift();
             mtInterface.mpdjToggleTrackMute();
@@ -2295,11 +2303,12 @@ void MpcInput::pollButtonLeds()
     set(122, when(noteDown[122]));                                         // COPY
     set(49, when(mpcShift));                                               // SHIFT
     set(43, when(mtInterface.isTrackMuteScreenActive()));                 // TRACK MUTE (5e-1)
+    set(39, mtProject.mpdjFullLevel ? Lit::Active : Lit::Available);       // FULL LEVEL (5f-1)
     // Not built yet (milestone 5): OVER DUB,
     // FULL LEVEL, STEP SEQ. Later, banks: dim when they hold samples,
     // dark when empty (Mike 2026-11-12)
     set(12, mpdjTcOn() ? Lit::Active : Lit::NotAvailable); // TC: lit while on, dark when off
-    for (uint8_t cc : { 80, 39, 41 })
+    for (uint8_t cc : { 80, 41 })
         set(cc, Lit::NotAvailable);
 }
 

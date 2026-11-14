@@ -196,9 +196,13 @@ static bool resolvePad(int pad, strPadSlot* out, uint8_t* velocity, const char**
             return false;
         }
         out->note = (int8_t)mpdjNotesNote(pad);
+        if (mtProject.mpdjFullLevel)
+            *velocity = 127; // FULL LEVEL (5f-1): every hit at the full-hit level
         return true;
     }
     *out = *padSlot(pad);
+    if (mtProject.mpdjFullLevel)
+        *velocity = 127; // FULL LEVEL (5f-1)
     return true;
 }
 
@@ -903,7 +907,8 @@ int padsSelfTest()
     mtProject.pads.pad[20] = { 20, 4, -1, padModeByte(kPadModeGate, 31) }; // B05: Gate, group 31
     strMpdjProjectData file;
     programsWriteToFile(file);
-    check(file.version == 4, "block version 4", -1);
+    check(file.version == kMpdjProjectDataVersion, "block version", -1);
+    check(file.flags == 0, "FULL LEVEL off -> flags 0", -1);
     mtProject.pads = strPadMap{};
     programsReadFromFile(file);
     check(mtProject.pads.pad[0].program == 5 &&
