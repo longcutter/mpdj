@@ -36,7 +36,7 @@ struct strPadSlot
     uint8_t program; // slot 0-63, or kPadNoProgram
     uint8_t track;   // 0-15
     int8_t note;     // kPadNoteDefault or a note 0-127
-    uint8_t mode;    // bits 0-1 PadMode, bits 2-6 choke group (0 = none), bit 7 = 0
+    uint8_t mode;    // bits 0-1 PadMode, bits 2-6 choke group (0 = none), bit 7 cut on release
 };
 static_assert(sizeof(strPadSlot) == 4);
 
@@ -46,9 +46,14 @@ static constexpr int kPadGroups = 31; // 1-31; 0 = no group
 
 constexpr PadMode padModeOf(uint8_t modeByte) { return PadMode(modeByte & kPadModeMask); }
 constexpr uint8_t padGroupOf(uint8_t modeByte) { return uint8_t((modeByte >> kPadGroupShift) & 0x1F); }
-constexpr uint8_t padModeByte(PadMode mode, uint8_t group)
+// Cut on release (5b-6a): a Gate pad's release cuts its track with the 5 ms
+// choke fade instead of the envelope release (hi-hat loops)
+static constexpr uint8_t kPadCutOnRelease = 0x80;
+constexpr bool padCutOf(uint8_t modeByte) { return (modeByte & kPadCutOnRelease) != 0; }
+constexpr uint8_t padModeByte(PadMode mode, uint8_t group, bool cut = false)
 {
-    return uint8_t((mode & kPadModeMask) | ((group > kPadGroups ? 0 : group) << kPadGroupShift));
+    return uint8_t((mode & kPadModeMask) | ((group > kPadGroups ? 0 : group) << kPadGroupShift) |
+                   (cut ? kPadCutOnRelease : 0));
 }
 
 // The MPDJ Kit's hats (tools/kitgen): Closed Hat, Open Hat, Pedal Hat
@@ -61,7 +66,8 @@ struct strPadMap
 
     constexpr strPadMap() : pad{} { setDefault(); }
 
-    // New projects: hats in group 1. withGroups = false: the plain map that
+    // New projects: hats in group 1 with cut on release (until Pad Assign,
+    // 5d, sets both per pad). withGroups = false: the plain map that
     // older files and invalid entries get (existing projects keep no groups)
     constexpr void setDefault(bool withGroups = true)
     {
@@ -69,7 +75,7 @@ struct strPadMap
             pad[i] = { uint8_t(i), uint8_t(i % kPadsPerBank), kPadNoteDefault, kPadModeAuto };
         if (withGroups)
             for (int i : kDefaultHatPads)
-                pad[i].mode = padModeByte(kPadModeAuto, kDefaultHatGroup);
+                pad[i].mode = padModeByte(kPadModeAuto, kDefaultHatGroup, true);
     }
 };
 
@@ -84,7 +90,9 @@ const char* padModeName(uint8_t mode); // takes the mode byte (group bits ignore
 
 // Choke groups (5b-5a): a pad's group 0-31 (0 = none, also for a bad index)
 uint8_t padGroup(int pad);
-void setPadGroup(int pad, uint8_t group); // keeps the play mode; > 31 = none
+void setPadGroup(int pad, uint8_t group); // keeps the play mode and cut; > 31 = none
+bool padCutOnRelease(int pad);             // 5b-6a
+void setPadCutOnRelease(int pad, bool cut);
 // The group a (program, track) plays in, for notes that don't come from a
 // pad (pattern playback): the first pad in bank order A01 -> D16 with that
 // program and track decides; 0 = none

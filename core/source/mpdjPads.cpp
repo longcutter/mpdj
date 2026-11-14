@@ -26,6 +26,7 @@ struct Held
 {
     int8_t track = -1; // -1 = not held by the engine
     bool gate = false;
+    bool cut = false;      // Gate + cut on release (5b-6a)
     bool recorded = false; // the press was written in live REC (5b-4a)
 };
 Held s_held[kPads];
@@ -90,7 +91,7 @@ const char* mpdjPadPress(int pad, uint8_t velocity)
 
     uint8_t note = p->note < 0 ? (uint8_t)Sequencer::STEP_NOTE_DEFAULT : (uint8_t)p->note;
     uint8_t velo = padVelocity(p->program, velocity ? velocity : 1);
-    s_held[pad] = { (int8_t)p->track, padIsGate(pad) };
+    s_held[pad] = { (int8_t)p->track, padIsGate(pad), padIsGate(pad) && padCutOf(p->mode) };
 
     // choke groups (5b-5c): the pad's own group cuts the rest of the group,
     // also when this track is muted
@@ -187,7 +188,7 @@ void mpdjPadRelease(int pad)
     if (pad < 0 || pad >= kPads || s_held[pad].track < 0)
         return;
     uint8_t track = (uint8_t)s_held[pad].track;
-    sequencer.mpdjPadNoteOff(track, kPadSourceBase + pad, s_held[pad].gate);
+    sequencer.mpdjPadNoteOff(track, kPadSourceBase + pad, s_held[pad].gate, s_held[pad].cut);
 #ifdef PLATFORM_MPC
     // MPDJ_CHOKE_TEST=1 (5b-5b): a pad's release chokes its own track, to hear
     // the fast cut before choke groups use it
@@ -260,7 +261,7 @@ const char* padModeName(uint8_t mode)
 static bool padValid(const strPadSlot& p)
 {
     return (p.program < kProgramSlots || p.program == kPadNoProgram) && p.track < kAllTracks &&
-           p.note >= kPadNoteDefault && padModeOf(p.mode) < kPadModeCount && (p.mode & 0x80) == 0;
+           p.note >= kPadNoteDefault && padModeOf(p.mode) < kPadModeCount;
 }
 
 uint8_t padGroup(int pad)
@@ -274,7 +275,21 @@ void setPadGroup(int pad, uint8_t group)
     if (pad < 0 || pad >= kPads)
         return;
     strPadSlot& p = mtProject.pads.pad[pad];
-    p.mode = padModeByte(padModeOf(p.mode), group);
+    p.mode = padModeByte(padModeOf(p.mode), group, padCutOf(p.mode));
+}
+
+bool padCutOnRelease(int pad)
+{
+    const strPadSlot* p = padSlot(pad);
+    return p && padCutOf(p->mode);
+}
+
+void setPadCutOnRelease(int pad, bool cut)
+{
+    if (pad < 0 || pad >= kPads)
+        return;
+    strPadSlot& p = mtProject.pads.pad[pad];
+    p.mode = padModeByte(padModeOf(p.mode), padGroupOf(p.mode), cut);
 }
 
 uint8_t padGroupFor(uint8_t program, uint8_t track)
@@ -341,6 +356,7 @@ int padsSelfTest()
             check(padModeOf(def.pad[i].mode) == kPadModeAuto, "default mode", i);
             bool hat = b == 0 && (n == 3 || n == 4 || n == 12);
             check(padGroupOf(def.pad[i].mode) == (hat ? 1 : 0), "default group (hats in 1)", i);
+            check(padCutOf(def.pad[i].mode) == hat, "default cut on release (hats)", i);
             check(plain.pad[i].mode == kPadModeAuto, "plain default: no group", i);
         }
     char name[4];
@@ -421,13 +437,33 @@ int padsSelfTest()
     check(memcmp(&mtProject.pads.pad[1], &def.pad[1], 4) == 0, "untouched pad after reload", 1);
     check(padGroup(20) == 31 && padModeOf(mtProject.pads.pad[20].mode) == kPadModeGate, "group 31 after reload", 20);
     check(padGroup(2) == 1 && padGroup(3) == 1 && padGroup(11) == 1, "hats' group after reload", -1);
+    check(padCutOnRelease(2) && padCutOnRelease(3) && padCutOnRelease(11) && !padCutOnRelease(0),
+          "hats' cut on release after reload", -1);
+
+    // 2b. Cut on release (5b-6a) is kept apart from mode and group
+    mtProject.pads.pad[41].mode = padModeByte(kPadModeGate, 9, true);
+    check(padModeOf(mtProject.pads.pad[41].mode) == kPadModeGate && padGroup(41) == 9 && padCutOnRelease(41),
+          "cut with mode and group", 41);
+    setPadGroup(41, 3);
+    check(padCutOnRelease(41) && padGroup(41) == 3, "setPadGroup keeps cut", 41);
+    setPadCutOnRelease(41, false);
+    check(!padCutOnRelease(41) && padGroup(41) == 3 && padModeOf(mtProject.pads.pad[41].mode) == kPadModeGate,
+          "setPadCutOnRelease keeps mode and group", 41);
+    setPadCutOnRelease(41, true);
+    programsWriteToFile(file);
+    mtProject.pads.pad[41] = {};
+    programsReadFromFile(file);
+    check(padCutOnRelease(41) && padGroup(41) == 3, "cut round trip", 41);
+    check(strcmp(padModeName(mtProject.pads.pad[41].mode), "Gate") == 0, "mode name ignores cut", 41);
+    mtProject.pads = def;
+    programsWriteToFile(file);
 
     // 3. Bad entries read back as that pad's plain default (no group)
     file.pads[3] = { 64, 2, -1, 0 };  // program out of range
     file.pads[4] = { 4, 16, -1, 0 };  // track out of range
     file.pads[5] = { 5, 5, -2, 0 };   // note
     file.pads[6] = { 6, 6, -1, 3 };   // mode
-    file.pads[7] = { 7, 7, -1, 0x80 }; // bit 7 set
+    file.pads[7] = { 7, 7, -1, uint8_t(3 | kPadCutOnRelease) }; // mode 3 with cut
     file.pads[8] = { 8, 8, -1, uint8_t(3 | (4 << kPadGroupShift)) }; // mode 3 with a group
     programsReadFromFile(file);
     for (int i = 3; i <= 8; i++)

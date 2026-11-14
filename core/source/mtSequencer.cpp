@@ -3239,7 +3239,7 @@ uint16_t Sequencer::mpdjChoke(uint8_t track, uint8_t group, const char* who)
     return cut;
 }
 
-void Sequencer::mpdjPadNoteOff(uint8_t track, int16_t source, bool sendOff)
+void Sequencer::mpdjPadNoteOff(uint8_t track, int16_t source, bool sendOff, bool cut)
 {
     if (track >= kAllTracks)
         return;
@@ -3257,7 +3257,10 @@ void Sequencer::mpdjPadNoteOff(uint8_t track, int16_t source, bool sendOff)
         }
         else if (isSampleTrack(track))
         {
-            instrumentPlayer[track].noteOff();
+            if (cut)
+                engine.chokeTrack(track);
+            else
+                instrumentPlayer[track].noteOff();
         }
         t.noteOpen = 0;
     }

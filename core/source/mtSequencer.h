@@ -914,7 +914,9 @@ class Sequencer
     // sound ring until the next note on the track cuts it.
     // velocity: already scaled for the program (padVelocity(), mpdjPads)
     void mpdjPadNoteOn(uint8_t track, uint8_t instrument, uint8_t note, uint8_t velocity, int16_t source);
-    void mpdjPadNoteOff(uint8_t track, int16_t source, bool sendOff);
+    // cut (5b-6a): a sample voice gets the 5 ms choke fade instead of its
+    // envelope release (a Gate pad with cut on release)
+    void mpdjPadNoteOff(uint8_t track, int16_t source, bool sendOff, bool cut = false);
     // MPDJ (5b-5c): choke groups. A note starting on `track` in `group` cuts
     // every other track whose last note was in that group: sample voices fade
     // out over 5 ms (engine.chokeTrack), an open MIDI note gets its note off.
