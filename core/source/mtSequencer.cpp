@@ -3326,7 +3326,7 @@ int8_t Sequencer::mpdjPadStepWrite(uint8_t track, uint8_t row, uint8_t instrumen
                                    uint8_t velocity, bool writeVolume)
 {
     strPattern* pattern = getPatternToUI();
-    if (track >= kAllTracks || row >= pattern->track[0].length)
+    if (track >= kAllTracks || row > pattern->track[0].length) // length = the last row's index
         return -1;
     strPattern::strTrack::strStep* step = &pattern->track[track].step[row];
     newFileManager.storePatternUndoRevision();
