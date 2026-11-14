@@ -140,6 +140,7 @@ class MpcInput
     uint32_t trackHitMs[16] = {};
     uint8_t trackHitProgram[16] = {};
     uint8_t trackHitLevel[16] = {};
+    uint8_t trackHitNote[16] = {};
     void openPadLeds();
     void pollPadLights();
     void setPadLed(int pad, uint8_t r, uint8_t g, uint8_t b);

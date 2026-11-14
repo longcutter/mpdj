@@ -456,12 +456,15 @@ void MpcInput::pollPadLights()
             trackHitMs[t] = now;
             trackHitProgram[t] = hit.program;
             trackHitLevel[t] = hit.velocity;
+            trackHitNote[t] = hit.note;
         }
     }
     uint8_t setting = mtConfig.general.padLights; // 0 Off, 1 Dim, 2 Bright
     bool show = setting != 0 && mtInterface.isPatternScreenActive();
     float base = setting == 1 ? 0.05f : 0.10f, top = setting == 1 ? 0.40f : 1.0f;
-    bool padMap = !mpdjNotesOn() && !mpdjLevelsOn();
+    bool notes = mpdjNotesOn(), levels = mpdjLevelsOn();
+    int rootPc = mtProject.values.padBoardRootNote % 12;
+    static const uint8_t kRootRed[3] = { 127, 0, 0 };
     for (int n = 0; n < 16; n++)
     {
         int pad = padBank * 16 + n;
@@ -476,14 +479,22 @@ void MpcInput::pollPadLights()
         float level = 0; // 0..1 above the dim base
         strPadSlot held;
         uint8_t heldVel;
+        uint8_t t = slot.track;
+        // a pattern / repeat note flashes the pad that plays it: the pad map's
+        // (program, track); in Notes mode also the same note (5c-3)
+        bool flash = trackHitCount[t] && now - trackHitMs[t] < kPadFlashMs && trackHitProgram[t] == slot.program &&
+                     !levels && (!notes || trackHitNote[t] == (uint8_t)slot.note);
         if (mpdjPadHeldSlot(pad, &held, &heldVel))
             level = heldVel / 50.0f;
-        else if (padMap && trackHitProgram[slot.track] == slot.program && trackHitCount[slot.track] &&
-                 now - trackHitMs[slot.track] < kPadFlashMs)
-            level = trackHitLevel[slot.track] / 50.0f * (1.0f - (now - trackHitMs[slot.track]) / (float)kPadFlashMs);
+        else if (flash)
+            level = trackHitLevel[t] / 50.0f * (1.0f - (now - trackHitMs[t]) / (float)kPadFlashMs);
         level = level > 1 ? 1 : level;
         float k = base + (top - base) * level;
-        const uint8_t* c = kTrackColours[slot.track & 15];
+        const uint8_t* c = kTrackColours[t & 15];
+        if (notes && slot.note >= 0 && slot.note % 12 == rootPc)
+            c = kRootRed; // Notes mode: the key's root pads are red (Mike 2026-11-14)
+        if (levels && level == 0)
+            k = base + (top - base) * 0.4f * (n + 1) / 16.0f; // 16 Levels: a ramp, pad 1 dimmest
         setPadLed(n, (uint8_t)(c[0] * k + 0.5f), (uint8_t)(c[1] * k + 0.5f), (uint8_t)(c[2] * k + 0.5f));
     }
 }
