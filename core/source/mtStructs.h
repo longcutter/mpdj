@@ -1183,6 +1183,8 @@ struct strMtConfig
         // MPDJ (TC, 2026-11-14): Timing correct when MPDJ starts: 1 = on (live
         // REC quantizes to the row, no micromove), 0 = off; TC toggles it per session
         uint8_t tcDefault = 1;
+        // MPDJ (5c-1): pad LEDs: 0 Off, 1 Dim, 2 Bright
+        uint8_t padLights = 2;
 #endif
     } general;
 

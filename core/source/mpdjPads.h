@@ -145,6 +145,22 @@ void mpdjSetCursorTrack(int track);
 // nearest row and writes no micromove; off = micromoves recorded. Starts
 // from Config > General "Timing correct" (on); a change there applies at once
 bool mpdjTcOn();
+
+// Pad lights (5c-1): every note started on a track (pads, repeats, pattern
+// playback) is noted here so the platform can light the pads that play it.
+// Audio or main thread; lock-free (a counter per track)
+struct MpdjTrackHit
+{
+    uint32_t count;   // bumps on every note on the track
+    uint8_t program;  // what played
+    uint8_t velocity; // 0-127
+};
+void mpdjLightsNoteOn(uint8_t track, uint8_t program, uint8_t velocity);
+MpdjTrackHit mpdjLightsTrackHit(uint8_t track);
+// Pads held right now (pad index -> track, -1 = not held) and what they play
+bool mpdjPadHeldSlot(int pad, strPadSlot* out, uint8_t* velocity);
+// What a physical pad plays in the current mode (pad map / Notes / 16 Levels)
+bool mpdjPadLightSlot(int pad, strPadSlot* out, uint8_t* velocity);
 void mpdjTcSet(bool on);
 
 // 16 Levels (5b-9; 16 LEVELS): the 16 pads play what the last hit played

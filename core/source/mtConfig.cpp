@@ -415,6 +415,8 @@ void checkConfig()
         mtConfig.general.notesSource = 0;
     if (mtConfig.general.tcDefault > 1)
         mtConfig.general.tcDefault = 1;
+    if (mtConfig.general.padLights > 2)
+        mtConfig.general.padLights = 2;
 #endif
     if (mtConfig.general.performanceSource > 1)
         mtConfig.general.performanceSource = 0;
@@ -582,6 +584,7 @@ void resetConfig()
     mtConfig.general.padVelToVolume = 1; // On
     mtConfig.general.notesSource = 0;    // last pad
     mtConfig.general.tcDefault = 1;      // TC on
+    mtConfig.general.padLights = 2;      // Bright
 #endif
 
     // interface ----------------------------------------

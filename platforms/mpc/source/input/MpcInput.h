@@ -132,6 +132,18 @@ class MpcInput
     bool buttonLedsEnabled = true;
     bool noteDown[128] = {};     // MPC button notes held right now
     uint8_t ledSent[128];        // last value sent per LED CC, 0xFF = unknown
+    // Pad lights (5c-1): SysEx on the controller's Public port
+    int padLedFd = -1;
+    uint8_t padLedSent[16][3];   // last RGB sent per pad, 0xFF = unknown
+    uint32_t padLedPollMs = 0;
+    uint32_t trackHitCount[16] = {};
+    uint32_t trackHitMs[16] = {};
+    uint8_t trackHitProgram[16] = {};
+    uint8_t trackHitLevel[16] = {};
+    void openPadLeds();
+    void pollPadLights();
+    void setPadLed(int pad, uint8_t r, uint8_t g, uint8_t b);
+    void padLedsOff();
     uint32_t beatLedMs = 0;      // when TAP TEMPO last flashed
     uint32_t beatRefMs = 0;      // free-running beat clock while stopped
     int lastBeatPos = -1;        // sequencer row seen last while playing

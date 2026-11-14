@@ -2497,7 +2497,11 @@ AUDIO_CORE_RAM void Sequencer::sendNoteOn(uint8_t track,
     // MPDJ (5b-5d): choke groups on pattern playback: the (program, track)'s
     // group from the pad map (first pad in bank order) cuts the rest of it
     if (step->note >= STEP_NOTE_MIN)
+    {
         mpdjChoke(track, padGroupFor(step->instrument, track));
+        // MPDJ (5c-1): pad lights; volume-column scale (50 = unity, empty = 50)
+        mpdjLightsNoteOn(track, step->instrument, step->volume < 0 ? 50 : (uint8_t)step->volume);
+    }
 
     if (toMidi || toSynth)
     {
@@ -3167,6 +3171,7 @@ void Sequencer::mpdjPadNoteOn(uint8_t track, uint8_t instrument, uint8_t note, u
 {
     if (track >= kAllTracks || isTrackEngineMuted(track))
         return;
+    mpdjLightsNoteOn(track, instrument, velocity); // MPDJ (5c-1): pad lights (velocity ~ volume scale)
 
     if (!isPlay() && !player.preRecMetronomeActive)
     {

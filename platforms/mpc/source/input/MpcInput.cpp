@@ -164,6 +164,7 @@ void MpcInput::open(SwitchGroupImpl* b, SwitchGroupImpl* p, EncoderImpl* e, Disp
     memset(enginePadHeld, -1, sizeof enginePadHeld);
     memset(buttonHeld, -1, sizeof buttonHeld);
     openMidi();
+    openPadLeds();
     openTouch();
     parseQLinkLeds();
     setQLinkLeds();
@@ -176,6 +177,10 @@ void MpcInput::close()
     qlinkMode = 0; // all Q-Link mode LEDs off
     setQLinkLeds();
     buttonLedsOff();
+    padLedsOff();
+    if (padLedFd >= 0)
+        ::close(padLedFd);
+    padLedFd = -1;
     if (midiFd >= 0)
         ::close(midiFd);
     if (touchFd >= 0)
@@ -193,6 +198,7 @@ void MpcInput::poll()
     pollTapHold();
     mpdjPadsPoll(); // Note Repeat hits to record (5b-7c)
     pollLevels();
+    pollPadLights();
     if (sideloadComboMs && mpcShift &&
         platform.getTimer()->millis() - sideloadComboMs >= Sideload::kComboHoldMs)
     {
@@ -230,6 +236,7 @@ void MpcInput::suspend()
     setQLinkLeds();
     qlinkMode = mode;
     buttonLedsOff(); // a sideload gets a dark panel; poll() relights them after resume()
+    padLedsOff();
     memset(noteDown, 0, sizeof noteDown);
     if (touchFd >= 0)
         ::close(touchFd);
@@ -247,6 +254,7 @@ void MpcInput::resume()
     openTouch();
     setQLinkLeds();
     memset(ledSent, 0xFF, sizeof ledSent); // resend every button LED
+    memset(padLedSent, 0xFF, sizeof padLedSent);
 }
 
 // SHIFT+BROWSE = SAVE (the MPC's printed shift label), from any screen.
@@ -366,6 +374,118 @@ void MpcInput::openMidi()
         printf("input: can't open %s: %s (is the MPC app still running?)\n", dev, strerror(errno));
     if (ctl >= 0)
         ::close(ctl);
+}
+
+// ---------------------------------------------------------------- pad lights (5c-1)
+// The pads' RGB LEDs take SysEx on the Public port (subdevice 0):
+// F0 47 7F 56 65 00 04 <pad 0-15> <R> <G> <B> F7 (pad 0 = pad 1, bottom left).
+// MPDJ_PAD_LEDS_DEV = a file to write it to instead (QEMU), MPDJ_PAD_LEDS=0 = off
+void MpcInput::openPadLeds()
+{
+    memset(padLedSent, 0xFF, sizeof padLedSent);
+    if (envStr("MPDJ_PAD_LEDS", "1")[0] == '0')
+        return;
+    if (const char* file = getenv("MPDJ_PAD_LEDS_DEV"))
+    {
+        padLedFd = ::open(file, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+        return;
+    }
+    const char* dev = envStr("MPDJ_MIDI_DEV", "/dev/snd/midiC0D0");
+    if (strncmp(dev, "/dev/snd/midiC", 14) != 0)
+        return; // a test FIFO: the SysEx would come back as input
+    char ctlPath[64];
+    snprintf(ctlPath, sizeof ctlPath, "/dev/snd/controlC%d", atoi(dev + 14));
+    int subdev = 0; // Public
+    int ctl = ::open(ctlPath, O_RDWR | O_CLOEXEC);
+    if (ctl >= 0)
+        ioctl(ctl, SNDRV_CTL_IOCTL_RAWMIDI_PREFER_SUBDEVICE, &subdev);
+    padLedFd = ::open(dev, O_WRONLY | O_NONBLOCK | O_CLOEXEC);
+    if (ctl >= 0)
+        ::close(ctl);
+    if (padLedFd < 0)
+        printf("input: pad lights: can't open %s (Public): %s\n", dev, strerror(errno));
+}
+
+void MpcInput::setPadLed(int pad, uint8_t r, uint8_t g, uint8_t b)
+{
+    if (padLedFd < 0 || pad < 0 || pad > 15)
+        return;
+    if (padLedSent[pad][0] == r && padLedSent[pad][1] == g && padLedSent[pad][2] == b)
+        return;
+    uint8_t m[] = { 0xF0, 0x47, 0x7F, 0x56, 0x65, 0x00, 0x04, (uint8_t)pad, r, g, b, 0xF7 };
+    if (write(padLedFd, m, sizeof m) == (ssize_t)sizeof m)
+    {
+        padLedSent[pad][0] = r;
+        padLedSent[pad][1] = g;
+        padLedSent[pad][2] = b;
+    }
+}
+
+void MpcInput::padLedsOff()
+{
+    for (int pad = 0; pad < 16; pad++)
+        setPadLed(pad, 0, 0, 0);
+}
+
+// One colour per track until pads get their own (5c-2); 0-127 per channel
+static const uint8_t kTrackColours[16][3] = {
+    { 127, 24, 0 },  { 127, 64, 0 },   { 127, 112, 0 }, { 64, 127, 0 },
+    { 0, 127, 24 },  { 0, 127, 90 },   { 0, 110, 127 }, { 0, 52, 127 },
+    { 24, 0, 127 },  { 72, 0, 127 },   { 127, 0, 127 }, { 127, 0, 64 },
+    { 127, 64, 64 }, { 64, 127, 96 },  { 96, 96, 127 }, { 110, 110, 110 },
+};
+
+// Empty slot = dark; a program = its colour, dim; played (held, or a note of
+// that program on that track from a pad or the pattern) = brighter by its
+// level (volume scale, 50 = a full hit), fading over kPadFlashMs
+void MpcInput::pollPadLights()
+{
+    if (padLedFd < 0)
+        return;
+    uint32_t now = platform.getTimer()->millis();
+    if (now - padLedPollMs < 10)
+        return;
+    padLedPollMs = now;
+    constexpr uint32_t kPadFlashMs = 200;
+    for (uint8_t t = 0; t < 16; t++)
+    {
+        MpdjTrackHit hit = mpdjLightsTrackHit(t);
+        if (hit.count != trackHitCount[t])
+        {
+            trackHitCount[t] = hit.count;
+            trackHitMs[t] = now;
+            trackHitProgram[t] = hit.program;
+            trackHitLevel[t] = hit.velocity;
+        }
+    }
+    uint8_t setting = mtConfig.general.padLights; // 0 Off, 1 Dim, 2 Bright
+    bool show = setting != 0 && mtInterface.isPatternScreenActive();
+    float base = setting == 1 ? 0.05f : 0.10f, top = setting == 1 ? 0.40f : 1.0f;
+    bool padMap = !mpdjNotesOn() && !mpdjLevelsOn();
+    for (int n = 0; n < 16; n++)
+    {
+        int pad = padBank * 16 + n;
+        strPadSlot slot;
+        uint8_t vel;
+        if (!show || !mpdjPadLightSlot(pad, &slot, &vel) || slot.program == kPadNoProgram ||
+            programType(slot.program) == kProgramEmpty)
+        {
+            setPadLed(n, 0, 0, 0);
+            continue;
+        }
+        float level = 0; // 0..1 above the dim base
+        strPadSlot held;
+        uint8_t heldVel;
+        if (mpdjPadHeldSlot(pad, &held, &heldVel))
+            level = heldVel / 50.0f;
+        else if (padMap && trackHitProgram[slot.track] == slot.program && trackHitCount[slot.track] &&
+                 now - trackHitMs[slot.track] < kPadFlashMs)
+            level = trackHitLevel[slot.track] / 50.0f * (1.0f - (now - trackHitMs[slot.track]) / (float)kPadFlashMs);
+        level = level > 1 ? 1 : level;
+        float k = base + (top - base) * level;
+        const uint8_t* c = kTrackColours[slot.track & 15];
+        setPadLed(n, (uint8_t)(c[0] * k + 0.5f), (uint8_t)(c[1] * k + 0.5f), (uint8_t)(c[2] * k + 0.5f));
+    }
 }
 
 void MpcInput::pollMidi()

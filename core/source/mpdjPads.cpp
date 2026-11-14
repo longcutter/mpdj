@@ -293,6 +293,46 @@ const char* padPress(int pad, const strPadSlot* p, uint8_t velocity)
 }
 }
 
+// ---------------------------------------------------------------- pad lights
+namespace
+{
+std::atomic<uint32_t> s_hitCount[kAllTracks];
+std::atomic<uint16_t> s_hitWhat[kAllTracks]; // program << 8 | velocity
+}
+
+void mpdjLightsNoteOn(uint8_t track, uint8_t program, uint8_t velocity)
+{
+    if (track >= kAllTracks)
+        return;
+    s_hitWhat[track].store((uint16_t)(program << 8 | (velocity & 0x7F)));
+    s_hitCount[track].fetch_add(1);
+}
+
+MpdjTrackHit mpdjLightsTrackHit(uint8_t track)
+{
+    if (track >= kAllTracks)
+        return { 0, 0, 0 };
+    uint16_t w = s_hitWhat[track].load();
+    return { s_hitCount[track].load(), (uint8_t)(w >> 8), (uint8_t)(w & 0x7F) };
+}
+
+bool mpdjPadHeldSlot(int pad, strPadSlot* out, uint8_t* velocity)
+{
+    if (pad < 0 || pad >= kPads || s_held[pad].track < 0)
+        return false;
+    const Held& h = s_held[pad];
+    *out = { h.program, (uint8_t)h.track, (int8_t)h.note, 0 };
+    *velocity = h.velo;
+    return true;
+}
+
+bool mpdjPadLightSlot(int pad, strPadSlot* out, uint8_t* velocity)
+{
+    const char* msg;
+    *velocity = 127;
+    return pad >= 0 && pad < kPads && resolvePad(pad, out, velocity, &msg);
+}
+
 // ---------------------------------------------------------------- TC
 namespace
 {
