@@ -1204,6 +1204,9 @@ void MpcInput::padStepEntry(int pad, uint8_t velocity)
 
 void MpcInput::onPad(uint8_t note, bool down, uint8_t velocity)
 {
+    if (!down)
+        if (int n = padNumber(note))
+            trackMute.padUp(n - 1); // ends a momentary mute (does nothing otherwise)
     if (!down && enginePadHeld[note] >= 0)
     {
         mpdjPadRelease(enginePadHeld[note]);
@@ -1214,7 +1217,7 @@ void MpcInput::onPad(uint8_t note, bool down, uint8_t velocity)
     {
         // Track Mute (5e-1): pad N mutes / unmutes track N, whatever the bank
         if (int n = padNumber(note))
-            trackMute.toggle(n - 1);
+            trackMute.padDown(n - 1); // 5e-2: Latch / Momentary
         return;
     }
     if (down && mtInterface.isPadAssignScreenActive())

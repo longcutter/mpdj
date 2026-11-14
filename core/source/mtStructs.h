@@ -1185,6 +1185,9 @@ struct strMtConfig
         uint8_t tcDefault = 1;
         // MPDJ (5c-1): pad LEDs: 0 Off, 1 Dim, 2 Bright
         uint8_t padLights = 2;
+        // MPDJ (5e-2): Track Mute pads: 0 Latch (press toggles), 1 Momentary
+        // (the mute flips while the pad is held)
+        uint8_t trackMuteMode = 0;
 #endif
     } general;
 

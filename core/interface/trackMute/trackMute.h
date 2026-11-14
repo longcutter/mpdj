@@ -17,6 +17,11 @@ class cTrackMute : public ModuleBase
     virtual void destroyDisplayControls();
 
     void toggle(int track);
+    // 5e-2: pads follow Latch / Momentary; a release ends a momentary flip
+    // (on any screen, so a pad held while leaving still lets go)
+    void padDown(int track);
+    void padUp(int track);
+    void toggleMode();
     void unmuteAll();
     int trackAt(float x, float y) const; // touch -> track 0-15, -1 off the grid
     void refresh();
@@ -30,6 +35,8 @@ class cTrackMute : public ModuleBase
     strPadGridData gridData;
     char title[32];
     char rightLabel[24];
+    bool held[16] = {};
+    char modeText[12];
 };
 
 extern cTrackMute trackMute;

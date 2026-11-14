@@ -8,6 +8,7 @@
 #include "mtAudioEngine.h"
 #include "mtSequencer.h"
 #include "mtStructs.h"
+#include "mtConfig.h"
 #include "patternEditor/patternEditor.h"
 
 #include <stdio.h>
@@ -55,7 +56,14 @@ void functUnmuteAll(uint8_t button, uint8_t state)
         TM->unmuteAll();
 }
 
-const char* const kLabels[8] = { "Unmute all", "", "", "", "", "", "", "" };
+void functMode(uint8_t button, uint8_t state)
+{
+    (void)button;
+    if (state == buttonPress)
+        TM->toggleMode();
+}
+
+const char* const kLabels[8] = { "Unmute all", "", "", "", "", "", "", "Pads" };
 } // namespace
 
 void cTrackMute::initDisplayControls()
@@ -79,6 +87,7 @@ void cTrackMute::initDisplayControls()
         p.w = 800 / 8 - 6;
         p.y = 424;
         p.h = 55;
+        p.value = i == 7 ? 1 : 0; // the mode label has two lines
         label[i] = display.createControl<cLabel>(&p);
     }
     strControlProperties pb;
@@ -115,6 +124,7 @@ void cTrackMute::start(uint32_t options)
                        interfaceButtonSong, interfaceButtonPattern })
         ip->setButtonObj(b, buttonPress, functSwitchModule);
     ip->setButtonObj(interfaceButton0, functUnmuteAll);
+    ip->setButtonObj(interfaceButton7, functMode);
     ip->setButtonObj(interfaceButtonPlay, buttonPress, functPlayAction);
 
     titleBar->show();
@@ -138,6 +148,29 @@ void cTrackMute::toggle(int track)
     mpdjSetTrackMute(track, !trackMuteRef(track));
     if (mtInterface.isTrackMuteScreenActive())
         refresh();
+}
+
+void cTrackMute::padDown(int track)
+{
+    if (track < 0 || track >= kAllTracks)
+        return;
+    toggle(track);
+    held[track] = mtConfig.general.trackMuteMode == 1;
+}
+
+void cTrackMute::padUp(int track)
+{
+    if (track < 0 || track >= kAllTracks || !held[track])
+        return;
+    held[track] = false;
+    toggle(track); // momentary: back as it was
+}
+
+void cTrackMute::toggleMode()
+{
+    mtConfig.general.trackMuteMode = !mtConfig.general.trackMuteMode;
+    saveConfig();
+    refresh();
 }
 
 void cTrackMute::unmuteAll()
@@ -171,6 +204,9 @@ void cTrackMute::refresh()
         c.empty = m;
     }
     gridData.selected = -1;
+    snprintf(modeText, sizeof modeText, "%s", mtConfig.general.trackMuteMode ? "Momentary" : "Latch");
+    display.setControlText2(label[7], modeText);
+    display.refreshControl(label[7]);
     display.setControlData(grid, &gridData);
     display.refreshControl(grid);
 
