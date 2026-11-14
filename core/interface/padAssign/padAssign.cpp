@@ -8,6 +8,7 @@
 #include "mtStructs.h"
 #include "mtSequencer.h"
 #include "mtAudioEngine.h"
+#include "core/interfacePopups.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -306,6 +307,152 @@ void cPadAssign::changeValue(int steps)
     }
     newFileManager.setProjectStructChanged();
     refresh();
+}
+
+// ---- 5d-4: copy -----------------------------------------------------------
+
+namespace
+{
+struct PendingCopy
+{
+    bool active = false;
+    int srcPad = -1, dstPad = -1;
+    uint8_t program = 0;
+} pending;
+
+char copyMsg[48];
+
+// The target pad gets the source's settings, keeping its own track
+void applyPadCopy(int srcPad, int dstPad, uint8_t program)
+{
+    strPadSlot& d = mtProject.pads.pad[dstPad];
+    const strPadSlot& s = mtProject.pads.pad[srcPad];
+    uint8_t track = d.track;
+    d = s;
+    d.track = track;
+    d.program = program;
+    setPadColor(dstPad, padColor(srcPad));
+    newFileManager.setProjectStructChanged();
+}
+
+bool slotFree(int slot)
+{
+    return programType(slot) == kProgramEmpty && !mtProject.instrument[slot].isActive &&
+           mtProject.programs.slot[slot].type != kProgramMidi;
+}
+
+// A free slot for a copy of a sample program: the first one after the last
+// sample, so no other sample moves in memory (safe while the pattern plays).
+// Otherwise any free slot, and *moves = true (playback has to stop).
+int freeSampleSlot(bool* moves)
+{
+    int last = -1;
+    for (int i = 0; i < kSampleInstrumentsCount; i++)
+        if (mtProject.instrument[i].isActive)
+            last = i;
+    for (int i = last + 1; i < kSampleInstrumentsCount; i++)
+        if (slotFree(i))
+        {
+            *moves = false;
+            return i;
+        }
+    for (int i = 0; i < kSampleInstrumentsCount; i++)
+        if (slotFree(i))
+        {
+            *moves = true;
+            return i;
+        }
+    return -1;
+}
+
+int freeSlot()
+{
+    for (int i = 0; i < kProgramSlots; i++)
+        if (slotFree(i))
+            return i;
+    return -1;
+}
+} // namespace
+
+const char* cPadAssign::copyPad(int dst, bool shareProgram)
+{
+    int src = selPad;
+    if (dst < 0 || dst >= kPads || src < 0 || src >= kPads || dst == src)
+        return nullptr;
+    if (pending.active)
+        return "Still copying";
+    char sName[4], dName[4];
+    padName(src, sName);
+    padName(dst, dName);
+    const strPadSlot& s = mtProject.pads.pad[src];
+
+    if (shareProgram || s.program == kPadNoProgram || programType(s.program) == kProgramEmpty)
+    {
+        applyPadCopy(src, dst, s.program);
+        selPad = dst;
+        refresh();
+        snprintf(copyMsg, sizeof copyMsg, "%s copied to %s", sName, dName);
+        return copyMsg;
+    }
+
+    if (programType(s.program) == kProgramMidi)
+    {
+        int slot = freeSlot();
+        if (slot < 0)
+            return "No free program slot";
+        mtProject.programs.slot[slot] = mtProject.programs.slot[s.program];
+        applyPadCopy(src, dst, (uint8_t)slot);
+        selPad = dst;
+        refresh();
+        snprintf(copyMsg, sizeof copyMsg, "%s copied to %s, program %d", sName, dName, slot + 1);
+        return copyMsg;
+    }
+
+    bool moves = false;
+    int slot = freeSampleSlot(&moves);
+    if (slot < 0)
+        return "No free program slot";
+    if ((uint64_t)mtProject.used_memory + newFileManager.getSampleMemorySize(s.program, s.program) >=
+        mtProject.max_memory)
+        return "Not enough sample memory";
+    if (moves && sequencer.getSeqState() != Sequencer::SEQ_STATE_STOP)
+        sequencer.stop(); // samples move in memory: nothing may play them meanwhile
+    if (!newFileManager.copyInstrumentsInWorkspace(s.program, 1, (uint8_t)slot))
+        return "Busy - try again";
+    pending.active = true;
+    pending.srcPad = src;
+    pending.dstPad = dst;
+    pending.program = (uint8_t)slot;
+    return "Copying...";
+}
+
+void cPadAssign::update()
+{
+    if (!pending.active)
+        return;
+    uint8_t st = newFileManager.getStatus();
+    if (st == fmCopyingInstrumentsEnd)
+    {
+        newFileManager.clearStatus();
+        pending.active = false;
+        applyPadCopy(pending.srcPad, pending.dstPad, pending.program);
+        char sName[4], dName[4];
+        padName(pending.srcPad, sName);
+        padName(pending.dstPad, dName);
+        snprintf(copyMsg, sizeof copyMsg, "%s copied to %s, program %d", sName, dName, pending.program + 1);
+        mtPopups.show(0, copyMsg);
+        if (mtInterface.isPadAssignScreenActive())
+        {
+            selPad = pending.dstPad;
+            refresh();
+        }
+    }
+    else if (st >= fmError)
+    {
+        newFileManager.clearStatus();
+        pending.active = false;
+        mtPopups.show(0, "Copy failed");
+    }
 }
 
 void cPadAssign::fillValues()

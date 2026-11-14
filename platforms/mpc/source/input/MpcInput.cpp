@@ -118,6 +118,7 @@ constexpr uint8_t kNoteShift = 49;
 constexpr uint8_t kNoteNoteRepeat = 11;
 constexpr uint8_t kNote16Levels = 40;
 constexpr uint8_t kNoteProgramEdit = 2;
+constexpr uint8_t kNoteCopy = 122;
 constexpr uint8_t kNoteMain = 52;
 constexpr uint8_t kNoteErase = 9;
 
@@ -829,6 +830,8 @@ void MpcInput::onButton(uint8_t note, bool down)
         case Act::Minus: tapWithShift(interfaceButtonDelete); break;
 
         case Act::Copy:
+            if (mtInterface.isPadAssignScreenActive())
+                break; // held for COPY + pad (5d-4)
             if (mpcShift)
                 tapWithShift(interfaceButtonDelete); // DELETE label: remove selected steps
             else
@@ -1167,6 +1170,14 @@ void MpcInput::onPad(uint8_t note, bool down, uint8_t velocity)
         if (!n)
             return;
         int pad = padIndex(padBank, n);
+        if (noteDown[kNoteCopy])
+        {
+            // 5d-4: COPY held = copy the selected pad here, with a copy of its
+            // program; SHIFT+COPY = same program
+            if (const char* msg = padAssign.copyPad(pad, mpcShift))
+                mtPopups.show(0, msg);
+            return;
+        }
         padAssign.selectPad(pad);
         enginePadHeld[note] = (int8_t)pad;
         lastEngineNote = note;

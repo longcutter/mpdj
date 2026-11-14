@@ -25,7 +25,7 @@ class cPadAssign : public ModuleBase
         ParamCount
     };
 
-    virtual void update() {}
+    virtual void update(); // finishes a program copy (5d-4)
     virtual void start(uint32_t options);
     virtual void stop();
     virtual void initDisplayControls();
@@ -35,6 +35,11 @@ class cPadAssign : public ModuleBase
     // button shows that bank (the same pad number there)
     void selectPad(int pad);
     int padAt(float x, float y) const; // touch -> pad, -1 off the grid
+
+    // 5d-4: COPY + pad = the selected pad onto `dst` with its own copy of the
+    // program; SHIFT+COPY + pad (shareProgram) = same program. The target keeps
+    // its track. Returns a message for a popup.
+    const char* copyPad(int dst, bool shareProgram);
     static constexpr int kGridX = 6, kGridY = 34, kGridW = 470, kGridH = 382;
     void showBank(int bank);
     int selectedPad() const { return selPad; }
