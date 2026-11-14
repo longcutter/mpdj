@@ -424,7 +424,7 @@ void checkConfig()
     if (mtConfig.general.fullLevelDefault > 1)
         mtConfig.general.fullLevelDefault = 0;
     if (mtConfig.general.popupTime > 6)
-        mtConfig.general.popupTime = 1;
+        mtConfig.general.popupTime = 0;
 #endif
     if (mtConfig.general.performanceSource > 1)
         mtConfig.general.performanceSource = 0;
@@ -596,7 +596,7 @@ void resetConfig()
     mtConfig.general.trackMuteMode = 0;  // Latch
     mtConfig.general.trackMuteTiming = 0; // Now
     mtConfig.general.fullLevelDefault = 0; // Off
-    mtConfig.general.popupTime = 1;        // 1 s
+    mtConfig.general.popupTime = 0;        // 0.5 s (Mike 2026-11-14)
 #endif
 
     // interface ----------------------------------------
