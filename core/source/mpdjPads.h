@@ -105,6 +105,22 @@ uint8_t padGroupFor(uint8_t program, uint8_t track);
 // pads mean this (MPC: the Pattern screen without popups, not recording).
 const char* mpdjPadPress(int pad, uint8_t velocity);
 void mpdjPadRelease(int pad);
+
+// Note Repeat (step 5b-7): while it's on (NOTE REPEAT held, or latched with
+// SHIFT), every held pad retriggers at the division with its press velocity.
+// Playing: on the pattern's grid (a uStep position); stopped: free-running
+// from the first repeating press. A pad's own press always sounds at once; a
+// grid hit closer than half a division to it is skipped.
+void mpdjRepeatSet(bool on);
+bool mpdjRepeatOn();
+// Division in sequencer nanoSteps (576 = one row = 1/16; all multiples of 12)
+static constexpr uint16_t kRepeatDefaultPeriod = 576;
+void mpdjRepeatSetPeriod(uint16_t nanoSteps);
+uint16_t mpdjRepeatPeriod();
+// Called by the sequencer on every nanoStep (audio thread). uPos = the
+// pattern position in uSteps (row * 48 + uStep - 1) on a uStep boundary
+// while playing, else -1
+void mpdjRepeatTick(bool playing, int32_t uPos);
 // Gate or One shot for the pad as it is now (Auto: Gate for MIDI programs and
 // samples that loop or sustain: loop modes, wavetable, granular)
 bool padIsGate(int pad);

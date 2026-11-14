@@ -242,6 +242,12 @@ AUDIO_CORE_RAM void Sequencer::tick_uStep(void)
     {
         timerTicks++;
 
+        // MPDJ (5b-7a): Note Repeat on the pattern's grid (uSteps from row 0)
+        int32_t uPos = -1;
+        if (timerTicks % 12 == 1)
+            uPos = (int32_t)player.track[0].actual_pos * kuStepsInStep + player.track[0].uStep - 1;
+        mpdjRepeatTick(true, uPos);
+
         if (timerTicks % 12 == 1)
         {
             inc_uStepGlobal();
@@ -251,6 +257,10 @@ AUDIO_CORE_RAM void Sequencer::tick_uStep(void)
                 inc_uStep(trackIdx);
             }
         }
+    }
+    else
+    {
+        mpdjRepeatTick(false, -1); // MPDJ (5b-7a): Note Repeat while stopped
     }
 }
 

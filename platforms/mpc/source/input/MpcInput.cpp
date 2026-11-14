@@ -69,6 +69,7 @@ enum class Act : uint8_t
     EncoderPush, // Pattern screen: paste (Tracker Shift+Copy); elsewhere Enter (Mini middle)
     QLinkMode,   // Q-LINK: Q-Link modes 1 (navigate) > 2 (screen buttons 1-4) > 3 (5-8)
     PadGrid,     // 16 LEVELS: Pattern screen pads = pad map / the Tracker's 4x12 grid
+    NoteRepeat,  // NOTE REPEAT: held = held pads retrigger; SHIFT = latch on / off (5b-7a)
 };
 
 struct ButtonMap
@@ -102,12 +103,14 @@ const ButtonMap kButtonMap[] = {
     { 111, Act::EncoderPush, -1, "ENCODER PUSH" },
     { 0, Act::QLinkMode, -1, "Q-LINK" },
     { 40, Act::PadGrid, -1, "16 LEVELS" }, // for now (5b-3); later the chromatic mode
-    // Not mapped yet: TRACK MUTE, NOTE REPEAT,
+    { 11, Act::NoteRepeat, -1, "NOTE REPEAT" },
+    // Not mapped yet: TRACK MUTE,
     // FULL LEVEL, STEP SEQ, TC, OVER DUB (pad work, milestone 5)
 };
 
 constexpr uint8_t kNoteBankA = 35, kNoteBankD = 38;
 constexpr uint8_t kNoteShift = 49;
+constexpr uint8_t kNoteNoteRepeat = 11;
 constexpr uint8_t kNoteMain = 52;
 constexpr uint8_t kNoteErase = 9;
 
@@ -525,6 +528,11 @@ void MpcInput::onButton(uint8_t note, bool down)
             mpcShift = false;
             closeProgramPicker();
         }
+        if (note == kNoteNoteRepeat && repeatHeld)
+        {
+            repeatHeld = false;
+            updateNoteRepeat();
+        }
         if (buttonHeld[note] >= 0)
         {
             buttons->release(buttonHeld[note]);
@@ -683,6 +691,18 @@ void MpcInput::onButton(uint8_t note, bool down)
             padGrid = !padGrid;
             mtPopups.show(0, padGrid ? "Pads: Tracker grid" : "Pads: pad map");
             break;
+        case Act::NoteRepeat:
+            if (mpcShift || repeatLatched)
+            {
+                // SHIFT+NOTE REPEAT latches it on; any press while latched unlatches
+                releaseCoreShift();
+                repeatLatched = !repeatLatched;
+                mtPopups.show(0, repeatLatched ? "Note Repeat latched" : "Note Repeat off");
+            }
+            else
+                repeatHeld = true;
+            updateNoteRepeat();
+            break;
     }
 
     if (hold >= 0)
@@ -695,6 +715,14 @@ void MpcInput::onButton(uint8_t note, bool down)
         programPicker = true;
         buttons->press(interfaceButtonInstr);
     }
+}
+
+// Note Repeat (5b-7a): on while NOTE REPEAT is held or latched
+void MpcInput::updateNoteRepeat()
+{
+    mpdjRepeatSet(repeatHeld || repeatLatched);
+    if (trace)
+        printf("input: note repeat %s\n", mpdjRepeatOn() ? (repeatLatched ? "latched" : "on") : "off");
 }
 
 // Holding TAP TEMPO for kTapHoldMs locks / unlocks the tempo; the press's tap
@@ -1793,6 +1821,7 @@ void MpcInput::pollButtonLeds()
     for (int b = 0; b < 4; b++)                                            // BANK A-D
         set((uint8_t)(kNoteBankA + b), when(padBank == b));
     set(40, !onPattern ? Lit::NotAvailable : when(padGrid));               // 16 LEVELS (grid)
+    set(11, !onPattern ? Lit::NotAvailable : when(repeatHeld || repeatLatched)); // NOTE REPEAT
     set(52, when(onPattern || onSong));                                    // MAIN
     set(50, when(mtInterface.isSampleLoaderScreenActive() || mtInterface.isFileScreenActive())); // BROWSE
     set(123, when(mtInterface.isConfigScreenActive()));                    // MENU
@@ -1801,10 +1830,10 @@ void MpcInput::pollButtonLeds()
     set(42, when(mtInterface.isPerformanceModeScreenActive()));            // NEXT SEQ (SHIFT = Performance)
     set(122, when(noteDown[122]));                                         // COPY
     set(49, when(mpcShift));                                               // SHIFT
-    // Not built yet (milestone 5): TRACK MUTE, OVER DUB, NOTE REPEAT, TC,
+    // Not built yet (milestone 5): TRACK MUTE, OVER DUB, TC,
     // FULL LEVEL, STEP SEQ. Later, banks: dim when they hold samples,
     // dark when empty (Mike 2026-11-12)
-    for (uint8_t cc : { 43, 80, 11, 12, 39, 41 })
+    for (uint8_t cc : { 43, 80, 12, 39, 41 })
         set(cc, Lit::NotAvailable);
 }
 

@@ -8,6 +8,9 @@
 #include "util_math.h"
 #include "mtConfig.h"
 
+#include "Audio.h"
+
+#include <atomic>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,9 +30,53 @@ struct Held
     int8_t track = -1; // -1 = not held by the engine
     bool gate = false;
     bool cut = false;      // Gate + cut on release (5b-6a)
-    bool recorded = false; // the press was written in live REC (5b-4a)
+    bool recorded = false;
+    // Note Repeat (5b-7a): what a retrigger plays, captured at the press
+    uint8_t program = 0;
+    uint8_t note = 0;
+    uint8_t velo = 0;
+    uint8_t group = 0;
+    std::atomic<bool> repeat{ false };
+    uint32_t lastHit = 0; // s_nano of the last hit // the press was written in live REC (5b-4a)
 };
 Held s_held[kPads];
+
+// Note Repeat state (5b-7a)
+std::atomic<bool> s_repeatOn{ false };
+std::atomic<uint16_t> s_repeatPeriod{ kRepeatDefaultPeriod };
+std::atomic<uint32_t> s_nano{ 0 }; // nanoSteps since start (audio thread)
+uint32_t s_freeNano = 0;           // stopped: phase from the first repeating press
+std::atomic<int> s_repeating{ 0 }; // pads repeating
+
+// Wait until the audio thread isn't inside a block: it holds the audio lock
+// for the whole block, so after this no retrigger can still be on its way
+void audioBarrier()
+{
+    AudioNoInterrupts();
+    AudioInterrupts();
+}
+
+void startRepeat(int pad)
+{
+    Held& h = s_held[pad];
+    if (h.track < 0 || h.repeat.load())
+        return;
+    if (s_repeating.load() == 0)
+        s_freeNano = 0; // read only by the audio thread, which is idle with 0 repeating
+    h.lastHit = s_nano.load();
+    h.repeat.store(true);
+    s_repeating.fetch_add(1);
+}
+
+void stopRepeat(int pad)
+{
+    Held& h = s_held[pad];
+    if (!h.repeat.load())
+        return;
+    h.repeat.store(false);
+    s_repeating.fetch_sub(1);
+    audioBarrier();
+}
 // The pad whose hit was written last on each track (5b-4b): only that pad's
 // release writes an OFF there (a later hit on the track ends the note anyway)
 int8_t s_lastRecPad[kAllTracks] = { -1, -1, -1, -1, -1, -1, -1, -1,
@@ -91,7 +138,15 @@ const char* mpdjPadPress(int pad, uint8_t velocity)
 
     uint8_t note = p->note < 0 ? (uint8_t)Sequencer::STEP_NOTE_DEFAULT : (uint8_t)p->note;
     uint8_t velo = padVelocity(p->program, velocity ? velocity : 1);
-    s_held[pad] = { (int8_t)p->track, padIsGate(pad), padIsGate(pad) && padCutOf(p->mode) };
+    Held& h = s_held[pad];
+    h.track = (int8_t)p->track;
+    h.gate = padIsGate(pad);
+    h.cut = h.gate && padCutOf(p->mode);
+    h.recorded = false;
+    h.program = p->program;
+    h.note = note;
+    h.velo = velo;
+    h.group = padGroupOf(p->mode);
 
     // choke groups (5b-5c): the pad's own group cuts the rest of the group,
     // also when this track is muted
@@ -118,7 +173,74 @@ const char* mpdjPadPress(int pad, uint8_t velocity)
                !sequencer.isRecArmedOnTrack(p->track) ? "track not armed" : "counting in");
     }
 #endif
+    if (s_repeatOn.load())
+        startRepeat(pad); // Note Repeat (5b-7a): the press was the first hit
     return nullptr;
+}
+
+// ---------------------------------------------------------------- Note Repeat
+void mpdjRepeatSet(bool on)
+{
+    if (on == s_repeatOn.load())
+        return;
+    s_repeatOn.store(on);
+    for (int pad = 0; pad < kPads; pad++)
+    {
+        if (on)
+            startRepeat(pad); // pads already held join in (no extra hit now)
+        else
+            stopRepeat(pad); // held pads keep their last note
+    }
+}
+
+bool mpdjRepeatOn()
+{
+    return s_repeatOn.load();
+}
+
+void mpdjRepeatSetPeriod(uint16_t nanoSteps)
+{
+    if (nanoSteps < 12)
+        nanoSteps = 12;
+    s_repeatPeriod.store(nanoSteps);
+}
+
+uint16_t mpdjRepeatPeriod()
+{
+    return s_repeatPeriod.load();
+}
+
+// Audio thread, every sequencer nanoStep (holds the audio lock)
+void mpdjRepeatTick(bool playing, int32_t uPos)
+{
+    uint32_t now = s_nano.fetch_add(1) + 1;
+    if (s_repeating.load() == 0)
+        return;
+    uint32_t period = s_repeatPeriod.load();
+    bool fire;
+    if (playing)
+    {
+        uint32_t uPeriod = period / 12; // uSteps
+        fire = uPos >= 0 && uPeriod && (uint32_t)uPos % uPeriod == 0;
+    }
+    else
+    {
+        s_freeNano++;
+        fire = s_freeNano % period == 0;
+    }
+    if (!fire)
+        return;
+    for (int pad = 0; pad < kPads; pad++)
+    {
+        Held& h = s_held[pad];
+        if (!h.repeat.load() || h.track < 0)
+            continue;
+        if (now - h.lastHit < period / 2)
+            continue; // just pressed: no flam
+        h.lastHit = now;
+        sequencer.mpdjChoke((uint8_t)h.track, h.group, nullptr);
+        sequencer.mpdjPadNoteOn((uint8_t)h.track, h.program, h.note, h.velo, kPadSourceBase + pad);
+    }
 }
 
 int mpdjPadStepWrite(int pad, int row, uint8_t velocity)
@@ -187,6 +309,7 @@ void mpdjPadRelease(int pad)
 {
     if (pad < 0 || pad >= kPads || s_held[pad].track < 0)
         return;
+    stopRepeat(pad); // no retrigger after the note off below
     uint8_t track = (uint8_t)s_held[pad].track;
     sequencer.mpdjPadNoteOff(track, kPadSourceBase + pad, s_held[pad].gate, s_held[pad].cut);
 #ifdef PLATFORM_MPC
@@ -224,7 +347,9 @@ void mpdjPadRelease(int pad)
         }
 #endif
     }
-    s_held[pad] = {};
+    Held& h = s_held[pad];
+    h.track = -1;
+    h.gate = h.cut = h.recorded = false;
 }
 
 const strPadSlot* padSlot(int pad)
