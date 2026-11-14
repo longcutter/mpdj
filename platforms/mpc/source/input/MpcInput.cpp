@@ -2130,8 +2130,26 @@ void MpcInput::pollButtonLeds()
            : when(mtInterface.isSamplePlayerScreenActive()));
     set(2, when(mtInterface.isInstrumentParamsScreenActive()));            // PROGRAM EDIT
     set(9, noteDown[9] ? Lit::ActiveRed : Lit::Available);                 // ERASE
-    for (int b = 0; b < 4; b++)                                            // BANK A-D
-        set((uint8_t)(kNoteBankA + b), when(padBank == b));
+    // BANK A-D (5c-4): the selected bank bright; on the Pattern screen's pad
+    // map a bank whose pads hold programs is dim and an empty one dark (Notes
+    // mode / 16 Levels: every bank plays, so all dim)
+    bool padMapHere = onPattern && !padGrid && !mpdjNotesOn() && !mpdjLevelsOn();
+    for (int b = 0; b < 4; b++)
+    {
+        Lit lit = when(padBank == b);
+        if (padBank != b && padMapHere)
+        {
+            bool filled = false;
+            for (int n = 0; n < 16 && !filled; n++)
+            {
+                const strPadSlot* p = padSlot(b * 16 + n);
+                filled = p && p->program != kPadNoProgram && programType(p->program) != kProgramEmpty;
+            }
+            if (!filled)
+                lit = Lit::NotAvailable;
+        }
+        set((uint8_t)(kNoteBankA + b), lit);
+    }
     set(40, !onPattern ? Lit::NotAvailable : when(mpdjLevelsOn() || mpdjNotesOn())); // 16 LEVELS (16 Levels / Notes)
     set(11, !onPattern ? Lit::NotAvailable : when(repeatHeld || repeatLatched)); // NOTE REPEAT
     set(52, when(onPattern || onSong));                                    // MAIN
