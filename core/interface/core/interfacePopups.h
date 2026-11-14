@@ -216,6 +216,8 @@ class InterfacePopups
     uint32_t* textColors[textLinesCount];
 
     elapsedMillis popupTimer;
+    uint32_t popupDurationMs = 2000; // MPDJ: popups time out in ms (Config "Popup time")
+    uint32_t defaultPopupMs() const;
     uint8_t globalPopupDisplayTime = 0;
 
     //-----------------------------------------------------------

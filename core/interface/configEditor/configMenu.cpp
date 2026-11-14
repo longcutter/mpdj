@@ -181,6 +181,8 @@ const strItemTypeListText setupPadLights{ &mtConfig.general.padLights, 3, padLig
 cMenuItem melPadLights(menuGeneral, "Pad lights", padLightsDesc, menuTypeItemListText, &setupPadLights);
 const strItemTypeListText setupFullLevel{ &mtConfig.general.fullLevelDefault, 2, fullLevelTexts };
 cMenuItem melFullLevel(menuGeneral, "Full level default", fullLevelDesc, menuTypeItemListText, &setupFullLevel);
+const strItemTypeListText setupPopupTime{ &mtConfig.general.popupTime, 7, popupTimeTexts };
+cMenuItem melPopupTime(menuGeneral, "Popup time", popupTimeDesc, menuTypeItemListText, &setupPopupTime);
 #endif
 cMenuItem melHexMode(menuGeneral,
                      "Numbering mode",

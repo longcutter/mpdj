@@ -210,22 +210,24 @@ void InterfacePopups::refreshColors()
 
 void InterfacePopups::update()
 {
-    if (globalPopupDisplayTime > 0)
+    // MPDJ: a duration in ms (Config "Popup time" for the default) instead of
+    // whole seconds counted down
+    if (globalPopupDisplayTime > 0 && popupTimer > popupDurationMs)
     {
-        if (popupTimer > 1000)
-        {
-            popupTimer = 0;
-
-            if (globalPopupDisplayTime == 1)
-            {
-                hide();
-            }
-            else
-            {
-                globalPopupDisplayTime--;
-            }
-        }
+        popupTimer = 0;
+        hide();
     }
+}
+
+uint32_t InterfacePopups::defaultPopupMs() const
+{
+#ifdef PLATFORM_MPC
+    static const uint16_t kPopupTimesMs[7] = { 500, 1000, 1500, 2000, 3000, 4000, 5000 };
+    uint8_t i = mtConfig.general.popupTime;
+    return kPopupTimesMs[i < 7 ? i : 1];
+#else
+    return globalConfig.time * 1000u;
+#endif
 }
 
 //=====================================================================================================
@@ -1320,6 +1322,7 @@ void InterfacePopups::show(uint8_t, char** multiLineText, uint8_t lines_count, u
     popupTimer = 0;
 
     globalPopupDisplayTime = time != 0 ? time : globalConfig.time;
+    popupDurationMs = time != 0 ? time * 1000u : defaultPopupMs();
 
     // kopiowanie configu
     popupData.textLinesCount = lines_count;
@@ -1498,6 +1501,7 @@ void InterfacePopups::showMasterVolumePopup()
 {
     popupTimer = 0;
     globalPopupDisplayTime = 2;
+    popupDurationMs = defaultPopupMs();
 
     float masterVolumeInDecybels = map((float)(mtConfig.audioCodecConfig.volume / 100.0f),
                                        0.0f,
