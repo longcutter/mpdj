@@ -57,8 +57,6 @@ constexpr uint8_t padModeByte(PadMode mode, uint8_t group, bool cut = false)
 }
 
 // The MPDJ Kit's hats (tools/kitgen): Closed Hat, Open Hat, Pedal Hat
-static constexpr int kDefaultHatPads[] = { 2, 3, 11 }; // A03, A04, A12
-static constexpr uint8_t kDefaultHatGroup = 1;
 
 // Pad colors (5c-2): 0 = Auto (the pad's track color), 1-16 = kPadPalette
 static constexpr int kPadColors = 16;
@@ -79,19 +77,16 @@ struct strPadMap
 
     constexpr strPadMap() : pad{}, color{} { setDefault(); }
 
-    // New projects: hats in group 1 with cut on release (until Pad Assign,
-    // 5d, sets both per pad). withGroups = false: the plain map that
-    // older files and invalid entries get (existing projects keep no groups)
-    constexpr void setDefault(bool withGroups = true)
+    // Pad N -> program N -> track N, no choke group, no cut on release, Auto
+    // colors. (5d-5, Mike 2026-11-14: the hats' built-in group 1 + cut is
+    // gone; choke groups and cut are set per pad on Pad Assign.)
+    constexpr void setDefault()
     {
         for (int i = 0; i < kPads; i++)
         {
             pad[i] = { uint8_t(i), uint8_t(i % kPadsPerBank), kPadNoteDefault, kPadModeAuto };
             color[i] = 0;
         }
-        if (withGroups)
-            for (int i : kDefaultHatPads)
-                pad[i].mode = padModeByte(kPadModeAuto, kDefaultHatGroup, true);
     }
 };
 

@@ -757,7 +757,7 @@ const uint8_t* padColorRgb(int pad, uint8_t track)
 void padsRead(const strPadSlot* in)
 {
     strPadMap def;
-    def.setDefault(false); // existing projects keep no groups
+    def.setDefault();
     for (int i = 0; i < kPads; i++)
         mtProject.pads.pad[i] = (in && padValid(in[i])) ? in[i] : def.pad[i];
 }
@@ -787,11 +787,11 @@ int padsSelfTest()
     memcpy(savedVolumes, mtProject.trackVolumeHi, sizeof(savedVolumes));
 
     // 1. The default map: bank A pad N -> program N -> track N, bank B pad N ->
-    //    program 16+N -> track N ...; sample pitch; Auto. New projects: the
-    //    kit's hats (A03, A04, A12) in choke group 1, every other pad none
+    //    program 16+N -> track N ...; sample pitch; Auto; no groups or cut (5d-5)
     strPadMap def;
-    strPadMap plain;
-    plain.setDefault(false);
+    strPadMap hats = def; // the tests' hats: A03, A04, A12 in group 1 with cut
+    for (int i : { 2, 3, 11 })
+        hats.pad[i].mode = padModeByte(kPadModeAuto, 1, true);
     for (int b = 0; b < kPadBanks; b++)
         for (int n = 1; n <= kPadsPerBank; n++)
         {
@@ -800,10 +800,7 @@ int padsSelfTest()
             check(def.pad[i].track == n - 1, "default track (banks share tracks)", i);
             check(def.pad[i].note == kPadNoteDefault, "default note", i);
             check(padModeOf(def.pad[i].mode) == kPadModeAuto, "default mode", i);
-            bool hat = b == 0 && (n == 3 || n == 4 || n == 12);
-            check(padGroupOf(def.pad[i].mode) == (hat ? 1 : 0), "default group (hats in 1)", i);
-            check(padCutOf(def.pad[i].mode) == hat, "default cut on release (hats)", i);
-            check(plain.pad[i].mode == kPadModeAuto, "plain default: no group", i);
+            check(def.pad[i].mode == kPadModeAuto, "default: no group, no cut", i);
         }
     char name[4];
     padName(padIndex(0, 1), name);
@@ -814,6 +811,8 @@ int padsSelfTest()
 
     // 1b. Group bits don't change the play mode
     mtProject.pads = def;
+    for (int i : { 2, 3, 11 })
+        setPadGroup(i, 1);
     check(padGroup(2) == 1 && padGroup(3) == 1 && padGroup(11) == 1 && padGroup(0) == 0,
           "padGroup on the default map", -1);
     check(padGroup(-1) == 0 && padGroup(kPads) == 0, "padGroup range", -1);
@@ -851,7 +850,7 @@ int padsSelfTest()
     mtProject.instrument[40].isActive = savedActive;
 
     // 1c. A (program, track)'s group: the first pad in bank order decides
-    mtProject.pads = def;
+    mtProject.pads = hats;
     check(padGroupFor(2, 2) == 1 && padGroupFor(3, 3) == 1 && padGroupFor(11, 11) == 1, "hats by (program, track)", -1);
     check(padGroupFor(0, 0) == 0 && padGroupFor(2, 3) == 0, "no group / no pad", -1);
     mtProject.pads.pad[padIndex(1, 5)] = { 2, 2, -1, padModeByte(kPadModeAuto, 7) }; // B05: closed hat, group 7
@@ -862,7 +861,7 @@ int padsSelfTest()
     check(padGroupFor(2, 2) == 0, "A16 (no group) comes before B05", -1);
 
     // 2. Round trip through the MPDJ block (version 4), groups included
-    mtProject.pads = def;
+    mtProject.pads = hats;
     mtProject.pads.pad[0] = { 5, 2, 48, kPadModeGate };          // A01: program 06, track 3, C-3
     mtProject.pads.pad[17] = { kPadNoProgram, 15, -1, kPadModeOneShot }; // B02: nothing, track 16
     mtProject.pads.pad[63] = { 63, 0, 127, kPadModeAuto };       // D16 -> track 1
@@ -935,7 +934,7 @@ int padsSelfTest()
     file.pads[8] = { 8, 8, -1, uint8_t(3 | (4 << kPadGroupShift)) }; // mode 3 with a group
     programsReadFromFile(file);
     for (int i = 3; i <= 8; i++)
-        check(memcmp(&mtProject.pads.pad[i], &plain.pad[i], 4) == 0, "bad entry -> plain default", i);
+        check(memcmp(&mtProject.pads.pad[i], &def.pad[i], 4) == 0, "bad entry -> plain default", i);
 
     // 4. Older MPDJ blocks (version 1, 2) and Tracker+ projects: the default
     //    map without groups (existing projects keep no groups)
@@ -945,7 +944,7 @@ int padsSelfTest()
         mtProject.pads.pad[9].track = 12;
         programsReadFromFile(file);
         for (int i = 0; i < kPads; i++)
-            check(memcmp(&mtProject.pads.pad[i], &plain.pad[i], 4) == 0,
+            check(memcmp(&mtProject.pads.pad[i], &def.pad[i], 4) == 0,
                   ver == 1 ? "version 1 block -> default map, no groups" : "version 2 block -> default map, no groups", i);
     }
     strMpdjProjectData none = {};
@@ -953,7 +952,7 @@ int padsSelfTest()
     programsReadFromFile(none);
     programsTakeImportNotice();
     for (int i = 0; i < kPads; i++)
-        check(memcmp(&mtProject.pads.pad[i], &plain.pad[i], 4) == 0, "Tracker+ project -> default map, no groups", i);
+        check(memcmp(&mtProject.pads.pad[i], &def.pad[i], 4) == 0, "Tracker+ project -> default map, no groups", i);
     check(padGroupFor(2, 2) == 0, "older file: hats in no group", -1);
 
     mtProject.pads = savedMap;
