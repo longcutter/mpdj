@@ -51,9 +51,9 @@ bool padIsGate(int pad)
         return false;
     if (programType(p->program) == kProgramMidi)
         return true; // a MIDI note always needs its note off
-    if (p->mode == kPadModeGate)
+    if (padModeOf(p->mode) == kPadModeGate)
         return true;
-    if (p->mode == kPadModeOneShot)
+    if (padModeOf(p->mode) == kPadModeOneShot)
         return false;
     switch (mtProject.instrument[p->program].playMode)
     {
@@ -228,7 +228,7 @@ void padName(int pad, char out[4])
 
 const char* padModeName(uint8_t mode)
 {
-    switch (mode)
+    switch (padModeOf(mode))
     {
     case kPadModeAuto: return "Auto";
     case kPadModeOneShot: return "One shot";
@@ -240,7 +240,32 @@ const char* padModeName(uint8_t mode)
 static bool padValid(const strPadSlot& p)
 {
     return (p.program < kProgramSlots || p.program == kPadNoProgram) && p.track < kAllTracks &&
-           p.note >= kPadNoteDefault && p.mode < kPadModeCount;
+           p.note >= kPadNoteDefault && padModeOf(p.mode) < kPadModeCount && (p.mode & 0x80) == 0;
+}
+
+uint8_t padGroup(int pad)
+{
+    const strPadSlot* p = padSlot(pad);
+    return p ? padGroupOf(p->mode) : 0;
+}
+
+void setPadGroup(int pad, uint8_t group)
+{
+    if (pad < 0 || pad >= kPads)
+        return;
+    strPadSlot& p = mtProject.pads.pad[pad];
+    p.mode = padModeByte(padModeOf(p.mode), group);
+}
+
+uint8_t padGroupFor(uint8_t program, uint8_t track)
+{
+    for (int i = 0; i < kPads; i++)
+    {
+        const strPadSlot& p = mtProject.pads.pad[i];
+        if (p.program == program && p.track == track)
+            return padGroupOf(p.mode);
+    }
+    return 0;
 }
 
 void padsWrite(strPadSlot* out)
@@ -251,6 +276,7 @@ void padsWrite(strPadSlot* out)
 void padsRead(const strPadSlot* in)
 {
     strPadMap def;
+    def.setDefault(false); // existing projects keep no groups
     for (int i = 0; i < kPads; i++)
         mtProject.pads.pad[i] = (in && padValid(in[i])) ? in[i] : def.pad[i];
 }
@@ -280,8 +306,11 @@ int padsSelfTest()
     memcpy(savedVolumes, mtProject.trackVolumeHi, sizeof(savedVolumes));
 
     // 1. The default map: bank A pad N -> program N -> track N, bank B pad N ->
-    //    program 16+N -> track N ...; sample pitch; Auto
+    //    program 16+N -> track N ...; sample pitch; Auto. New projects: the
+    //    kit's hats (A03, A04, A12) in choke group 1, every other pad none
     strPadMap def;
+    strPadMap plain;
+    plain.setDefault(false);
     for (int b = 0; b < kPadBanks; b++)
         for (int n = 1; n <= kPadsPerBank; n++)
         {
@@ -289,7 +318,10 @@ int padsSelfTest()
             check(def.pad[i].program == b * 16 + n - 1, "default program", i);
             check(def.pad[i].track == n - 1, "default track (banks share tracks)", i);
             check(def.pad[i].note == kPadNoteDefault, "default note", i);
-            check(def.pad[i].mode == kPadModeAuto, "default mode", i);
+            check(padModeOf(def.pad[i].mode) == kPadModeAuto, "default mode", i);
+            bool hat = b == 0 && (n == 3 || n == 4 || n == 12);
+            check(padGroupOf(def.pad[i].mode) == (hat ? 1 : 0), "default group (hats in 1)", i);
+            check(plain.pad[i].mode == kPadModeAuto, "plain default: no group", i);
         }
     char name[4];
     padName(padIndex(0, 1), name);
@@ -298,10 +330,61 @@ int padsSelfTest()
     check(strcmp(name, "D16") == 0, "name D16", 63);
     check(padSlot(-1) == nullptr && padSlot(kPads) == nullptr, "padSlot range", -1);
 
-    // 2. Round trip through the MPDJ block (version 3)
+    // 1b. Group bits don't change the play mode
+    mtProject.pads = def;
+    check(padGroup(2) == 1 && padGroup(3) == 1 && padGroup(11) == 1 && padGroup(0) == 0,
+          "padGroup on the default map", -1);
+    check(padGroup(-1) == 0 && padGroup(kPads) == 0, "padGroup range", -1);
+    for (int m = 0; m < kPadModeCount; m++)
+        for (int g : { 0, 1, 17, 31 })
+        {
+            mtProject.pads.pad[40].mode = padModeByte(PadMode(m), (uint8_t)g);
+            check(padModeOf(mtProject.pads.pad[40].mode) == m && padGroup(40) == g, "mode and group apart",
+                  m * 100 + g);
+            check(strcmp(padModeName(mtProject.pads.pad[40].mode), padModeName((uint8_t)m)) == 0,
+                  "mode name ignores the group", m * 100 + g);
+        }
+    mtProject.pads.pad[40].mode = padModeByte(kPadModeGate, 0);
+    setPadGroup(40, 9);
+    check(padModeOf(mtProject.pads.pad[40].mode) == kPadModeGate && padGroup(40) == 9, "setPadGroup keeps the mode", 40);
+    setPadGroup(40, 0);
+    check(mtProject.pads.pad[40].mode == kPadModeGate, "setPadGroup 0 = none", 40);
+    setPadGroup(40, 32);
+    check(mtProject.pads.pad[40].mode == kPadModeGate, "setPadGroup > 31 = none", 40);
+    // a Gate pad on a sample program (no loop) stays Gate with a group; One shot stays One shot
+    mtProject.programs.slot[40] = {};
+    uint8_t savedPlayMode = mtProject.instrument[40].playMode;
+    uint8_t savedActive = mtProject.instrument[40].isActive;
+    mtProject.instrument[40].isActive = 1;
+    mtProject.instrument[40].playMode = playModeSingleShot;
+    mtProject.pads.pad[40] = { 40, 8, -1, padModeByte(kPadModeGate, 5) };
+    check(padIsGate(40), "Gate with a group is still Gate", 40);
+    mtProject.pads.pad[40].mode = padModeByte(kPadModeOneShot, 5);
+    check(!padIsGate(40), "One shot with a group is still One shot", 40);
+    mtProject.pads.pad[40].mode = padModeByte(kPadModeAuto, 31);
+    check(!padIsGate(40), "Auto with a group follows the play mode", 40);
+    mtProject.instrument[40].playMode = playModeLoopForward;
+    check(padIsGate(40), "Auto with a group on a loop = Gate", 40);
+    mtProject.instrument[40].playMode = savedPlayMode;
+    mtProject.instrument[40].isActive = savedActive;
+
+    // 1c. A (program, track)'s group: the first pad in bank order decides
+    mtProject.pads = def;
+    check(padGroupFor(2, 2) == 1 && padGroupFor(3, 3) == 1 && padGroupFor(11, 11) == 1, "hats by (program, track)", -1);
+    check(padGroupFor(0, 0) == 0 && padGroupFor(2, 3) == 0, "no group / no pad", -1);
+    mtProject.pads.pad[padIndex(1, 5)] = { 2, 2, -1, padModeByte(kPadModeAuto, 7) }; // B05: closed hat, group 7
+    check(padGroupFor(2, 2) == 1, "A03 comes before B05", -1);
+    mtProject.pads.pad[2].program = 5; // A03 now plays something else
+    check(padGroupFor(2, 2) == 7, "then B05 decides", -1);
+    mtProject.pads.pad[padIndex(0, 16)] = { 2, 2, -1, kPadModeAuto }; // A16: same pair, no group
+    check(padGroupFor(2, 2) == 0, "A16 (no group) comes before B05", -1);
+
+    // 2. Round trip through the MPDJ block (version 3), groups included
+    mtProject.pads = def;
     mtProject.pads.pad[0] = { 5, 2, 48, kPadModeGate };          // A01: program 06, track 3, C-3
     mtProject.pads.pad[17] = { kPadNoProgram, 15, -1, kPadModeOneShot }; // B02: nothing, track 16
     mtProject.pads.pad[63] = { 63, 0, 127, kPadModeAuto };       // D16 -> track 1
+    mtProject.pads.pad[20] = { 20, 4, -1, padModeByte(kPadModeGate, 31) }; // B05: Gate, group 31
     strMpdjProjectData file;
     programsWriteToFile(file);
     check(file.version == 3, "block version 3", -1);
@@ -316,32 +399,38 @@ int padsSelfTest()
           "B02 after reload", 17);
     check(mtProject.pads.pad[63].track == 0 && mtProject.pads.pad[63].note == 127, "D16 after reload", 63);
     check(memcmp(&mtProject.pads.pad[1], &def.pad[1], 4) == 0, "untouched pad after reload", 1);
+    check(padGroup(20) == 31 && padModeOf(mtProject.pads.pad[20].mode) == kPadModeGate, "group 31 after reload", 20);
+    check(padGroup(2) == 1 && padGroup(3) == 1 && padGroup(11) == 1, "hats' group after reload", -1);
 
-    // 3. Bad entries read back as that pad's default
+    // 3. Bad entries read back as that pad's plain default (no group)
     file.pads[3] = { 64, 2, -1, 0 };  // program out of range
     file.pads[4] = { 4, 16, -1, 0 };  // track out of range
     file.pads[5] = { 5, 5, -2, 0 };   // note
     file.pads[6] = { 6, 6, -1, 3 };   // mode
+    file.pads[7] = { 7, 7, -1, 0x80 }; // bit 7 set
+    file.pads[8] = { 8, 8, -1, uint8_t(3 | (4 << kPadGroupShift)) }; // mode 3 with a group
     programsReadFromFile(file);
-    for (int i = 3; i <= 6; i++)
-        check(memcmp(&mtProject.pads.pad[i], &def.pad[i], 4) == 0, "bad entry -> default", i);
+    for (int i = 3; i <= 8; i++)
+        check(memcmp(&mtProject.pads.pad[i], &plain.pad[i], 4) == 0, "bad entry -> plain default", i);
 
-    // 4. Older MPDJ blocks (version 1, 2) and Tracker+ projects: the default map
+    // 4. Older MPDJ blocks (version 1, 2) and Tracker+ projects: the default
+    //    map without groups (existing projects keep no groups)
     for (uint8_t ver = 1; ver <= 2; ver++)
     {
         file.version = ver;
         mtProject.pads.pad[9].track = 12;
         programsReadFromFile(file);
         for (int i = 0; i < kPads; i++)
-            check(memcmp(&mtProject.pads.pad[i], &def.pad[i], 4) == 0,
-                  ver == 1 ? "version 1 block -> default map" : "version 2 block -> default map", i);
+            check(memcmp(&mtProject.pads.pad[i], &plain.pad[i], 4) == 0,
+                  ver == 1 ? "version 1 block -> default map, no groups" : "version 2 block -> default map, no groups", i);
     }
     strMpdjProjectData none = {};
     mtProject.pads.pad[9].track = 12;
     programsReadFromFile(none);
     programsTakeImportNotice();
     for (int i = 0; i < kPads; i++)
-        check(memcmp(&mtProject.pads.pad[i], &def.pad[i], 4) == 0, "Tracker+ project -> default map", i);
+        check(memcmp(&mtProject.pads.pad[i], &plain.pad[i], 4) == 0, "Tracker+ project -> default map, no groups", i);
+    check(padGroupFor(2, 2) == 0, "older file: hats in no group", -1);
 
     mtProject.pads = savedMap;
     mtProject.programs = savedPrograms;
@@ -370,7 +459,7 @@ int padsSelfTest()
                    sequencer.mpdjVelocityToVolume(padVelocityScale(v, pv, 2, 100)));
     }
 
-    printf("pad map (pad: program -> track):\n");
+    printf("pad map (pad: program -> track, gN = choke group):\n");
     for (int i = 0; i < kPads; i++)
     {
         const strPadSlot& p = mtProject.pads.pad[i];
@@ -379,6 +468,10 @@ int padsSelfTest()
             printf("  %s: -- -> %2d", name, p.track + 1);
         else
             printf("  %s: %02d -> %2d", name, p.program + 1, p.track + 1);
+        if (padGroupOf(p.mode))
+            printf(" g%-2u", padGroupOf(p.mode));
+        else
+            printf("    ");
         if (i % 8 == 7)
             printf("\n");
     }
