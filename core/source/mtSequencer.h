@@ -919,8 +919,9 @@ class Sequencer
     // every other track whose last note was in that group: sample voices fade
     // out over 5 ms (engine.chokeTrack), an open MIDI note gets its note off.
     // Muted tracks cut and get cut. Then `track` remembers the group (0 =
-    // none: nothing is cut). Returns a bit per track cut.
-    uint16_t mpdjChoke(uint8_t track, uint8_t group);
+    // none: nothing is cut). Returns a bit per track cut. `who` names the
+    // source for MPDJ_CHOKE_TRACE ("A03"; nullptr = pattern playback)
+    uint16_t mpdjChoke(uint8_t track, uint8_t group, const char* who = nullptr);
     // MPDJ (5b-4a): live REC (REC + playing): write a pad hit onto its track
     // (Overwrite: note, program, volume, micromove; FX columns stay). False
     // when nothing was written (not recording, track not armed, count-in).

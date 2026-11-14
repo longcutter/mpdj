@@ -8,6 +8,7 @@
 #include "log.h"
 #include "mtAudioEngine.h"
 #include "mtSequencer.h"
+#include "mpdjPads.h"
 #include "mtStructs.h"
 #include "sampleRecorder/sampleRecorder.h"
 
@@ -406,7 +407,13 @@ AUDIO_CORE_RAM void Sequencer::play_microStep(int row)
     if (!playerRow.isActive)
         return;
     if (isTrackEngineMuted(row))
+    {
+        // MPDJ (5b-5d): a muted track's notes still cut their choke group (at
+        // the row; micromove and rolls aren't followed on a muted track)
+        if (playerRow.uStep == 1 && stepToSend.note >= STEP_NOTE_MIN)
+            mpdjChoke(row, padGroupFor(stepToSend.instrument, row));
         return;
+    }
 
     // ************************************
     // 		 PRE EFEKTY i operacje na uStep == 1
@@ -2477,6 +2484,11 @@ AUDIO_CORE_RAM void Sequencer::sendNoteOn(uint8_t track,
         return;
     }
 
+    // MPDJ (5b-5d): choke groups on pattern playback: the (program, track)'s
+    // group from the pad map (first pad in bank order) cuts the rest of it
+    if (step->note >= STEP_NOTE_MIN)
+        mpdjChoke(track, padGroupFor(step->instrument, track));
+
     if (toMidi || toSynth)
     {
         if ((step->fx[0].type == fx.FX_TYPE_MIDI_CHORD && step->fx[1].type != fx.FX_TYPE_ARP) ||
@@ -3178,7 +3190,7 @@ void Sequencer::mpdjPadNoteOn(uint8_t track, uint8_t instrument, uint8_t note, u
     }
 }
 
-uint16_t Sequencer::mpdjChoke(uint8_t track, uint8_t group)
+uint16_t Sequencer::mpdjChoke(uint8_t track, uint8_t group, const char* who)
 {
     if (track >= kAllTracks)
         return 0;
@@ -3209,6 +3221,21 @@ uint16_t Sequencer::mpdjChoke(uint8_t track, uint8_t group)
         }
     }
     player.track[track].mpdjChokeGroup = group;
+#ifdef PLATFORM_MPC
+    // MPDJ_CHOKE_TRACE=1: "choke: A03 (group 1) on track 3 cuts track 4";
+    // pattern notes print only when they cut something
+    static const bool trace = getenv("MPDJ_CHOKE_TRACE") != nullptr;
+    if (trace && group && (who || cut))
+    {
+        printf("choke: %s (group %u) on track %d cuts", who ? who : "pattern", group, track + 1);
+        if (!cut)
+            printf(" nothing");
+        for (int t = 0; t < kAllTracks; t++)
+            if (cut & (1u << t))
+                printf(" track %d", t + 1);
+        printf("\n");
+    }
+#endif
     return cut;
 }
 
