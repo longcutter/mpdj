@@ -171,6 +171,9 @@ class MpcInput
     bool padGrid = false;       // 16 LEVELS: the Pattern screen's pads drive the 4x12 grid
     bool repeatHeld = false;    // NOTE REPEAT held (5b-7a)
     bool repeatLatched = false; // SHIFT+NOTE REPEAT latch (5b-7a)
+    bool repeatUnlatchOnRelease = false; // a press while latched (5b-7b: a turn keeps the latch)
+    int repeatDivision = 4;              // index into kRepeatDivisions (5b-7b), 4 = 1/16
+    void turnRepeatDivision(int steps);
     void updateNoteRepeat();
     int8_t padHeld[128];        // MPC pad note -> Tracker pad index sent on press
     int8_t enginePadHeld[128];  // MPC pad note -> MPDJ pad (0-63) pressed in the pad engine

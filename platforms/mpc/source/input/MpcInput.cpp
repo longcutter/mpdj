@@ -531,6 +531,12 @@ void MpcInput::onButton(uint8_t note, bool down)
         if (note == kNoteNoteRepeat && repeatHeld)
         {
             repeatHeld = false;
+            if (repeatUnlatchOnRelease)
+            {
+                repeatUnlatchOnRelease = false;
+                repeatLatched = false;
+                mtPopups.show(0, "Note Repeat off");
+            }
             updateNoteRepeat();
         }
         if (buttonHeld[note] >= 0)
@@ -692,15 +698,20 @@ void MpcInput::onButton(uint8_t note, bool down)
             mtPopups.show(0, padGrid ? "Pads: Tracker grid" : "Pads: pad map");
             break;
         case Act::NoteRepeat:
-            if (mpcShift || repeatLatched)
+            if (mpcShift)
             {
-                // SHIFT+NOTE REPEAT latches it on; any press while latched unlatches
+                // SHIFT+NOTE REPEAT latches it on / off
                 releaseCoreShift();
                 repeatLatched = !repeatLatched;
                 mtPopups.show(0, repeatLatched ? "Note Repeat latched" : "Note Repeat off");
             }
             else
+            {
+                // held = on; a press while latched unlatches on release, unless
+                // the main encoder picks a division meanwhile (5b-7b)
                 repeatHeld = true;
+                repeatUnlatchOnRelease = repeatLatched;
+            }
             updateNoteRepeat();
             break;
     }
@@ -723,6 +734,33 @@ void MpcInput::updateNoteRepeat()
     mpdjRepeatSet(repeatHeld || repeatLatched);
     if (trace)
         printf("input: note repeat %s\n", mpdjRepeatOn() ? (repeatLatched ? "latched" : "on") : "off");
+}
+
+// Note Repeat divisions (5b-7b), coarse to fine; nanoSteps (576 = one row = 1/16)
+struct RepeatDivision
+{
+    uint16_t period;
+    const char* name;
+};
+constexpr RepeatDivision kRepeatDivisions[] = {
+    { 2304, "1/4" }, { 1536, "1/4T" }, { 1152, "1/8" },  { 768, "1/8T" },
+    { 576, "1/16" }, { 384, "1/16T" }, { 288, "1/32" }, { 192, "1/32T" },
+};
+constexpr int kRepeatDivisionCount = sizeof(kRepeatDivisions) / sizeof(kRepeatDivisions[0]);
+
+// NOTE REPEAT held + main encoder: clockwise = finer. Not saved (session only)
+void MpcInput::turnRepeatDivision(int steps)
+{
+    repeatUnlatchOnRelease = false;
+    int d = repeatDivision + (steps > 0 ? 1 : -1);
+    d = d < 0 ? 0 : (d >= kRepeatDivisionCount ? kRepeatDivisionCount - 1 : d);
+    repeatDivision = d;
+    mpdjRepeatSetPeriod(kRepeatDivisions[d].period);
+    char msg[32];
+    snprintf(msg, sizeof msg, "Note Repeat %s", kRepeatDivisions[d].name);
+    mtPopups.show(0, msg);
+    if (trace)
+        printf("input: note repeat division %s (%u)\n", kRepeatDivisions[d].name, kRepeatDivisions[d].period);
 }
 
 // Holding TAP TEMPO for kTapHoldMs locks / unlocks the tempo; the press's tap
@@ -1043,6 +1081,11 @@ void MpcInput::onRelative(uint8_t cc, uint8_t value)
         return;
     if (cc == kCcMainEncoder)
     {
+        if (repeatHeld)
+        {
+            turnRepeatDivision(steps); // NOTE REPEAT held: the division (5b-7b)
+            return;
+        }
         if (!pointScreenZoom(steps))
             turnValue(steps);
         return;
