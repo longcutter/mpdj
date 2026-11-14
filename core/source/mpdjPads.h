@@ -127,6 +127,19 @@ void mpdjRepeatTick(bool playing, int32_t uPos);
 // that joined later, each repeat is written as its own hit. The audio thread
 // queues those; call this from the main loop to write them
 void mpdjPadsPoll();
+
+// Notes mode (5b-8a; SHIFT+16 LEVELS): the 16 pads play one program
+// chromatically: pad 1 = the project's root (padBoardRootNote), bank B in the
+// octave of the sample's own pitch (C5), A one lower, C / D one / two higher.
+// Config "Notes mode plays": the last pad hit (program, track, mode) or the
+// title bar's program on the cursor's track. Pad hits, Note Repeat, live REC
+// and step entry work as with the pad map
+void mpdjNotesSet(bool on);
+bool mpdjNotesOn();
+int mpdjNotesNote(int pad);
+bool mpdjNotesSource(strPadSlot* out); // false: nothing to play
+const char* mpdjNotesPress(int pad, uint8_t velocity);
+void mpdjSetCursorTrack(int track);
 // The Roll value for a division in nanoSteps, 0 = none fits
 uint8_t mpdjRollForPeriod(uint16_t nanoSteps);
 // Gate or One shot for the pad as it is now (Auto: Gate for MIDI programs and

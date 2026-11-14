@@ -24,7 +24,7 @@ constexpr uint8_t generalMenuGroupCount = 9;
 #elif defined(PLATFORM_MPC) // no USB group (USB storage / USB audio are Tracker+ hardware)
 constexpr uint8_t baseMenuGroupCount = 6;
 constexpr uint8_t projectMenuGroupCount = 10;
-constexpr uint8_t generalMenuGroupCount = 17; // + Button lights, Tap tempo flash, 3 pad settings (5b-4d)
+constexpr uint8_t generalMenuGroupCount = 18; // + Button lights, Tap tempo flash, 3 pad settings (5b-4d), Notes mode plays (5b-8a)
 #elif defined(PLATFORM_IMX)
 constexpr uint8_t baseMenuGroupCount = 7;
 constexpr uint8_t projectMenuGroupCount = 10;
@@ -173,6 +173,8 @@ const strItemTypeListText setupPadVelVol{ &mtConfig.general.padVelToVolume, 2, p
 cMenuItem melPadCurve(menuGeneral, "Pad velocity curve", padCurveDesc, menuTypeItemListText, &setupPadCurve);
 cMenuItem melPadTop(menuGeneral, "Pad full hit", padTopDesc, menuTypeItemListText, &setupPadTop);
 cMenuItem melPadVelVol(menuGeneral, "Pad vel to volume", padVelVolDesc, menuTypeItemListText, &setupPadVelVol);
+const strItemTypeListText setupNotesSource{ &mtConfig.general.notesSource, 2, notesSourceTexts };
+cMenuItem melNotesSource(menuGeneral, "Notes mode plays", notesSourceDesc, menuTypeItemListText, &setupNotesSource);
 #endif
 cMenuItem melHexMode(menuGeneral,
                      "Numbering mode",

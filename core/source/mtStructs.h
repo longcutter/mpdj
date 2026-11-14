@@ -1177,6 +1177,9 @@ struct strMtConfig
         uint8_t padCurve = 1;
         uint8_t padTop = 18;
         uint8_t padVelToVolume = 1;
+        // MPDJ (5b-8a): what Notes mode plays: 0 = the last pad hit (its
+        // program on its track), 1 = the title bar's program on the cursor's track
+        uint8_t notesSource = 0;
 #endif
     } general;
 

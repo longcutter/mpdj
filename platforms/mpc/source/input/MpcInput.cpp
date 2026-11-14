@@ -695,7 +695,18 @@ void MpcInput::onButton(uint8_t note, bool down)
             break;
         case Act::QLinkMode: cycleQLinkMode(); break;
         case Act::PadGrid:
-            padGrid = !padGrid;
+            if (mpcShift)
+            {
+                // SHIFT+16 LEVELS: Notes mode on / off (5b-8a)
+                releaseCoreShift();
+                mpdjNotesSet(!mpdjNotesOn());
+                padGrid = false;
+                showNotesPopup();
+                break;
+            }
+            padGrid = !padGrid; // 16 LEVELS alone: the grid toggle until 16 Levels (5b-9)
+            if (padGrid)
+                mpdjNotesSet(false);
             mtPopups.show(0, padGrid ? "Pads: Tracker grid" : "Pads: pad map");
             break;
         case Act::NoteRepeat:
@@ -727,6 +738,25 @@ void MpcInput::onButton(uint8_t note, bool down)
         programPicker = true;
         buttons->press(interfaceButtonInstr);
     }
+}
+
+// Notes mode (5b-8a): say what the pads play now
+void MpcInput::showNotesPopup()
+{
+    if (!mpdjNotesOn())
+    {
+        mtPopups.show(0, "Pads: pad map");
+        return;
+    }
+    mpdjSetCursorTrack(patternEditor.trackerPattern.actualTrack);
+    strPadSlot slot;
+    char msg[48];
+    if (!mpdjNotesSource(&slot))
+        snprintf(msg, sizeof msg, "Notes: no program");
+    else
+        snprintf(msg, sizeof msg, "Notes: %02d on track %d, root %s", slot.program + 1, slot.track + 1,
+                 mtNotes[mpdjNotesNote(16)]); // bank B pad 1
+    mtPopups.show(0, msg);
 }
 
 // Note Repeat (5b-7a): on while NOTE REPEAT is held or latched
@@ -883,6 +913,7 @@ void MpcInput::onPad(uint8_t note, bool down, uint8_t velocity)
                    padIsGate(pad) ? "gate" : "one shot");
         }
         enginePadHeld[note] = (int8_t)pad;
+        mpdjSetCursorTrack(patternEditor.trackerPattern.actualTrack); // Notes mode's title-bar source
         if (const char* msg = mpdjPadPress(pad, velocity))
             mtPopups.show(0, msg);
         else if (sequencer.isRec())
@@ -1864,7 +1895,7 @@ void MpcInput::pollButtonLeds()
     set(9, noteDown[9] ? Lit::ActiveRed : Lit::Available);                 // ERASE
     for (int b = 0; b < 4; b++)                                            // BANK A-D
         set((uint8_t)(kNoteBankA + b), when(padBank == b));
-    set(40, !onPattern ? Lit::NotAvailable : when(padGrid));               // 16 LEVELS (grid)
+    set(40, !onPattern ? Lit::NotAvailable : when(padGrid || mpdjNotesOn())); // 16 LEVELS (grid / Notes)
     set(11, !onPattern ? Lit::NotAvailable : when(repeatHeld || repeatLatched)); // NOTE REPEAT
     set(52, when(onPattern || onSong));                                    // MAIN
     set(50, when(mtInterface.isSampleLoaderScreenActive() || mtInterface.isFileScreenActive())); // BROWSE

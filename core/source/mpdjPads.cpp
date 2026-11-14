@@ -99,9 +99,10 @@ bool recTrace()
 }
 }
 
-bool padIsGate(int pad)
+namespace
 {
-    const strPadSlot* p = padSlot(pad);
+bool slotIsGate(const strPadSlot* p)
+{
     if (!p || p->program == kPadNoProgram)
         return false;
     if (programType(p->program) == kProgramMidi)
@@ -121,10 +122,34 @@ bool padIsGate(int pad)
     }
 }
 
+int s_cursorTrack = 0; // the Pattern screen's cursor track (set by the platform)
+int s_lastPad = -1; // the last pad hit in the pad map (5b-8a: Notes mode's default source)
+bool s_notesMode = false;
+const char* padPress(int pad, const strPadSlot* p, uint8_t velocity);
+}
+
+bool padIsGate(int pad)
+{
+    return slotIsGate(padSlot(pad));
+}
+
 const char* mpdjPadPress(int pad, uint8_t velocity)
 {
+    if (pad < 0 || pad >= kPads)
+        return nullptr;
+    if (s_notesMode)
+        return mpdjNotesPress(pad, velocity);
+    s_lastPad = pad;
+    return padPress(pad, padSlot(pad), velocity);
+}
+
+namespace
+{
+// A press of physical pad `pad` playing slot `p` (the pad map's own slot, or
+// what Notes mode makes of it)
+const char* padPress(int pad, const strPadSlot* p, uint8_t velocity)
+{
     static char msg[32];
-    const strPadSlot* p = padSlot(pad);
     if (!p)
         return nullptr;
     char name[4];
@@ -146,7 +171,7 @@ const char* mpdjPadPress(int pad, uint8_t velocity)
     uint8_t velo = padVelocity(p->program, velocity ? velocity : 1);
     Held& h = s_held[pad];
     h.track = (int8_t)p->track;
-    h.gate = padIsGate(pad);
+    h.gate = slotIsGate(p);
     h.cut = h.gate && padCutOf(p->mode);
     h.recorded = false;
     h.rolled = false;
@@ -194,6 +219,60 @@ const char* mpdjPadPress(int pad, uint8_t velocity)
     if (s_repeatOn.load())
         startRepeat(pad); // Note Repeat (5b-7a): the press was the first hit
     return nullptr;
+}
+}
+
+// ---------------------------------------------------------------- Notes mode
+void mpdjSetCursorTrack(int track)
+{
+    if (track >= 0 && track < kAllTracks)
+        s_cursorTrack = track;
+}
+
+void mpdjNotesSet(bool on)
+{
+    s_notesMode = on;
+}
+
+bool mpdjNotesOn()
+{
+    return s_notesMode;
+}
+
+int mpdjNotesNote(int pad)
+{
+    // pad 1 of bank B = the root in the octave that plays the sample at its
+    // own pitch (C5 = 60); bank A an octave lower, C / D one and two higher;
+    // pads go up chromatically
+    int bank = pad / kPadsPerBank, n = pad % kPadsPerBank;
+    int root = mtProject.values.padBoardRootNote % 12;
+    int note = Sequencer::STEP_NOTE_DEFAULT + root + (bank - 1) * 12 + n;
+    return note > 127 ? 127 : note;
+}
+
+bool mpdjNotesSource(strPadSlot* out)
+{
+    if (mtConfig.general.notesSource == 1)
+    {
+        // the title bar's program on the cursor's track
+        out->program = mtProject.values.lastUsedInstrument;
+        out->track = (uint8_t)s_cursorTrack;
+        out->note = kPadNoteDefault;
+        out->mode = kPadModeAuto;
+        return out->program < kProgramSlots;
+    }
+    const strPadSlot* src = padSlot(s_lastPad >= 0 ? s_lastPad : 0); // A01 until a pad is hit
+    *out = *src;
+    return src->program != kPadNoProgram;
+}
+
+const char* mpdjNotesPress(int pad, uint8_t velocity)
+{
+    strPadSlot slot;
+    if (!mpdjNotesSource(&slot))
+        return "Notes: no program";
+    slot.note = (int8_t)mpdjNotesNote(pad);
+    return padPress(pad, &slot, velocity);
 }
 
 // ---------------------------------------------------------------- Note Repeat
@@ -314,6 +393,14 @@ void mpdjPadsPoll()
 int mpdjPadStepWrite(int pad, int row, uint8_t velocity)
 {
     const strPadSlot* p = padSlot(pad);
+    strPadSlot notesSlot;
+    if (s_notesMode) // Notes mode (5b-8a): the pad's note on the source's program and track
+    {
+        if (!mpdjNotesSource(&notesSlot))
+            return -1;
+        notesSlot.note = (int8_t)mpdjNotesNote(pad);
+        p = &notesSlot;
+    }
     if (!p || p->program == kPadNoProgram || programType(p->program) == kProgramEmpty)
         return -1;
     uint8_t note = p->note < 0 ? (uint8_t)Sequencer::STEP_NOTE_DEFAULT : (uint8_t)p->note;
