@@ -711,6 +711,18 @@ void MpcInput::onButton(uint8_t note, bool down)
                 releaseCoreShift();
                 mpdjNotesSet(!mpdjNotesOn());
                 mpdjLevelsSet(false);
+                // Notes mode starts on bank B (the sample's own pitch; Mike
+                // 2026-11-14); leaving it returns to the bank used before
+                if (mpdjNotesOn())
+                {
+                    bankBeforeNotes = padBank;
+                    padBank = 1;
+                }
+                else if (bankBeforeNotes >= 0)
+                {
+                    padBank = bankBeforeNotes;
+                    bankBeforeNotes = -1;
+                }
                 padGrid = false;
                 showNotesPopup();
                 break;
@@ -758,6 +770,11 @@ void MpcInput::toggleLevels()
 {
     bool on = !mpdjLevelsOn();
     mpdjLevelsSet(on);
+    if (mpdjNotesOn() && bankBeforeNotes >= 0)
+    {
+        padBank = bankBeforeNotes; // Notes mode ends here too
+        bankBeforeNotes = -1;
+    }
     mpdjNotesSet(false);
     padGrid = false;
     static char msg[40]; // the popup keeps the pointer

@@ -168,6 +168,7 @@ class MpcInput
     const FbOutput* fb = nullptr;
     bool trace = false;
     int padBank = 0;            // 0..3 = banks A-D (grid: Tracker pad columns 0-3, 4-7, 8-11; D = C)
+    int bankBeforeNotes = -1;   // the bank to return to when Notes mode ends (5b-8 follow-up)
     bool padGrid = false;       // 16 LEVELS: the Pattern screen's pads drive the 4x12 grid
     bool repeatHeld = false;    // NOTE REPEAT held (5b-7a)
     bool repeatLatched = false; // SHIFT+NOTE REPEAT latch (5b-7a)
