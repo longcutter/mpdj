@@ -78,6 +78,7 @@ enum class Act : uint8_t
     Tc,          // TC: timing correct on / off (quantized live REC vs micromoves)
     TrackMute,   // TRACK MUTE: the Track Mute screen (5e-1)
     FullLevel,   // FULL LEVEL: pads at the full-hit level, per project (5f-1)
+    Overdub,     // OVER DUB: latch; live REC replaces and clears ahead (5f-2)
 };
 
 struct ButtonMap
@@ -115,6 +116,7 @@ const ButtonMap kButtonMap[] = {
     { 12, Act::Tc, -1, "TC" },
     { 43, Act::TrackMute, -1, "TRACK MUTE" },
     { 39, Act::FullLevel, -1, "FULL LEVEL" },
+    { 80, Act::Overdub, -1, "OVER DUB" },
     // Not mapped yet:
     //, STEP SEQ, TC, OVER DUB (pad work, milestone 5)
 };
@@ -207,6 +209,7 @@ void MpcInput::poll()
     pollTapHold();
     mpdjPadsPoll(); // Note Repeat hits to record (5b-7c)
     trackMute.syncQueued(); // Track Mute changes applied at the bar / pattern (5e-3)
+    mpdjOverdubPoll();      // OVER DUB: erased rows -> save flag; pass ends with REC (5f-2)
     pollLevels();
     pollPadLights();
     if (sideloadComboMs && mpcShift &&
@@ -950,6 +953,11 @@ void MpcInput::onButton(uint8_t note, bool down)
             levelsHeld = true;
             levelsTurned = false;
             break;
+        case Act::Overdub:
+            mpdjOverdubSet(!mpdjOverdubOn());
+            mtPopups.show(0, mpdjOverdubOn() ? "Over Dub on: replace" : "Over Dub off: add");
+            break;
+
         case Act::FullLevel:
             mtProject.mpdjFullLevel = !mtProject.mpdjFullLevel;
             newFileManager.setProjectStructChanged();
@@ -2304,11 +2312,12 @@ void MpcInput::pollButtonLeds()
     set(49, when(mpcShift));                                               // SHIFT
     set(43, when(mtInterface.isTrackMuteScreenActive()));                 // TRACK MUTE (5e-1)
     set(39, mtProject.mpdjFullLevel ? Lit::Active : Lit::Available);       // FULL LEVEL (5f-1)
+    set(80, mpdjOverdubOn() ? Lit::Active : Lit::Available);               // OVER DUB (5f-2)
     // Not built yet (milestone 5): OVER DUB,
     // FULL LEVEL, STEP SEQ. Later, banks: dim when they hold samples,
     // dark when empty (Mike 2026-11-12)
     set(12, mpdjTcOn() ? Lit::Active : Lit::NotAvailable); // TC: lit while on, dark when off
-    for (uint8_t cc : { 80, 41 })
+    for (uint8_t cc : { 41 })
         set(cc, Lit::NotAvailable);
 }
 

@@ -7,16 +7,96 @@
 #include "mtStructs.h"
 #include "util_math.h"
 #include "mtConfig.h"
+#include "fileManager.h"
 #include "scales.h"
 
 #include "Audio.h"
 
 #include <atomic>
+#include <stdio.h>
+#include <stdlib.h>
 #include "mpdjTracks.h"
 
 // ---- Track Mute timing (5e-3) ----------------------------------------------
 static std::atomic<uint16_t> s_mutePending{ 0 }, s_muteApplied{ 0 };
 static constexpr int kMuteUSteps = 48; // uSteps per row (Sequencer::kuStepsInStep)
+
+// ---- OVER DUB (5f-2) ---------------------------------------------------------
+static std::atomic<bool> s_overdub{ false }, s_odErased{ false };
+static std::atomic<uint16_t> s_odTracks{ 0 };
+static std::atomic<int16_t> s_odKeep[16][2];
+static bool s_odUndoStored = false;
+
+static void overdubEndPass()
+{
+    s_odTracks.store(0);
+    for (auto& k : s_odKeep)
+        k[0].store(-1), k[1].store(-1);
+    s_odUndoStored = false;
+}
+
+void mpdjOverdubSet(bool on)
+{
+    overdubEndPass(); // a new pass starts clean (protected rows -1)
+    s_overdub.store(on);
+}
+bool mpdjOverdubOn() { return s_overdub.load(); }
+uint16_t mpdjOverdubTracks() { return s_overdub.load() ? s_odTracks.load() : 0; }
+
+void mpdjOverdubJoin(int track, int keepRow)
+{
+    if (!s_overdub.load() || track < 0 || track >= 16)
+        return;
+    if (keepRow >= 0)
+    {
+        // two protected rows per track (a note and its OFF); replace the older
+        int slot = s_odKeep[track][0].load() < 0 ? 0 : 1;
+        if (slot == 1 && s_odKeep[track][1].load() >= 0)
+            s_odKeep[track][0].store(s_odKeep[track][1].load());
+        s_odKeep[track][slot].store((int16_t)keepRow);
+    }
+    s_odTracks.fetch_or((uint16_t)(1u << track));
+}
+
+bool mpdjOverdubKeep(int track, int row)
+{
+    for (auto& k : s_odKeep[track])
+    {
+        int16_t r = row;
+        if (k.compare_exchange_strong(r, (int16_t)-1))
+            return true;
+    }
+    return false;
+}
+
+bool mpdjOverdubTakeUndo()
+{
+    if (s_odUndoStored)
+        return false;
+    s_odUndoStored = true;
+    return true;
+}
+
+void mpdjOverdubErased(int track, int row)
+{
+    s_odErased.store(true);
+#ifdef PLATFORM_MPC
+    static const bool trace = [] { const char* v = getenv("MPDJ_PAD_REC_TRACE"); return v && *v && *v != '0'; }();
+    if (trace)
+        printf("pad rec: over dub cleared track %d row %d\n", track + 1, row);
+#else
+    (void)track;
+    (void)row;
+#endif
+}
+
+void mpdjOverdubPoll()
+{
+    if (s_odErased.exchange(false))
+        newFileManager.setActualPatternStructChanged();
+    if ((s_odTracks.load() || s_odUndoStored) && (!sequencer.isRec() || !sequencer.isPlay()))
+        overdubEndPass();
+}
 
 void mpdjMuteQueue(int track)
 {
@@ -315,7 +395,9 @@ const char* padPress(int pad, const strPadSlot* p, uint8_t velocity)
     else if (sequencer.isRec() && recTrace())
     {
         printf("pad rec: %s -> track %d not written (%s)\n", name, p->track + 1,
-               !sequencer.isRecArmedOnTrack(p->track) ? "track not armed" : "counting in");
+               !sequencer.isRecArmedOnTrack(p->track) ? "track not armed"
+               : sequencer.mpdjCountingIn()           ? "counting in"
+                                                      : "the row has a note; Over Dub off adds only");
     }
 #endif
     if (s_repeatOn.load())

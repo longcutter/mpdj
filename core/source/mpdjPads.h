@@ -148,6 +148,22 @@ uint16_t mpdjMutePending();
 uint16_t mpdjMuteTakePending(); // clears the queue, returns it (apply now)
 uint16_t mpdjMuteTakeApplied();
 void mpdjMuteTick(int32_t uPos);
+
+// OVER DUB (5f-2, Mike 2026-11-14). Plain live REC only adds: a hit on a row
+// that already holds a note is not written. OVER DUB latched: hits replace,
+// and from a track's first hit in the pass on, the rows the playhead reaches
+// on that track are cleared before they play (note, program, volume,
+// micromove, a Roll; other FX stay) unless just written ahead of it. One
+// undo step per pass. A pass ends when OVER DUB goes off or REC / playback
+// stops (mpdjOverdubPoll on the UI thread).
+void mpdjOverdubSet(bool on);
+bool mpdjOverdubOn();
+uint16_t mpdjOverdubTracks();                // tracks joined in this pass
+void mpdjOverdubJoin(int track, int keepRow); // a written hit (keepRow = ahead row or -1)
+bool mpdjOverdubKeep(int track, int row);     // audio thread: protected row (consumed)
+bool mpdjOverdubTakeUndo();                   // true once per pass: store the undo step now
+void mpdjOverdubErased(int track, int row);   // audio thread: a row was cleared
+void mpdjOverdubPoll();                       // UI thread
 // Live REC (5b-7c): a pad pressed with Note Repeat on writes its note with a
 // Roll at the division when the Roll has it (1/16, 1/32, 1/32T) and an OFF
 // (CUT with cut on release) at its release; at other divisions, or for a pad

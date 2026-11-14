@@ -935,6 +935,8 @@ class Sequencer
         bool skipNext = false;
     };
     // writeVolume false (Config "Pad vel to volume" Off): the volume column is cleared
+    void mpdjOverdubErase(int row); // MPDJ 5f-2, audio thread
+    bool mpdjCountingIn() { return player.preRecMetronomeActive; }
     bool mpdjPadRecWrite(uint8_t track, uint8_t instrument, uint8_t note, uint8_t velocity,
                          bool writeVolume, MpdjRecWrite* out);
     // MPDJ (5b-7c): put a Roll (rollVal = enRollPeriod, constant type) on a

@@ -248,6 +248,8 @@ AUDIO_CORE_RAM void Sequencer::tick_uStep(void)
             uPos = (int32_t)player.track[0].actual_pos * kuStepsInStep + player.track[0].uStep - 1;
         mpdjRepeatTick(true, uPos);
         mpdjMuteTick(uPos); // MPDJ (5e-3): queued Track Mute changes at the bar / pattern
+        if (uPos >= 0 && uPos % kuStepsInStep == 0)
+            mpdjOverdubErase(uPos / kuStepsInStep); // MPDJ (5f-2): OVER DUB clears ahead of the playhead
 
         if (timerTicks % 12 == 1)
         {
@@ -3318,7 +3320,13 @@ bool Sequencer::mpdjPadRecWrite(uint8_t track, uint8_t instrument, uint8_t note,
     uint8_t dest = anticipatedBeat1 ? 0 : getDestRecordingStep(track, !recMicrotiming());
     strPattern::strTrack::strStep* step = &currentPattern->track[track].step[dest];
 
-    newFileManager.storePatternUndoRevision();
+    // MPDJ (5f-2): plain live REC only adds (a row with a note keeps it);
+    // OVER DUB replaces, with one undo step for the whole pass
+    bool overdub = mpdjOverdubOn();
+    if (!overdub && step->note >= 0)
+        return false;
+    if (!overdub || mpdjOverdubTakeUndo())
+        newFileManager.storePatternUndoRevision();
     step->note = note;
     step->instrument = instrument;
     step->volume = writeVolume ? velocityToVolume(velocity) : -1;
@@ -3332,6 +3340,8 @@ bool Sequencer::mpdjPadRecWrite(uint8_t track, uint8_t instrument, uint8_t note,
     // pad already plays it, so the sequencer skips it once
     bool skip = anticipatedBeat1 || dest != t.actual_pos;
     t.mpdjSkipPos = skip ? dest : -1;
+    if (overdub)
+        mpdjOverdubJoin(track, skip ? dest : -1); // the erase leaves this row alone
     newFileManager.setActualPatternStructChanged();
 
     if (out)
@@ -3342,6 +3352,34 @@ bool Sequencer::mpdjPadRecWrite(uint8_t track, uint8_t instrument, uint8_t note,
         out->skipNext = skip;
     }
     return true;
+}
+
+// MPDJ (5f-2): OVER DUB in live REC: before row `row` plays, clear it on
+// the tracks hit in this pass (unless written just ahead of the playhead)
+void Sequencer::mpdjOverdubErase(int row)
+{
+    uint16_t m = mpdjOverdubTracks();
+    if (!m || !isRec() || player.preRecMetronomeActive || row < 0 || row > currentPattern->track[0].length)
+        return;
+    for (int t = 0; t < kAllTracks; t++)
+    {
+        if (!(m & (1u << t)) || mpdjOverdubKeep(t, row))
+            continue;
+        strPattern::strTrack::strStep& s = currentPattern->track[t].step[row];
+        if (s.note == STEP_NOTE_EMPTY && s.volume < 0 && s.micromove < 0)
+            continue;
+        s.note = STEP_NOTE_EMPTY;
+        s.instrument = 0;
+        s.volume = -1;
+        s.micromove = -1;
+        for (auto& f : s.fx)
+            if (f.type == fx.FX_TYPE_ROLL) // a recorded Note Repeat roll goes with its note
+            {
+                f.type = fx.FX_TYPE_NONE;
+                f.value = 0;
+            }
+        mpdjOverdubErased(t, row);
+    }
 }
 
 void Sequencer::mpdjSetRoll(uint8_t track, uint8_t row, uint8_t rollVal)
@@ -3389,6 +3427,8 @@ int Sequencer::mpdjPadRecOff(uint8_t track, bool* hadNote, bool cut)
         return -1; // never replace a note with an OFF
     }
     step->note = cut ? STEP_NOTE_OFF_CUT : STEP_NOTE_OFF_DEFAULT;
+    if (dest != t.actual_pos)
+        mpdjOverdubJoin(track, dest); // OVER DUB: don't erase the OFF ahead (5f-2)
     step->micromove = (recMicrotiming() && dest == t.actual_pos)
                         ? clamp<int>(mapClamped<int>(t.uStep, 1, 48, 0, 100),
                                      getFxMin(fx.FX_TYPE_MICROMOVE),
