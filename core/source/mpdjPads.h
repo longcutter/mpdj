@@ -137,6 +137,17 @@ uint16_t mpdjRepeatPeriod();
 // pattern position in uSteps (row * 48 + uStep - 1) on a uStep boundary
 // while playing, else -1
 void mpdjRepeatTick(bool playing, int32_t uPos);
+
+// Track Mute timing (5e-3): a press queues a flip of the track's mute (again
+// = cancel); the audio thread applies queued flips at the next bar / pattern
+// start (mpdjMuteTick, from the sequencer before the row plays). The UI picks
+// up what was applied (mpdjMuteTakeApplied) to grey the Pattern screen and
+// mark the project changed. Bits = tracks 0-15.
+void mpdjMuteQueue(int track);
+uint16_t mpdjMutePending();
+uint16_t mpdjMuteTakePending(); // clears the queue, returns it (apply now)
+uint16_t mpdjMuteTakeApplied();
+void mpdjMuteTick(int32_t uPos);
 // Live REC (5b-7c): a pad pressed with Note Repeat on writes its note with a
 // Roll at the division when the Roll has it (1/16, 1/32, 1/32T) and an OFF
 // (CUT with cut on release) at its release; at other divisions, or for a pad

@@ -419,6 +419,8 @@ void checkConfig()
         mtConfig.general.padLights = 2;
     if (mtConfig.general.trackMuteMode > 1)
         mtConfig.general.trackMuteMode = 0;
+    if (mtConfig.general.trackMuteTiming > 2)
+        mtConfig.general.trackMuteTiming = 0;
 #endif
     if (mtConfig.general.performanceSource > 1)
         mtConfig.general.performanceSource = 0;
@@ -588,6 +590,7 @@ void resetConfig()
     mtConfig.general.tcDefault = 1;      // TC on
     mtConfig.general.padLights = 2;      // Bright
     mtConfig.general.trackMuteMode = 0;  // Latch
+    mtConfig.general.trackMuteTiming = 0; // Now
 #endif
 
     // interface ----------------------------------------

@@ -1188,6 +1188,9 @@ struct strMtConfig
         // MPDJ (5e-2): Track Mute pads: 0 Latch (press toggles), 1 Momentary
         // (the mute flips while the pad is held)
         uint8_t trackMuteMode = 0;
+        // MPDJ (5e-3): when a Track Mute press takes effect while playing:
+        // 0 Now, 1 next bar (the metronome's bar), 2 next pattern start
+        uint8_t trackMuteTiming = 0;
 #endif
     } general;
 

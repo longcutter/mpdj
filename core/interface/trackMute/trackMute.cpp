@@ -63,7 +63,16 @@ void functMode(uint8_t button, uint8_t state)
         TM->toggleMode();
 }
 
-const char* const kLabels[8] = { "Unmute all", "", "", "", "", "", "", "Pads" };
+void functTiming(uint8_t button, uint8_t state)
+{
+    (void)button;
+    if (state == buttonPress)
+        TM->cycleTiming();
+}
+
+const char* const kLabels[8] = { "Unmute all", "", "", "", "", "", "Timing", "Pads" };
+const char* const kTimingNames[3] = { "Now", "Next bar", "Pattern" };
+const char* const kTimingShort[3] = { "", "next bar", "@ pattern" };
 } // namespace
 
 void cTrackMute::initDisplayControls()
@@ -87,7 +96,7 @@ void cTrackMute::initDisplayControls()
         p.w = 800 / 8 - 6;
         p.y = 424;
         p.h = 55;
-        p.value = i == 7 ? 1 : 0; // the mode label has two lines
+        p.value = i >= 6 ? 1 : 0; // the Timing and Pads labels have two lines
         label[i] = display.createControl<cLabel>(&p);
     }
     strControlProperties pb;
@@ -124,6 +133,7 @@ void cTrackMute::start(uint32_t options)
                        interfaceButtonSong, interfaceButtonPattern })
         ip->setButtonObj(b, buttonPress, functSwitchModule);
     ip->setButtonObj(interfaceButton0, functUnmuteAll);
+    ip->setButtonObj(interfaceButton6, functTiming);
     ip->setButtonObj(interfaceButton7, functMode);
     ip->setButtonObj(interfaceButtonPlay, buttonPress, functPlayAction);
 
@@ -141,21 +151,60 @@ void cTrackMute::start(uint32_t options)
 
 void cTrackMute::stop() { moduleRefresh = 0; }
 
-void cTrackMute::toggle(int track)
+void cTrackMute::flip(int track, bool queueable)
 {
     if (track < 0 || track >= kAllTracks)
         return;
-    mpdjSetTrackMute(track, !trackMuteRef(track));
+    if (queueable && mtConfig.general.trackMuteTiming != 0 && sequencer.isPlay())
+        mpdjMuteQueue(track); // again before it happens = cancel
+    else
+        mpdjSetTrackMute(track, !trackMuteRef(track));
     if (mtInterface.isTrackMuteScreenActive())
         refresh();
+}
+
+void cTrackMute::toggle(int track) { flip(track, true); }
+
+void cTrackMute::cycleTiming()
+{
+    mtConfig.general.trackMuteTiming = (mtConfig.general.trackMuteTiming + 1) % 3;
+    saveConfig();
+    refresh();
+}
+
+void cTrackMute::syncQueued()
+{
+    bool onScreen = mtInterface.isTrackMuteScreenActive();
+    if (uint16_t a = mpdjMuteTakeApplied())
+    {
+        for (int t = 0; t < kAllTracks; t++)
+            if (a & (1u << t))
+                patternEditor.trackerPattern.inactive[t] = trackMuteRef(t);
+        newFileManager.setProjectStructChanged();
+        if (mtInterface.isPatternScreenActive())
+            display.refreshControl(patternEditor.patternControl);
+        if (onScreen)
+            refresh();
+    }
+    if (!sequencer.isPlay() && mpdjMutePending())
+    {
+        // stopped before the bar came: apply now
+        uint16_t m = mpdjMuteTakePending();
+        for (int t = 0; t < kAllTracks; t++)
+            if (m & (1u << t))
+                mpdjSetTrackMute(t, !trackMuteRef(t));
+        if (onScreen)
+            refresh();
+    }
 }
 
 void cTrackMute::padDown(int track)
 {
     if (track < 0 || track >= kAllTracks)
         return;
-    toggle(track);
-    held[track] = mtConfig.general.trackMuteMode == 1;
+    bool momentary = mtConfig.general.trackMuteMode == 1;
+    flip(track, !momentary); // Momentary is always immediate
+    held[track] = momentary;
 }
 
 void cTrackMute::padUp(int track)
@@ -163,7 +212,7 @@ void cTrackMute::padUp(int track)
     if (track < 0 || track >= kAllTracks || !held[track])
         return;
     held[track] = false;
-    toggle(track); // momentary: back as it was
+    flip(track, false); // momentary: back as it was, right away
 }
 
 void cTrackMute::toggleMode()
@@ -175,9 +224,20 @@ void cTrackMute::toggleMode()
 
 void cTrackMute::unmuteAll()
 {
+    bool queue = mtConfig.general.trackMuteTiming != 0 && sequencer.isPlay();
+    uint16_t pending = mpdjMutePending();
     for (int t = 0; t < kAllTracks; t++)
-        if (trackMuteRef(t))
-            mpdjSetTrackMute(t, false);
+    {
+        bool p = pending & (1u << t);
+        bool m = trackMuteRef(t);
+        if (!queue)
+        {
+            if (m)
+                mpdjSetTrackMute(t, false);
+        }
+        else if (m != p) // muted and not yet queued, or unmuted with a mute queued
+            mpdjMuteQueue(t);
+    }
     refresh();
 }
 
@@ -199,7 +259,10 @@ void cTrackMute::refresh()
         muted += m;
         snprintf(c.name, sizeof c.name, "T%d", t + 1);
         snprintf(c.program, sizeof c.program, "%s", trackNameRef(t));
-        snprintf(c.marks, sizeof c.marks, "%s", m ? "MUTED" : "");
+        if (mpdjMutePending() & (1u << t))
+            snprintf(c.marks, sizeof c.marks, "%s %s", m ? "PLAY" : "MUTE", kTimingShort[mtConfig.general.trackMuteTiming]);
+        else
+            snprintf(c.marks, sizeof c.marks, "%s", m ? "MUTED" : "");
         c.color = m ? 0 : rgb(kPadPalette[t % kPadColors]);
         c.empty = m;
     }
@@ -207,6 +270,9 @@ void cTrackMute::refresh()
     snprintf(modeText, sizeof modeText, "%s", mtConfig.general.trackMuteMode ? "Momentary" : "Latch");
     display.setControlText2(label[7], modeText);
     display.refreshControl(label[7]);
+    snprintf(timingText, sizeof timingText, "%s", kTimingNames[mtConfig.general.trackMuteTiming]);
+    display.setControlText2(label[6], timingText);
+    display.refreshControl(label[6]);
     display.setControlData(grid, &gridData);
     display.refreshControl(grid);
 

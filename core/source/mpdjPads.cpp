@@ -12,6 +12,41 @@
 #include "Audio.h"
 
 #include <atomic>
+#include "mpdjTracks.h"
+
+// ---- Track Mute timing (5e-3) ----------------------------------------------
+static std::atomic<uint16_t> s_mutePending{ 0 }, s_muteApplied{ 0 };
+static constexpr int kMuteUSteps = 48; // uSteps per row (Sequencer::kuStepsInStep)
+
+void mpdjMuteQueue(int track)
+{
+    if (track >= 0 && track < 16)
+        s_mutePending.fetch_xor((uint16_t)(1u << track));
+}
+
+uint16_t mpdjMutePending() { return s_mutePending.load(); }
+uint16_t mpdjMuteTakePending() { return s_mutePending.exchange(0); }
+uint16_t mpdjMuteTakeApplied() { return s_muteApplied.exchange(0); }
+
+void mpdjMuteTick(int32_t uPos)
+{
+    if (uPos < 0 || uPos % kMuteUSteps != 0 || !s_mutePending.load())
+        return;
+    int row = uPos / kMuteUSteps;
+    int perBar = sequencer.getMetronomeDenominator() * sequencer.getMetronomeNumerator();
+    bool due = mtConfig.general.trackMuteTiming == 2 ? row == 0
+                                                       : (perBar > 0 && row % perBar == 0);
+    if (!due)
+        return;
+    uint16_t m = s_mutePending.exchange(0);
+    for (int t = 0; t < 16; t++)
+        if (m & (1u << t))
+        {
+            trackMuteRef(t) = !trackMuteRef(t);
+            engine.muteTrack(t, trackMuteRef(t));
+        }
+    s_muteApplied.fetch_or(m);
+}
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>

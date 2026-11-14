@@ -22,6 +22,10 @@ class cTrackMute : public ModuleBase
     void padDown(int track);
     void padUp(int track);
     void toggleMode();
+    void cycleTiming(); // 5e-3: Now / Next bar / Next pattern
+    // Every poll, any screen: finish changes the audio thread applied (grey
+    // the Pattern screen, save flag); apply queued ones at once when stopped
+    void syncQueued();
     void unmuteAll();
     int trackAt(float x, float y) const; // touch -> track 0-15, -1 off the grid
     void refresh();
@@ -37,6 +41,9 @@ class cTrackMute : public ModuleBase
     char rightLabel[24];
     bool held[16] = {};
     char modeText[12];
+    char timingText[12];
+    uint32_t lastBlinkMs = 0;
+    void flip(int track, bool queueable); // queue (Latch + timing + playing) or now
 };
 
 extern cTrackMute trackMute;

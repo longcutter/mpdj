@@ -204,6 +204,7 @@ void MpcInput::poll()
     pollButtonLeds();
     pollTapHold();
     mpdjPadsPoll(); // Note Repeat hits to record (5b-7c)
+    trackMute.syncQueued(); // Track Mute changes applied at the bar / pattern (5e-3)
     pollLevels();
     pollPadLights();
     if (sideloadComboMs && mpcShift &&
@@ -495,7 +496,11 @@ void MpcInput::pollPadLights()
             }
             const uint8_t* c = kPadPalette[t];
             float k;
-            if (trackMuteRef(t))
+            // 5e-3: a queued change blinks between now and then (4 Hz)
+            bool muted = trackMuteRef(t);
+            if ((mpdjMutePending() & (1u << t)) && (now / 125) % 2)
+                muted = !muted;
+            if (muted)
             {
                 c = kMutedRed;
                 k = base;

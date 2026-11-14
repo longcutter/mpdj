@@ -247,6 +247,7 @@ AUDIO_CORE_RAM void Sequencer::tick_uStep(void)
         if (timerTicks % 12 == 1)
             uPos = (int32_t)player.track[0].actual_pos * kuStepsInStep + player.track[0].uStep - 1;
         mpdjRepeatTick(true, uPos);
+        mpdjMuteTick(uPos); // MPDJ (5e-3): queued Track Mute changes at the bar / pattern
 
         if (timerTicks % 12 == 1)
         {
