@@ -51,9 +51,9 @@ void cPadGrid::update()
         API_VERTEX2F(x + cw, y + ch);
         API_END();
 
-        if (c.colour)
+        if (c.color)
         {
-            API_COLOR(c.colour);
+            API_COLOR(c.color);
             API_BEGIN(RECTS);
             API_VERTEX2F(x, y);
             API_VERTEX2F(x + cw, y + 4);

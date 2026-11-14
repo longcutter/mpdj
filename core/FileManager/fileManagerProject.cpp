@@ -110,7 +110,7 @@ bool cFileManager::loadProjectFileFormFileStruct(strMtProject* project, strProje
     static constexpr size_t kMpdjV2ProjectFileSize =
       offsetof(strProjectFile, projectDataAndHeader.project.mpdj) + kMpdjProjectDataV2Size +
       sizeof(uint32_t);
-    // MPDJ: and with the version 3 block (5b-1 .. 5c-1, before pad colours)
+    // MPDJ: and with the version 3 block (5b-1 .. 5c-1, before pad colors)
     static constexpr size_t kMpdjV3ProjectFileSize =
       offsetof(strProjectFile, projectDataAndHeader.project.mpdj) + kMpdjProjectDataV3Size +
       sizeof(uint32_t);

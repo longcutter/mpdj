@@ -60,14 +60,14 @@ constexpr uint8_t padModeByte(PadMode mode, uint8_t group, bool cut = false)
 static constexpr int kDefaultHatPads[] = { 2, 3, 11 }; // A03, A04, A12
 static constexpr uint8_t kDefaultHatGroup = 1;
 
-// Pad colours (5c-2): 0 = Auto (the pad's track colour), 1-16 = kPadPalette
-static constexpr int kPadColours = 16;
-static constexpr uint8_t kPadPalette[kPadColours][3] = { // 0-127 per channel; also the track colours
+// Pad colors (5c-2): 0 = Auto (the pad's track color), 1-16 = kPadPalette
+static constexpr int kPadColors = 16;
+static constexpr uint8_t kPadPalette[kPadColors][3] = { // 0-127 per channel; also the track colors
     { 127, 24, 0 },  { 127, 64, 0 },  { 127, 112, 0 }, { 64, 127, 0 },  { 0, 127, 24 },   { 0, 127, 90 },
     { 0, 110, 127 }, { 0, 52, 127 },  { 24, 0, 127 },  { 72, 0, 127 },  { 127, 0, 127 },  { 127, 0, 64 },
     { 127, 64, 64 }, { 64, 127, 96 }, { 96, 96, 127 }, { 110, 110, 110 },
 };
-static constexpr const char* kPadColourNames[kPadColours + 1] = {
+static constexpr const char* kPadColorNames[kPadColors + 1] = {
     "Auto", "Red-orange", "Orange", "Yellow", "Lime", "Green", "Teal", "Cyan", "Sky",
     "Blue", "Violet", "Magenta", "Pink", "Salmon", "Mint", "Lavender", "White",
 };
@@ -75,9 +75,9 @@ static constexpr const char* kPadColourNames[kPadColours + 1] = {
 struct strPadMap
 {
     strPadSlot pad[kPads]; // index = bank * 16 + (pad number - 1)
-    uint8_t colour[kPads]; // 5c-2: 0 = Auto, 1-16 = kPadPalette entry + 1
+    uint8_t color[kPads]; // 5c-2: 0 = Auto, 1-16 = kPadPalette entry + 1
 
-    constexpr strPadMap() : pad{}, colour{} { setDefault(); }
+    constexpr strPadMap() : pad{}, color{} { setDefault(); }
 
     // New projects: hats in group 1 with cut on release (until Pad Assign,
     // 5d, sets both per pad). withGroups = false: the plain map that
@@ -87,7 +87,7 @@ struct strPadMap
         for (int i = 0; i < kPads; i++)
         {
             pad[i] = { uint8_t(i), uint8_t(i % kPadsPerBank), kPadNoteDefault, kPadModeAuto };
-            colour[i] = 0;
+            color[i] = 0;
         }
         if (withGroups)
             for (int i : kDefaultHatPads)
@@ -108,11 +108,11 @@ const char* padModeName(uint8_t mode); // takes the mode byte (group bits ignore
 uint8_t padGroup(int pad);
 void setPadGroup(int pad, uint8_t group); // keeps the play mode and cut; > 31 = none
 bool padCutOnRelease(int pad);             // 5b-6a
-// Pad colour (5c-2): the stored value (0 Auto, 1-16) and the RGB a pad shows
-// for a track (Auto = the track's palette colour)
-uint8_t padColour(int pad);
-void setPadColour(int pad, uint8_t colour);
-const uint8_t* padColourRgb(int pad, uint8_t track);
+// Pad color (5c-2): the stored value (0 Auto, 1-16) and the RGB a pad shows
+// for a track (Auto = the track's palette color)
+uint8_t padColor(int pad);
+void setPadColor(int pad, uint8_t color);
+const uint8_t* padColorRgb(int pad, uint8_t track);
 void setPadCutOnRelease(int pad, bool cut);
 // The group a (program, track) plays in, for notes that don't come from a
 // pad (pattern playback): the first pad in bank order A01 -> D16 with that
@@ -214,8 +214,8 @@ int mpdjPadStepWrite(int pad, int row, uint8_t velocity);
 // Invalid entries read back as that pad's default.
 void padsWrite(strPadSlot* out);
 void padsRead(const strPadSlot* in); // nullptr = default map (older files)
-void padColoursWrite(uint8_t* out);   // 5c-2, block version 4
-void padColoursRead(const uint8_t* in); // nullptr = all Auto (older files)
+void padColorsWrite(uint8_t* out);   // 5c-2, block version 4
+void padColorsRead(const uint8_t* in); // nullptr = all Auto (older files)
 
 // MPDJ_PADS_TEST=1: checks the default map, the file round trip and older
 // files, prints the map and exits. Returns the exit code, or -1 when unset.

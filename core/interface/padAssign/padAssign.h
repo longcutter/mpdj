@@ -21,7 +21,7 @@ class cPadAssign : public ModuleBase
         ParamMode,
         ParamChoke,
         ParamCut,
-        ParamColour,
+        ParamColor,
         ParamCount
     };
 

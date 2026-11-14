@@ -6,17 +6,17 @@
 // arrive on) and prints it, while you watch the panel:
 //   main encoder        number 0..127 (previous one is switched off first)
 //   main encoder push   message type: CC (B0 n v) <-> note (90 n v), channel 1
-//   Q-Link 1            value 0..127 (brightness / colour), default 127
+//   Q-Link 1            value 0..127 (brightness / color), default 127
 //   PLAY / STOP         sweep through the numbers by itself (0.7 s each) / pause
 //   Ctrl+C              quit (switches everything it lit back off)
 // Q-Link 1 single clicks reach the low values TheKikGen reported for button
 // LEDs (0 off, 1 dim, 2 = ?, 3 bright).
 //
-// Pad colours (reported by TheKikGen, untested on the One+): SysEx
+// Pad colors (reported by TheKikGen, untested on the One+): SysEx
 //   F0 47 7F 56 65 00 04 <pad 0-15> <R> <G> <B> F7   (0x56 = One+ product ID)
 // sent on the Public port (subdevice 0) by default:
 //   Q-Links 2 / 3 / 4   red / green / blue 0..127 for the next pad
-//   hit a pad           paint it with that colour
+//   hit a pad           paint it with that color
 //   TAP TEMPO           paint all 16 pads with a test pattern (pad 1 = red, ...)
 //   ERASE               all pads off
 //   Q-LINK              send pad SysEx on the other port (Public <-> Private)
@@ -55,7 +55,7 @@ uint32_t nowMs()
 }
 
 int fd = -1;    // Private port (buttons, button / Q-Link LEDs)
-int fdPub = -1; // Public port (pad colours, identity request)
+int fdPub = -1; // Public port (pad colors, identity request)
 
 void send3(uint8_t s, uint8_t d1, uint8_t d2)
 {
@@ -182,7 +182,7 @@ int runLedProbe()
     bool padOnPub = fdPub >= 0;
     int rgb[3] = { 127, 0, 0 };
     bool padUsed[2][16] = {};
-    auto padColour = [&](int pad, int r, int g, int b, bool quiet) {
+    auto padColor = [&](int pad, int r, int g, int b, bool quiet) {
         int f = padOnPub ? fdPub : fd;
         uint8_t m[] = { 0xF0, 0x47, 0x7F, 0x56, 0x65, 0x00, 0x04,
                         (uint8_t)pad, (uint8_t)r, (uint8_t)g, (uint8_t)b, 0xF7 };
@@ -254,7 +254,7 @@ int runLedProbe()
             {
                 int p = padNumber(data[0]);
                 if (type == 0x90 && data[1] > 0 && p > 0)
-                    padColour(p - 1, rgb[0], rgb[1], rgb[2], false);
+                    padColor(p - 1, rgb[0], rgb[1], rgb[2], false);
                 continue;
             }
             if ((status & 0x0F) != 0)
@@ -276,7 +276,7 @@ int runLedProbe()
                 int& c = rgb[data[0] - 17];
                 c += relSteps(data[1]);
                 c = c < 0 ? 0 : c > 127 ? 127 : c;
-                printf("led probe: pad colour R %d G %d B %d\n", rgb[0], rgb[1], rgb[2]);
+                printf("led probe: pad color R %d G %d B %d\n", rgb[0], rgb[1], rgb[2]);
             }
             else if (type == 0x90 && data[1] > 0)
             {
@@ -289,7 +289,7 @@ int runLedProbe()
                         { 16, 0, 0 },    { 0, 16, 0 },    { 0, 0, 16 },   { 16, 16, 16 },
                     };
                     for (int p = 0; p < 16; p++)
-                        padColour(p, kPattern[p][0], kPattern[p][1], kPattern[p][2], true);
+                        padColor(p, kPattern[p][0], kPattern[p][1], kPattern[p][2], true);
                     printf("led probe: test pattern on %s. Expect, from pad 1 (bottom left), left to right:\n"
                            "  row 1: red, green, blue, white\n"
                            "  row 2: yellow, cyan, magenta, orange\n"
@@ -300,7 +300,7 @@ int runLedProbe()
                 else if (data[0] == 9) // ERASE: pads off
                 {
                     for (int p = 0; p < 16; p++)
-                        padColour(p, 0, 0, 0, true);
+                        padColor(p, 0, 0, 0, true);
                     printf("led probe: all pads off on %s\n", padOnPub ? "Public" : "Private");
                 }
                 else if (data[0] == 0) // Q-LINK: other port
@@ -347,7 +347,7 @@ int runLedProbe()
         padOnPub = port == 1;
         for (int p = 0; p < 16; p++)
             if (padUsed[port][p])
-                padColour(p, 0, 0, 0, true);
+                padColor(p, 0, 0, 0, true);
     }
     if (fdPub >= 0)
         close(fdPub);

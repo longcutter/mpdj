@@ -1,6 +1,6 @@
 // MPDJ logo for the boot / start screen (Mike's design, 2026-11-12), 320 x 162,
 // L4 (16 grey levels, two pixels per byte, left pixel in the high nibble),
-// drawn as a mask in the theme colour. Made from docs/mpdj-logo.png by taking
+// drawn as a mask in the theme color. Made from docs/mpdj-logo.png by taking
 // ink = alpha x darkness, so the strokes draw and the white fill stays background.
 #include <stdint.h>
 

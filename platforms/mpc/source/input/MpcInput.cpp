@@ -430,27 +430,27 @@ void MpcInput::padLedsOff()
 }
 
 // Hold a pad on the Pattern screen's pad map (not in edit mode / REC) and turn
-// the main encoder: that pad's colour, Auto (its track's) -> 16 palette
-// colours -> Auto (5c-2; saved in the project; Pad Assign sets it later too)
-bool MpcInput::turnHeldPadColour(int steps)
+// the main encoder: that pad's color, Auto (its track's) -> 16 palette
+// colors -> Auto (5c-2; saved in the project; Pad Assign sets it later too)
+bool MpcInput::turnHeldPadColor(int steps)
 {
     if (!mtInterface.isPatternScreenActive() || mpdjNotesOn() || mpdjLevelsOn() || padGrid ||
         patternEditor.editMode || sequencer.isRec() || lastEngineNote < 0 || enginePadHeld[lastEngineNote] < 0)
         return false;
     int pad = enginePadHeld[lastEngineNote];
-    int c = padColour(pad) + (steps > 0 ? 1 : -1);
-    c = c < 0 ? kPadColours : (c > kPadColours ? 0 : c); // wraps
-    setPadColour(pad, (uint8_t)c);
+    int c = padColor(pad) + (steps > 0 ? 1 : -1);
+    c = c < 0 ? kPadColors : (c > kPadColors ? 0 : c); // wraps
+    setPadColor(pad, (uint8_t)c);
     newFileManager.setProjectStructChanged();
     static char msg[40]; // the popup keeps the pointer
     char name[4];
     padName(pad, name);
-    snprintf(msg, sizeof msg, "%s colour: %s", name, kPadColourNames[c]);
+    snprintf(msg, sizeof msg, "%s color: %s", name, kPadColorNames[c]);
     mtPopups.show(0, msg);
     return true;
 }
 
-// Empty slot = dark; a program = its colour, dim; played (held, or a note of
+// Empty slot = dark; a program = its color, dim; played (held, or a note of
 // that program on that track from a pad or the pattern) = brighter by its
 // level (volume scale, 50 = a full hit), fading over kPadFlashMs
 void MpcInput::pollPadLights()
@@ -510,9 +510,9 @@ void MpcInput::pollPadLights()
             level = trackHitLevel[t] / 50.0f * (1.0f - (now - trackHitMs[t]) / (float)kPadFlashMs);
         level = level > 1 ? 1 : level;
         float k = base + (top - base) * level;
-        // Notes mode: roots red, the other notes white, not the pad's colour;
-        // 16 Levels: the source's track colour (Mike 2026-11-14)
-        const uint8_t* c = notes ? kNoteWhite : levels ? kPadPalette[t & 15] : padColourRgb(pad, t);
+        // Notes mode: roots red, the other notes white, not the pad's color;
+        // 16 Levels: the source's track color (Mike 2026-11-14)
+        const uint8_t* c = notes ? kNoteWhite : levels ? kPadPalette[t & 15] : padColorRgb(pad, t);
         if (notes && slot.note >= 0 && slot.note % 12 == rootPc)
             c = kRootRed;
         if (levels && level == 0)
@@ -1194,7 +1194,7 @@ void MpcInput::onPad(uint8_t note, bool down, uint8_t velocity)
                    padIsGate(pad) ? "gate" : "one shot");
         }
         enginePadHeld[note] = (int8_t)pad;
-        lastEngineNote = note; // hold a pad + main encoder = its colour (5c-2)
+        lastEngineNote = note; // hold a pad + main encoder = its color (5c-2)
         mpdjSetCursorTrack(patternEditor.trackerPattern.actualTrack); // Notes mode's title-bar source
         if (const char* msg = mpdjPadPress(pad, velocity))
             mtPopups.show(0, msg);
@@ -1400,8 +1400,8 @@ void MpcInput::onRelative(uint8_t cc, uint8_t value)
             turnRepeatDivision(steps); // NOTE REPEAT held: the division (5b-7b)
             return;
         }
-        if (turnHeldPadColour(steps))
-            return; // a pad held on the pad map: its colour (5c-2)
+        if (turnHeldPadColor(steps))
+            return; // a pad held on the pad map: its color (5c-2)
         if (levelsHeld && mtInterface.isPatternScreenActive())
         {
             // 16 LEVELS held on the Pattern screen (any pad mode): the project
@@ -2066,7 +2066,7 @@ void MpcInput::setQLinkLeds()
 //   Dim      active = dim (white or red), the rest dark
 //   Bright   active = bright, the rest dark
 //   Dynamic  available = dim white, active = bright (default)
-// Values (hardware map): one-colour LEDs 0 off, 1 dim, 2+ bright; two-colour
+// Values (hardware map): one-color LEDs 0 off, 1 dim, 2+ bright; two-color
 // buttons 1 dim white, 2 dim red, 3 bright white, 4 bright red, so the same
 // numbers work for both. "Tap tempo flash" (Off / Dim / Bright) flashes TAP
 // TEMPO on each beat. The Q-Link mode LEDs follow the same setting. Only changes

@@ -81,8 +81,8 @@ struct strMpdjProjectData
     uint8_t reservedTracks[24];
     // version 3 (step 5b-1): the pad map, mpdjPads.h
     strPadSlot pads[kPads];
-    // version 4 (step 5c-2): pad colours (0 = Auto, 1-16 palette)
-    uint8_t padColour[kPads];
+    // version 4 (step 5c-2): pad colors (0 = Auto, 1-16 palette)
+    uint8_t padColor[kPads];
 };
 static constexpr size_t kMpdjProjectDataV1Size = 8 + 4 * kProgramSlots; // version 1 ended here
 static constexpr size_t kMpdjProjectDataV2Size = kMpdjProjectDataV1Size + 32; // version 2 ended here

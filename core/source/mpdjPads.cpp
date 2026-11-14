@@ -726,32 +726,32 @@ void padsWrite(strPadSlot* out)
     memcpy(out, mtProject.pads.pad, sizeof(mtProject.pads.pad));
 }
 
-void padColoursWrite(uint8_t* out)
+void padColorsWrite(uint8_t* out)
 {
-    memcpy(out, mtProject.pads.colour, sizeof(mtProject.pads.colour));
+    memcpy(out, mtProject.pads.color, sizeof(mtProject.pads.color));
 }
 
-void padColoursRead(const uint8_t* in)
+void padColorsRead(const uint8_t* in)
 {
     for (int i = 0; i < kPads; i++)
-        mtProject.pads.colour[i] = (in && in[i] <= kPadColours) ? in[i] : 0;
+        mtProject.pads.color[i] = (in && in[i] <= kPadColors) ? in[i] : 0;
 }
 
-uint8_t padColour(int pad)
+uint8_t padColor(int pad)
 {
-    return (pad >= 0 && pad < kPads) ? mtProject.pads.colour[pad] : 0;
+    return (pad >= 0 && pad < kPads) ? mtProject.pads.color[pad] : 0;
 }
 
-void setPadColour(int pad, uint8_t colour)
+void setPadColor(int pad, uint8_t color)
 {
-    if (pad >= 0 && pad < kPads && colour <= kPadColours)
-        mtProject.pads.colour[pad] = colour;
+    if (pad >= 0 && pad < kPads && color <= kPadColors)
+        mtProject.pads.color[pad] = color;
 }
 
-const uint8_t* padColourRgb(int pad, uint8_t track)
+const uint8_t* padColorRgb(int pad, uint8_t track)
 {
-    uint8_t c = padColour(pad);
-    return c ? kPadPalette[c - 1] : kPadPalette[track % kPadColours];
+    uint8_t c = padColor(pad);
+    return c ? kPadPalette[c - 1] : kPadPalette[track % kPadColors];
 }
 
 void padsRead(const strPadSlot* in)
@@ -886,25 +886,25 @@ int padsSelfTest()
     check(padCutOnRelease(2) && padCutOnRelease(3) && padCutOnRelease(11) && !padCutOnRelease(0),
           "hats' cut on release after reload", -1);
 
-    // 2c. Pad colours (5c-2): round trip; a version 3 block or bad values -> Auto
+    // 2c. Pad colors (5c-2): round trip; a version 3 block or bad values -> Auto
     mtProject.pads = def;
-    check(padColour(5) == 0 && padColourRgb(5, 3) == kPadPalette[3], "Auto = the track's colour", 5);
-    setPadColour(5, 7);
-    setPadColour(63, 16);
-    setPadColour(6, 17); // out of range: ignored
-    check(padColour(5) == 7 && padColourRgb(5, 3) == kPadPalette[6] && padColour(6) == 0, "set colour", 5);
+    check(padColor(5) == 0 && padColorRgb(5, 3) == kPadPalette[3], "Auto = the track's color", 5);
+    setPadColor(5, 7);
+    setPadColor(63, 16);
+    setPadColor(6, 17); // out of range: ignored
+    check(padColor(5) == 7 && padColorRgb(5, 3) == kPadPalette[6] && padColor(6) == 0, "set color", 5);
     programsWriteToFile(file);
-    mtProject.pads.colour[5] = mtProject.pads.colour[63] = 0;
+    mtProject.pads.color[5] = mtProject.pads.color[63] = 0;
     programsReadFromFile(file);
-    check(padColour(5) == 7 && padColour(63) == 16, "colour round trip", 63);
-    file.padColour[9] = 40;
+    check(padColor(5) == 7 && padColor(63) == 16, "color round trip", 63);
+    file.padColor[9] = 40;
     programsReadFromFile(file);
-    check(padColour(9) == 0, "bad colour -> Auto", 9);
+    check(padColor(9) == 0, "bad color -> Auto", 9);
     file.version = 3;
     programsReadFromFile(file);
-    check(padColour(5) == 0 && padColour(63) == 0, "version 3 block -> Auto", 5);
+    check(padColor(5) == 0 && padColor(63) == 0, "version 3 block -> Auto", 5);
     file.version = 4;
-    file.padColour[9] = 0;
+    file.padColor[9] = 0;
     mtProject.pads = def;
     programsWriteToFile(file);
 

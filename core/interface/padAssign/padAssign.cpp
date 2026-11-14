@@ -6,6 +6,7 @@
 #include "mpdjPads.h"
 #include "mpdjPrograms.h"
 #include "mtStructs.h"
+#include "mtSequencer.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -16,9 +17,9 @@ static cPadAssign* PA = &padAssign;
 namespace
 {
 const char* const kParamNames[cPadAssign::ParamCount] = { "Program", "Track", "Tune", "Level",
-                                                          "Mode",    "Choke", "Cut",  "Colour" };
+                                                          "Mode",    "Choke", "Cut",  "Color" };
 const char* const kListNames[cPadAssign::ParamCount] = { "Program", "Track",       "Tune",           "Level",
-                                                         "Mode",    "Choke group", "Cut on release", "Colour" };
+                                                         "Mode",    "Choke group", "Cut on release", "Color" };
 
 uint32_t rgb(const uint8_t* c)
 {
@@ -44,6 +45,21 @@ void functSwitchModule(uint8_t button)
 }
 
 void functEncoder(int16_t value) { PA->changeValue(value); }
+
+// Transport works here as on every Tracker screen (Mike 2026-11-14: tune pads
+// against the running pattern): Play toggles, Shift+Play plays the song
+void functPlayAction()
+{
+    if (sequencer.getSeqState() == Sequencer::SEQ_STATE_STOP)
+    {
+        if (PA->buttons->isButtonPressed(interfaceButtonShift))
+            sequencer.playSong();
+        else
+            sequencer.playPattern();
+    }
+    else
+        sequencer.stop();
+}
 
 int clampInt(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
@@ -150,6 +166,7 @@ void cPadAssign::start(uint32_t options)
     ip->setButtonObj(interfaceButtonDown, buttonPress, functDown);
     for (int b = 0; b < 8; b++)
         ip->setButtonObj(interfaceButton0 + b, functActionButton);
+    ip->setButtonObj(interfaceButtonPlay, buttonPress, functPlayAction);
     ip->setPotObj(interfacePot0, functEncoder); // QL4 / main encoder: the value (5d-2)
 
     titleBar->show();
@@ -244,7 +261,7 @@ void cPadAssign::changeValue(int steps)
     }
     case ParamChoke: setPadGroup(selPad, (uint8_t)clampInt(padGroupOf(p.mode) + steps, 0, kPadGroups)); break;
     case ParamCut: setPadCutOnRelease(selPad, dir > 0); break;
-    case ParamColour: setPadColour(selPad, (uint8_t)clampInt(padColour(selPad) + dir, 0, kPadColours)); break;
+    case ParamColor: setPadColor(selPad, (uint8_t)clampInt(padColor(selPad) + dir, 0, kPadColors)); break;
     default: return;
     }
     newFileManager.setProjectStructChanged();
@@ -274,12 +291,12 @@ void cPadAssign::fillValues()
     else
         snprintf(paramValues[ParamChoke], sizeof paramValues[0], "Off");
     snprintf(paramValues[ParamCut], sizeof paramValues[0], "%s", padCutOf(p->mode) ? "On" : "Off");
-    uint8_t c = padColour(selPad);
+    uint8_t c = padColor(selPad);
     if (c)
-        snprintf(paramValues[ParamColour], sizeof paramValues[0], "%s", kPadColourNames[c]);
+        snprintf(paramValues[ParamColor], sizeof paramValues[0], "%s", kPadColorNames[c]);
     else
-        snprintf(paramValues[ParamColour], sizeof paramValues[0], "Auto (%s)",
-                 kPadColourNames[p->track % kPadColours + 1]);
+        snprintf(paramValues[ParamColor], sizeof paramValues[0], "Auto (%s)",
+                 kPadColorNames[p->track % kPadColors + 1]);
 
     // the labels' short values
     if (p->program == kPadNoProgram)
@@ -292,7 +309,7 @@ void cPadAssign::fillValues()
     snprintf(labelValues[ParamMode], sizeof labelValues[0], "%s", padModeName(p->mode));
     snprintf(labelValues[ParamChoke], sizeof labelValues[0], "%s", g ? paramValues[ParamChoke] : "Off");
     snprintf(labelValues[ParamCut], sizeof labelValues[0], "%s", paramValues[ParamCut]);
-    snprintf(labelValues[ParamColour], sizeof labelValues[0], "%s", c ? kPadColourNames[c] : "Auto");
+    snprintf(labelValues[ParamColor], sizeof labelValues[0], "%s", c ? kPadColorNames[c] : "Auto");
 }
 
 void cPadAssign::refresh()
@@ -317,7 +334,7 @@ void cPadAssign::refresh()
             if (g)
                 snprintf(gs, sizeof gs, " G%u", g);
             snprintf(c.marks, sizeof c.marks, "T%d%s%s", p->track + 1, gs, padCutOf(p->mode) ? " Cut" : "");
-            c.colour = empty ? 0 : rgb(padColourRgb(pad, p->track));
+            c.color = empty ? 0 : rgb(padColorRgb(pad, p->track));
         }
         c.empty = empty;
     }
