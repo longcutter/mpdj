@@ -1601,6 +1601,23 @@ void audioEngine::cutAllVolumeEnvelopes()
     }
 }
 
+// MPDJ (5b-5b): choke groups' fast cut
+void audioEngine::chokeTrack(uint8_t track, float ms)
+{
+    if (track < kVoices)
+        instrumentPlayer[track].chokeCut(ms);
+}
+
+void playerEngine::chokeCut(float ms)
+{
+    float n = ms * (AUDIO_SAMPLE_RATE_EXACT / 1000.0f);
+    uint16_t samples = n < 1.0f ? 1 : (n > 65535.0f ? 65535 : (uint16_t)(n + 0.5f));
+    AudioNoInterrupts();
+    for (int channel = 0; channel < (int)playMemPtr.size(); channel++)
+        playMemPtr[channel]->chokeStart(samples);
+    AudioInterrupts();
+}
+
 void audioEngine::setLineInOutType(uint8_t type)
 {
     input.getStereoToMono()->setOutSignalType((AudioStereoToMono::OutSignalType)type);

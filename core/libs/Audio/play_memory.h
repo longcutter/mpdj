@@ -218,6 +218,13 @@ class AudioPlayMemory : public AudioStream
     };
 
     void setSlidePitch(bool upOrDown, uint8_t dstValue, float time);
+
+    // MPDJ (step 5b-5b, choke groups): fade the sounding note out linearly over
+    // `samples`, then the voice goes idle (no envelope release). A note on
+    // during the fade waits for its end. Nothing happens when the voice is idle.
+    // Call with the audio lock held (playerEngine::chokeCut)
+    void chokeStart(uint16_t samples);
+    bool chokeActive() const { return choke.active; }
     void setSamplePointsSource(AudioPlayMemory* sourceObject);
     //******************************************************************ENVELOPE PUBLIC BLOCK
     // END****************************************************************************//
@@ -436,6 +443,17 @@ class AudioPlayMemory : public AudioStream
         int8_t note;
         bool isPrev;
     } stackedPlay;
+
+    // MPDJ choke fade (5b-5b): gain in Q16 (65536 = full), step per sample
+    struct strChoke
+    {
+        bool active = false;
+        bool startStacked = false; // a note on arrived during the fade
+        int32_t gain = 65536;
+        int32_t step = 0;
+    } choke;
+    bool chokeApply(audio_block_t* block); // true = faded out
+    void chokeFinish();
 
     uint8_t tuneForceFlag;
     uint8_t pointsForceFlag;

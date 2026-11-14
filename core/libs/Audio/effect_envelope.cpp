@@ -263,6 +263,13 @@ AUDIO_CORE_FLASH void AudioPlayMemory::envelopeNoteOn(uint8_t instr_idx, int8_t 
 {
     //	__disable_irq();
     AudioNoInterrupts();
+    if (choke.active) // MPDJ (5b-5b): starts when the choke fade ends
+    {
+        envelope.pressedFlag = 1;
+        stackedPlay = { true, instr_idx, note, false };
+        AudioInterrupts();
+        return;
+    }
     envelope.pressedFlag = 1;
     envelope.wtPhase = 0;
     envelope.wtReleaseStartPhase = 0;
@@ -300,6 +307,13 @@ AUDIO_CORE_FLASH void AudioPlayMemory::envelopeNoteOnForPrev(uint8_t instr_idx, 
 {
     //	__disable_irq();
     AudioNoInterrupts();
+    if (choke.active) // MPDJ (5b-5b): starts when the choke fade ends
+    {
+        envelope.pressedFlag = 1;
+        stackedPlay = { true, instr_idx, note, true };
+        AudioInterrupts();
+        return;
+    }
     envelope.pressedFlag = 1;
     envelope.wtPhase = 0;
     envelope.wtReleaseStartPhase = 0;
@@ -375,6 +389,14 @@ AUDIO_CORE_FLASH void AudioPlayMemory::envelopeNoteOnForPrev(int16_t* addr,
 AUDIO_CORE_FLASH void AudioPlayMemory::envelopeNoteOff(void)
 {
     AudioNoInterrupts();
+
+    if (choke.active) // MPDJ (5b-5b): the choke fade ends the note
+    {
+        envelope.pressedFlag = 0;
+        stackedPlay.enable = false;
+        AudioInterrupts();
+        return;
+    }
 
     envelope.pressedFlag = 0;
     if (stackedPlay.enable)

@@ -3,6 +3,7 @@
 
 #include "mpdjPrograms.h"
 #include "mtSequencer.h"
+#include "mtAudioEngine.h"
 #include "mtStructs.h"
 #include "util_math.h"
 #include "mtConfig.h"
@@ -183,6 +184,21 @@ void mpdjPadRelease(int pad)
         return;
     uint8_t track = (uint8_t)s_held[pad].track;
     sequencer.mpdjPadNoteOff(track, kPadSourceBase + pad, s_held[pad].gate);
+#ifdef PLATFORM_MPC
+    // MPDJ_CHOKE_TEST=1 (5b-5b): a pad's release chokes its own track, to hear
+    // the fast cut before choke groups use it
+    static int chokeTest = -1;
+    if (chokeTest < 0)
+    {
+        const char* v = getenv("MPDJ_CHOKE_TEST");
+        chokeTest = (v && *v && *v != '0') ? 1 : 0;
+    }
+    if (chokeTest)
+    {
+        engine.chokeTrack(track);
+        printf("choke test: track %d cut\n", track + 1);
+    }
+#endif
 
     // REC + playing, Gate pad (5b-4b): the release writes an OFF
     if (s_held[pad].gate && s_held[pad].recorded && s_lastRecPad[track] == pad)

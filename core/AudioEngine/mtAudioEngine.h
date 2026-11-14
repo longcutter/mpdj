@@ -148,6 +148,10 @@ class audioEngine
     void stopTestSignal();
     void endAllFx(bool synthOnly = false);
     void cutAllVolumeEnvelopes();
+    // MPDJ (5b-5b, choke groups): fade the track's voice out over `ms` and
+    // stop it (no envelope release); the next note on the track plays normally
+    static constexpr float kChokeMs = 5.0f;
+    void chokeTrack(uint8_t track, float ms = kChokeMs);
     void setPassEnvelope(uint8_t state);
     void blockDelayRefresh();
     void unblockDelayRefresh();
@@ -670,6 +674,7 @@ class playerEngine
     //*****note off
     void noteOffFade();
     void noteOffCut();
+    void chokeCut(float ms); // MPDJ (5b-5b)
     void noteOffOrdinary();
     //*************************************************
     //**********************UPDATE HANDLERS

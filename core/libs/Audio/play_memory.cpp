@@ -128,6 +128,25 @@ AUDIO_CORE_RAM void AudioPlayMemory::update(void)
     if (isBlockedInstrument[currentInstrIdx])
         return;
 
+    // MPDJ (5b-5b): a note on that came during a choke fade starts now, from
+    // silence, with a fresh envelope
+    if (choke.startStacked)
+    {
+        choke.startStacked = false;
+        if (stackedPlay.enable)
+        {
+            stackedPlay.enable = false;
+            envelopeSwitchPhase(envelope.passFlag ? envelopePhaseSustain : envelopePhaseDelay);
+            if (stackedPlay.isPrev)
+                playForPrev(stackedPlay.instr_idx, stackedPlay.note);
+            else
+                play(stackedPlay.instr_idx, stackedPlay.note);
+        }
+    }
+
+    if (choke.active && envelope.state == envelopePhaseIdle && !stackedPlay.enable)
+        chokeFinish(); // the note ended on its own during the fade
+
     if (envelope.state == envelopePhaseIdle && !stackedPlay.enable)
     {
         if (playing)
@@ -157,7 +176,74 @@ AUDIO_CORE_RAM void AudioPlayMemory::update(void)
         lowerVolume3dB(block);
     }
 
+    // the fade's last block still goes through the envelope; the voice goes
+    // idle after it (an idle envelope would zero the block)
+    bool chokeDone = choke.active && chokeApply(block);
+
     envelopeUpdate(block);
+
+    if (chokeDone)
+        chokeFinish();
+}
+
+// MPDJ (5b-5b): choke groups' fast cut. The caller holds the audio lock
+// (AudioNoInterrupts) for all of a voice's channels: the lock doesn't nest, so
+// taking it here would let the audio thread run between the channels
+void AudioPlayMemory::chokeStart(uint16_t samples)
+{
+    if (envelope.state == envelopePhaseIdle && !stackedPlay.enable)
+        return; // nothing sounding
+    if (samples == 0)
+        samples = 1;
+    if (!choke.active)
+        choke.gain = 65536;
+    choke.step = (choke.gain + samples - 1) / samples;
+    if (choke.step < 1)
+        choke.step = 1;
+    choke.active = true;
+    // a note on stacked behind a forced release (same-track retrigger) is
+    // cut too: the choke wins
+    stackedPlay.enable = false;
+}
+
+AUDIO_CORE_RAM bool AudioPlayMemory::chokeApply(audio_block_t* block)
+{
+    int i = 0;
+    if (block)
+    {
+        for (; i < AUDIO_BLOCK_SAMPLES && choke.gain > 0; i++)
+        {
+            choke.gain -= choke.step;
+            if (choke.gain < 0)
+                choke.gain = 0;
+            block->data[i] = (int16_t)(((int32_t)block->data[i] * choke.gain) >> 16);
+        }
+        for (; i < AUDIO_BLOCK_SAMPLES; i++)
+            block->data[i] = 0;
+    }
+    else
+    {
+        choke.gain -= choke.step * AUDIO_BLOCK_SAMPLES;
+        if (choke.gain < 0)
+            choke.gain = 0;
+    }
+    return choke.gain == 0; // the caller calls chokeFinish() after the envelope
+}
+
+AUDIO_CORE_RAM void AudioPlayMemory::chokeFinish()
+{
+    choke.active = false;
+    choke.gain = 65536;
+    choke.step = 0;
+    bool stacked = stackedPlay.enable;
+    envelope.pressedFlag = stacked ? 1 : 0;
+    envelopeSwitchPhase(envelopePhaseIdle);
+    if (playing)
+        stop();
+    if (stacked)
+        choke.startStacked = true; // next block
+    else
+        envelope.endReleaseFlag = 1; // as when a release ends
 }
 
 AUDIO_CORE_RAM void AudioPlayMemory::lowerVolume3dB(audio_block_t* block)
