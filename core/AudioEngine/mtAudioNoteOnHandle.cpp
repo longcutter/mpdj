@@ -229,7 +229,13 @@ AUDIO_CORE_RAM void playerEngine::noteOff(int8_t option)
     switch (option)
     {
         case Sequencer::STEP_NOTE_OFF_FADE: noteOffFade(); break;
+#ifdef PLATFORM_MPC
+        // MPDJ (5b-6b): CUT fades out over 5 ms (the choke fade) instead of
+        // stopping the voice dead, which clicks
+        case Sequencer::STEP_NOTE_OFF_CUT: chokeCut(audioEngine::kChokeMs); break;
+#else
         case Sequencer::STEP_NOTE_OFF_CUT: noteOffCut(); break;
+#endif
         case Sequencer::STEP_NOTE_OFF_DEFAULT: noteOffOrdinary(); break;
         default: noteOffOrdinary(); break;
     }

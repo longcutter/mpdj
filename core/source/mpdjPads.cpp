@@ -209,14 +209,15 @@ void mpdjPadRelease(int pad)
     if (s_held[pad].gate && s_held[pad].recorded && s_lastRecPad[track] == pad)
     {
         bool hadNote = false;
-        int row = sequencer.mpdjPadRecOff(track, &hadNote);
+        int row = sequencer.mpdjPadRecOff(track, &hadNote, s_held[pad].cut);
 #ifdef PLATFORM_MPC
         if (recTrace())
         {
             char name[4];
             padName(pad, name);
             if (row >= 0)
-                printf("pad rec: %s release -> track %d row %d: OFF\n", name, track + 1, row);
+                printf("pad rec: %s release -> track %d row %d: %s\n", name, track + 1, row,
+                       s_held[pad].cut ? "CUT" : "OFF");
             else
                 printf("pad rec: %s release -> track %d: no OFF (%s)\n", name, track + 1,
                        hadNote ? "a note is on that row" : "not recording");

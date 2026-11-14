@@ -941,7 +941,8 @@ class Sequencer
     // row, always after the note's row (as the Tracker: a release on the
     // note's own row writes it on the next one), only into a row without a
     // note. Returns the row, -1 = not written (*hadNote: a note was there).
-    int mpdjPadRecOff(uint8_t track, bool* hadNote);
+    // cut (5b-6b): writes a CUT instead of an OFF (pads with cut on release)
+    int mpdjPadRecOff(uint8_t track, bool* hadNote, bool cut = false);
     int8_t mpdjVelocityToVolume(int8_t velocity) { return velocityToVolume(velocity); }
     // MPDJ (5b-4c): edit mode (REC + stopped, or REC alone while playing):
     // write a pad hit at a row (Overwrite: note, program, volume; micromove

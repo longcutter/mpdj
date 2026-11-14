@@ -3341,7 +3341,7 @@ int8_t Sequencer::mpdjPadStepWrite(uint8_t track, uint8_t row, uint8_t instrumen
     return step->volume < 0 ? 0 : step->volume;
 }
 
-int Sequencer::mpdjPadRecOff(uint8_t track, bool* hadNote)
+int Sequencer::mpdjPadRecOff(uint8_t track, bool* hadNote, bool cut)
 {
     if (hadNote)
         *hadNote = false;
@@ -3358,7 +3358,7 @@ int Sequencer::mpdjPadRecOff(uint8_t track, bool* hadNote)
             *hadNote = true;
         return -1; // never replace a note with an OFF
     }
-    step->note = STEP_NOTE_OFF_DEFAULT;
+    step->note = cut ? STEP_NOTE_OFF_CUT : STEP_NOTE_OFF_DEFAULT;
     step->micromove = (recMicrotiming() && dest == t.actual_pos)
                         ? clamp<int>(mapClamped<int>(t.uStep, 1, 48, 0, 100),
                                      getFxMin(fx.FX_TYPE_MICROMOVE),
