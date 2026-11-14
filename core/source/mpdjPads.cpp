@@ -7,6 +7,7 @@
 #include "mtStructs.h"
 #include "util_math.h"
 #include "mtConfig.h"
+#include "scales.h"
 
 #include "Audio.h"
 
@@ -244,9 +245,18 @@ int mpdjNotesNote(int pad)
     // pad 1 of bank B = the root in the octave that plays the sample at its
     // own pitch (C5 = 60); bank A an octave lower, C / D one and two higher;
     // pads go up chromatically
+    // pads go up chromatically, or through the project scale (5b-8b:
+    // padBoardScale, the Tracker's scale list; pad n = the n-th degree)
     int bank = pad / kPadsPerBank, n = pad % kPadsPerBank;
     int root = mtProject.values.padBoardRootNote % 12;
-    int note = Sequencer::STEP_NOTE_DEFAULT + root + (bank - 1) * 12 + n;
+    int note = Sequencer::STEP_NOTE_DEFAULT + root + (bank - 1) * 12;
+    uint8_t scale = mtProject.values.padBoardScale;
+    if (scale == 0 || scale > MAX_SCALE)
+        note += n;
+    else
+        for (int degree = 0; degree < n && note < 127;)
+            if (isInScale((uint8_t)++note, (uint8_t)root, scale))
+                degree++;
     return note > 127 ? 127 : note;
 }
 

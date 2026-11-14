@@ -14,6 +14,8 @@
 #include "fileManager.h"
 #include "mtSequencer.h"
 #include "mtStructs.h"
+#include "scales.h"
+#include "configEditor/configMenuActions.h"
 #include "mpdjPads.h"
 #include "patternEditor/patternEditor.h"
 #include "projectEditor/projectEditor.h"
@@ -111,6 +113,7 @@ const ButtonMap kButtonMap[] = {
 constexpr uint8_t kNoteBankA = 35, kNoteBankD = 38;
 constexpr uint8_t kNoteShift = 49;
 constexpr uint8_t kNoteNoteRepeat = 11;
+constexpr uint8_t kNote16Levels = 40;
 constexpr uint8_t kNoteMain = 52;
 constexpr uint8_t kNoteErase = 9;
 
@@ -529,6 +532,12 @@ void MpcInput::onButton(uint8_t note, bool down)
             mpcShift = false;
             closeProgramPicker();
         }
+        if (note == kNote16Levels && levelsHeld)
+        {
+            levelsHeld = false;
+            if (!levelsTurned)
+                togglePadGrid();
+        }
         if (note == kNoteNoteRepeat && repeatHeld)
         {
             repeatHeld = false;
@@ -704,10 +713,10 @@ void MpcInput::onButton(uint8_t note, bool down)
                 showNotesPopup();
                 break;
             }
-            padGrid = !padGrid; // 16 LEVELS alone: the grid toggle until 16 Levels (5b-9)
-            if (padGrid)
-                mpdjNotesSet(false);
-            mtPopups.show(0, padGrid ? "Pads: Tracker grid" : "Pads: pad map");
+            // 16 LEVELS alone: acts on release (togglePadGrid), unless the main
+            // encoder picked a scale / root meanwhile (Notes mode, 5b-8b)
+            levelsHeld = true;
+            levelsTurned = false;
             break;
         case Act::NoteRepeat:
             if (mpcShift)
@@ -740,6 +749,43 @@ void MpcInput::onButton(uint8_t note, bool down)
     }
 }
 
+// 16 LEVELS alone: the pad map <-> the Tracker's 4x12 grid (until 16 Levels, 5b-9)
+void MpcInput::togglePadGrid()
+{
+    padGrid = !padGrid;
+    if (padGrid)
+        mpdjNotesSet(false);
+    mtPopups.show(0, padGrid ? "Pads: Tracker grid" : "Pads: pad map");
+}
+
+// Notes mode (5b-8b): 16 LEVELS held + main encoder = the project scale (the
+// Tracker's list), + SHIFT = the root; both live in the project and also set
+// the Tracker's pad board (setPadBoardValues)
+void MpcInput::turnNotesScale(int steps)
+{
+    levelsTurned = true;
+    int dir = steps > 0 ? 1 : -1;
+    static char msg[40]; // the popup keeps the pointer
+    if (mpcShift)
+    {
+        uint8_t& root = mtProject.values.padBoardRootNote; // 0..36 = C1..C4 in Config's list
+        int pc = (root % 12 + dir + 12) % 12;
+        root = (uint8_t)(root - root % 12 + pc);
+        if (root > 36)
+            root -= 12;
+        snprintf(msg, sizeof msg, "Notes root: %s", mtNotes[60 + pc]);
+    }
+    else
+    {
+        uint8_t& scale = mtProject.values.padBoardScale;
+        int s = scale + dir;
+        scale = (uint8_t)(s < 0 ? 0 : (s > MAX_SCALE ? MAX_SCALE : s));
+        snprintf(msg, sizeof msg, "Notes scale: %s", scaleNames[scale]);
+    }
+    setPadBoardValues();
+    mtPopups.show(0, msg);
+}
+
 // Notes mode (5b-8a): say what the pads play now
 void MpcInput::showNotesPopup()
 {
@@ -750,7 +796,7 @@ void MpcInput::showNotesPopup()
     }
     mpdjSetCursorTrack(patternEditor.trackerPattern.actualTrack);
     strPadSlot slot;
-    char msg[48];
+    static char msg[48]; // the popup keeps the pointer
     if (!mpdjNotesSource(&slot))
         snprintf(msg, sizeof msg, "Notes: no program");
     else
@@ -787,7 +833,7 @@ void MpcInput::turnRepeatDivision(int steps)
     d = d < 0 ? 0 : (d >= kRepeatDivisionCount ? kRepeatDivisionCount - 1 : d);
     repeatDivision = d;
     mpdjRepeatSetPeriod(kRepeatDivisions[d].period);
-    char msg[32];
+    static char msg[32]; // the popup keeps the pointer
     snprintf(msg, sizeof msg, "Note Repeat %s", kRepeatDivisions[d].name);
     mtPopups.show(0, msg);
     if (trace)
@@ -1116,6 +1162,11 @@ void MpcInput::onRelative(uint8_t cc, uint8_t value)
         if (repeatHeld)
         {
             turnRepeatDivision(steps); // NOTE REPEAT held: the division (5b-7b)
+            return;
+        }
+        if (levelsHeld && mpdjNotesOn())
+        {
+            turnNotesScale(steps); // 16 LEVELS held in Notes mode: scale; + SHIFT: root (5b-8b)
             return;
         }
         if (!pointScreenZoom(steps))
