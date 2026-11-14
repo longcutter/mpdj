@@ -3335,6 +3335,17 @@ bool Sequencer::mpdjPadRecWrite(uint8_t track, uint8_t instrument, uint8_t note,
     return true;
 }
 
+void Sequencer::mpdjSetRoll(uint8_t track, uint8_t row, uint8_t rollVal)
+{
+    if (track >= kAllTracks || row > currentPattern->track[0].length)
+        return;
+    strPattern::strTrack::strStep* step = &currentPattern->track[track].step[row];
+    int slot = (step->fx[0].type == fx.FX_TYPE_NONE || step->fx[0].type == fx.FX_TYPE_ROLL) ? 0 : 1;
+    step->fx[slot].type = fx.FX_TYPE_ROLL;
+    step->fx[slot].value = rollVal;
+    newFileManager.setActualPatternStructChanged();
+}
+
 int8_t Sequencer::mpdjPadStepWrite(uint8_t track, uint8_t row, uint8_t instrument, uint8_t note,
                                    uint8_t velocity, bool writeVolume)
 {

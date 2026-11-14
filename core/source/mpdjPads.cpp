@@ -37,6 +37,7 @@ struct Held
     uint8_t velo = 0;
     uint8_t group = 0;
     std::atomic<bool> repeat{ false };
+    bool rolled = false; // live REC wrote the press with a Roll (5b-7c)
     uint32_t lastHit = 0; // s_nano of the last hit // the press was written in live REC (5b-4a)
 };
 Held s_held[kPads];
@@ -47,6 +48,11 @@ std::atomic<uint16_t> s_repeatPeriod{ kRepeatDefaultPeriod };
 std::atomic<uint32_t> s_nano{ 0 }; // nanoSteps since start (audio thread)
 uint32_t s_freeNano = 0;           // stopped: phase from the first repeating press
 std::atomic<int> s_repeating{ 0 }; // pads repeating
+
+// Repeat hits to write in live REC (5b-7c): audio thread -> main loop
+constexpr int kRecQueue = 64;
+std::atomic<uint8_t> s_recQueue[kRecQueue];
+std::atomic<uint32_t> s_recHead{ 0 }, s_recTail{ 0 };
 
 // Wait until the audio thread isn't inside a block: it holds the audio lock
 // for the whole block, so after this no retrigger can still be on its way
@@ -143,6 +149,7 @@ const char* mpdjPadPress(int pad, uint8_t velocity)
     h.gate = padIsGate(pad);
     h.cut = h.gate && padCutOf(p->mode);
     h.recorded = false;
+    h.rolled = false;
     h.program = p->program;
     h.note = note;
     h.velo = velo;
@@ -159,6 +166,17 @@ const char* mpdjPadPress(int pad, uint8_t velocity)
     {
         s_held[pad].recorded = true;
         s_lastRecPad[p->track] = (int8_t)pad;
+        // Note Repeat (5b-7c): the press carries a Roll at the division
+        uint8_t roll = s_repeatOn.load() ? mpdjRollForPeriod(s_repeatPeriod.load()) : 0;
+        s_held[pad].rolled = roll != 0;
+        if (roll)
+        {
+            sequencer.mpdjSetRoll(p->track, (uint8_t)w.row, roll);
+#ifdef PLATFORM_MPC
+            if (recTrace())
+                printf("pad rec: %s -> track %d row %d: Roll %u (note repeat)\n", name, p->track + 1, w.row, roll);
+#endif
+        }
 #ifdef PLATFORM_MPC
         if (recTrace())
             printf("pad rec: %s vel %u -> track %d row %d: %s %02d vol %d micro %d%s\n", name,
@@ -240,6 +258,56 @@ void mpdjRepeatTick(bool playing, int32_t uPos)
         h.lastHit = now;
         sequencer.mpdjChoke((uint8_t)h.track, h.group, nullptr);
         sequencer.mpdjPadNoteOn((uint8_t)h.track, h.program, h.note, h.velo, kPadSourceBase + pad);
+        if (playing && !h.rolled && sequencer.isRec())
+        {
+            uint32_t head = s_recHead.load();
+            if (head - s_recTail.load() < kRecQueue) // full: drop the write, not the sound
+            {
+                s_recQueue[head % kRecQueue].store((uint8_t)pad);
+                s_recHead.store(head + 1);
+            }
+        }
+    }
+}
+
+uint8_t mpdjRollForPeriod(uint16_t nanoSteps)
+{
+    switch (nanoSteps)
+    {
+    case 576: return Sequencer::strFxConsts::ROLL_PERIOD_1_1; // 1/16
+    case 288: return Sequencer::strFxConsts::ROLL_PERIOD_1_2; // 1/32
+    case 192: return Sequencer::strFxConsts::ROLL_PERIOD_1_3; // 1/32T
+    default: return 0;
+    }
+}
+
+// Main loop: write the repeat hits the audio thread queued (5b-7c)
+void mpdjPadsPoll()
+{
+    uint32_t tail = s_recTail.load();
+    while (tail != s_recHead.load())
+    {
+        int pad = s_recQueue[tail % kRecQueue].load();
+        tail++;
+        s_recTail.store(tail);
+        Held& h = s_held[pad];
+        if (h.track < 0)
+            continue; // released meanwhile
+        Sequencer::MpdjRecWrite w;
+        if (sequencer.mpdjPadRecWrite((uint8_t)h.track, h.program, h.note, h.velo, padVelocityToVolume(), &w))
+        {
+            h.recorded = true;
+            s_lastRecPad[h.track] = (int8_t)pad;
+#ifdef PLATFORM_MPC
+            if (recTrace())
+            {
+                char name[4];
+                padName(pad, name);
+                printf("pad rec: %s repeat -> track %d row %d: %s %02d vol %d micro %d\n", name,
+                       h.track + 1, w.row, mtNotes[h.note], h.program + 1, w.volume, w.micromove);
+            }
+#endif
+        }
     }
 }
 
@@ -328,8 +396,8 @@ void mpdjPadRelease(int pad)
     }
 #endif
 
-    // REC + playing, Gate pad (5b-4b): the release writes an OFF
-    if (s_held[pad].gate && s_held[pad].recorded && s_lastRecPad[track] == pad)
+    // REC + playing, Gate pad (5b-4b) or a Roll (5b-7c): the release writes an OFF
+    if ((s_held[pad].gate || s_held[pad].rolled) && s_held[pad].recorded && s_lastRecPad[track] == pad)
     {
         bool hadNote = false;
         int row = sequencer.mpdjPadRecOff(track, &hadNote, s_held[pad].cut);
@@ -349,7 +417,7 @@ void mpdjPadRelease(int pad)
     }
     Held& h = s_held[pad];
     h.track = -1;
-    h.gate = h.cut = h.recorded = false;
+    h.gate = h.cut = h.recorded = h.rolled = false;
 }
 
 const strPadSlot* padSlot(int pad)

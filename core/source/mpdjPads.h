@@ -121,6 +121,14 @@ uint16_t mpdjRepeatPeriod();
 // pattern position in uSteps (row * 48 + uStep - 1) on a uStep boundary
 // while playing, else -1
 void mpdjRepeatTick(bool playing, int32_t uPos);
+// Live REC (5b-7c): a pad pressed with Note Repeat on writes its note with a
+// Roll at the division when the Roll has it (1/16, 1/32, 1/32T) and an OFF
+// (CUT with cut on release) at its release; at other divisions, or for a pad
+// that joined later, each repeat is written as its own hit. The audio thread
+// queues those; call this from the main loop to write them
+void mpdjPadsPoll();
+// The Roll value for a division in nanoSteps, 0 = none fits
+uint8_t mpdjRollForPeriod(uint16_t nanoSteps);
 // Gate or One shot for the pad as it is now (Auto: Gate for MIDI programs and
 // samples that loop or sustain: loop modes, wavetable, granular)
 bool padIsGate(int pad);

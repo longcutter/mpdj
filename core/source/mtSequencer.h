@@ -937,6 +937,9 @@ class Sequencer
     // writeVolume false (Config "Pad vel to volume" Off): the volume column is cleared
     bool mpdjPadRecWrite(uint8_t track, uint8_t instrument, uint8_t note, uint8_t velocity,
                          bool writeVolume, MpdjRecWrite* out);
+    // MPDJ (5b-7c): put a Roll (rollVal = enRollPeriod, constant type) on a
+    // row of the current pattern: FX1 if empty or already a Roll, else FX2
+    void mpdjSetRoll(uint8_t track, uint8_t row, uint8_t rollVal);
     // MPDJ (5b-4b): live REC, a Gate pad let go: write an OFF on the release
     // row, always after the note's row (as the Tracker: a release on the
     // note's own row writes it on the next one), only into a row without a

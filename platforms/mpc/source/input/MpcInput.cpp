@@ -186,6 +186,7 @@ void MpcInput::poll()
     pollQLinks();
     pollButtonLeds();
     pollTapHold();
+    mpdjPadsPoll(); // Note Repeat hits to record (5b-7c)
     if (sideloadComboMs && mpcShift &&
         platform.getTimer()->millis() - sideloadComboMs >= Sideload::kComboHoldMs)
     {
