@@ -164,6 +164,15 @@ bool mpdjOverdubKeep(int track, int row);     // audio thread: protected row (co
 bool mpdjOverdubTakeUndo();                   // true once per pass: store the undo step now
 void mpdjOverdubErased(int track, int row);   // audio thread: a row was cleared
 void mpdjOverdubPoll();                       // UI thread
+
+// ERASE + pad (5f-3, Mike 2026-11-14): the pad's hits = notes of its program
+// on its track (Notes mode: also its note). Playing: cleared as the playhead
+// reaches them while ERASE and the pad are held (one undo step per ERASE
+// hold); stopped: all of them at once (one undo step). Returns a popup text.
+const char* mpdjErasePadDown(int pad);
+void mpdjErasePadUp(int pad);
+void mpdjEraseEnd(); // ERASE released
+void mpdjEraseTick(int row); // audio thread, before the row plays
 // Live REC (5b-7c): a pad pressed with Note Repeat on writes its note with a
 // Roll at the division when the Roll has it (1/16, 1/32, 1/32T) and an OFF
 // (CUT with cut on release) at its release; at other divisions, or for a pad

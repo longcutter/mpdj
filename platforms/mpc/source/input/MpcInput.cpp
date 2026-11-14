@@ -173,6 +173,7 @@ void MpcInput::open(SwitchGroupImpl* b, SwitchGroupImpl* p, EncoderImpl* e, Disp
         qlinkDivider = 1;
     memset(padHeld, -1, sizeof padHeld);
     memset(enginePadHeld, -1, sizeof enginePadHeld);
+    memset(erasePadHeld, -1, sizeof erasePadHeld);
     memset(buttonHeld, -1, sizeof buttonHeld);
     openMidi();
     openPadLeds();
@@ -235,6 +236,7 @@ void MpcInput::suspend()
     }
     memset(padHeld, -1, sizeof padHeld);
     memset(enginePadHeld, -1, sizeof enginePadHeld);
+    memset(erasePadHeld, -1, sizeof erasePadHeld);
     memset(buttonHeld, -1, sizeof buttonHeld);
     if (touchedButton >= 0)
         buttons->release(touchedButton);
@@ -730,6 +732,8 @@ void MpcInput::onButton(uint8_t note, bool down)
 
     if (!down)
     {
+        if (note == kNoteErase)
+            mpdjEraseEnd(); // ERASE + pad (5f-3): the hold ends
         if (note == kNoteMain || note == kNoteShift)
             sideloadComboMs = 0;
         if (note == kNoteShift)
@@ -1228,6 +1232,25 @@ void MpcInput::onPad(uint8_t note, bool down, uint8_t velocity)
     if (!down)
         if (int n = padNumber(note))
             trackMute.padUp(n - 1); // ends a momentary mute (does nothing otherwise)
+    if (!down && erasePadHeld[note & 127] >= 0)
+    {
+        mpdjErasePadUp(erasePadHeld[note & 127]);
+        erasePadHeld[note & 127] = -1;
+        return;
+    }
+    if (down && noteDown[kNoteErase] && mtInterface.isPatternScreenActive())
+    {
+        // ERASE + pad (5f-3): remove the pad's hits (playing: as the playhead
+        // passes, while held; stopped: all of them); the pad doesn't play
+        if (int n = padNumber(note))
+        {
+            int pad = padIndex(padBank, n);
+            erasePadHeld[note & 127] = (int8_t)pad;
+            if (const char* msg = mpdjErasePadDown(pad))
+                mtPopups.show(0, msg);
+        }
+        return;
+    }
     if (!down && enginePadHeld[note] >= 0)
     {
         mpdjPadRelease(enginePadHeld[note]);

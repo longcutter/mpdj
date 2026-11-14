@@ -249,7 +249,10 @@ AUDIO_CORE_RAM void Sequencer::tick_uStep(void)
         mpdjRepeatTick(true, uPos);
         mpdjMuteTick(uPos); // MPDJ (5e-3): queued Track Mute changes at the bar / pattern
         if (uPos >= 0 && uPos % kuStepsInStep == 0)
+        {
             mpdjOverdubErase(uPos / kuStepsInStep); // MPDJ (5f-2): OVER DUB clears ahead of the playhead
+            mpdjEraseTick(uPos / kuStepsInStep);    // MPDJ (5f-3): ERASE + pad
+        }
 
         if (timerTicks % 12 == 1)
         {
@@ -3380,6 +3383,26 @@ void Sequencer::mpdjOverdubErase(int row)
             }
         mpdjOverdubErased(t, row);
     }
+}
+
+int Sequencer::mpdjEraseHit(strPattern* pattern, int track, int row, int program, int note)
+{
+    if (!pattern || track < 0 || track >= kAllTracks || row < 0 || row > pattern->track[0].length)
+        return 0;
+    strPattern::strTrack::strStep& s = pattern->track[track].step[row];
+    if (s.note < 0 || s.instrument != program || (note >= 0 && s.note != note))
+        return 0;
+    s.note = STEP_NOTE_EMPTY;
+    s.instrument = 0;
+    s.volume = -1;
+    s.micromove = -1;
+    for (auto& f : s.fx)
+        if (f.type == fx.FX_TYPE_ROLL)
+        {
+            f.type = fx.FX_TYPE_NONE;
+            f.value = 0;
+        }
+    return 1;
 }
 
 void Sequencer::mpdjSetRoll(uint8_t track, uint8_t row, uint8_t rollVal)

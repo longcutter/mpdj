@@ -936,6 +936,9 @@ class Sequencer
     };
     // writeVolume false (Config "Pad vel to volume" Off): the volume column is cleared
     void mpdjOverdubErase(int row); // MPDJ 5f-2, audio thread
+    // MPDJ 5f-3: clear `row` on `track` if it holds a note of `program` (and
+    // `note`, unless -1); 1 if cleared
+    int mpdjEraseHit(strPattern* pattern, int track, int row, int program, int note);
     bool mpdjCountingIn() { return player.preRecMetronomeActive; }
     bool mpdjPadRecWrite(uint8_t track, uint8_t instrument, uint8_t note, uint8_t velocity,
                          bool writeVolume, MpdjRecWrite* out);

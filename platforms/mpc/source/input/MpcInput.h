@@ -199,5 +199,6 @@ class MpcInput
     void turnNotesScale(int steps);
     int8_t padHeld[128];        // MPC pad note -> Tracker pad index sent on press
     int8_t enginePadHeld[128];  // MPC pad note -> MPDJ pad (0-63) pressed in the pad engine
+    int8_t erasePadHeld[128]; // ERASE + pad (5f-3): the pad index held, -1 none
     int8_t buttonHeld[128];     // MPC button note -> Tracker button sent on press
 };
