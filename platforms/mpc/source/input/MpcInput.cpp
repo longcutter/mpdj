@@ -839,6 +839,12 @@ void MpcInput::onButton(uint8_t note, bool down)
             break;
 
         case Act::Undo:
+            if (mtInterface.isPadAssignScreenActive())
+            {
+                // 5d-6: Pad Assign's own undo (copies, settings)
+                mtPopups.show(0, mpcShift ? padAssign.redo() : padAssign.undo());
+                break;
+            }
             if (!onPattern)
                 break;
             if (mpcShift)

@@ -51,6 +51,11 @@ class cPadAssign : public ModuleBase
 
     // QL4 / main encoder: change the selected setting of the selected pad (5d-2)
     void changeValue(int steps);
+    bool applyValue(int steps); // one change, false if nothing changed
+
+    // 5d-6: UNDO / SHIFT+UNDO on Pad Assign; return a popup message
+    const char* undo();
+    const char* redo();
 
     void refresh();
 

@@ -84,6 +84,79 @@ void refreshVoices(uint32_t mask)
         instrumentPlayer[i].setRefreshBit(mask);
 }
 
+namespace
+{
+struct UndoStep
+{
+    strPadMap before, after;
+    int16_t inst = -1; // program whose Tune / Volume changed
+    int8_t tuneBefore = 0, tuneAfter = 0;
+    uint8_t volBefore = 0, volAfter = 0;
+    int16_t created = -1; // program slot a copy filled
+    uint8_t createdFrom = 0;
+    bool createdMidi = false;
+    strProgramSlot midi{};
+    int16_t pad = -1;
+    uint8_t param = 0;
+    bool open = false; // still merging encoder turns
+    char what[40];
+};
+
+constexpr int kUndoSteps = 16;
+UndoStep undoSteps[kUndoSteps];
+int undoCount = 0, undoPos = 0; // steps [0, undoPos) can be undone, [undoPos, undoCount) redone
+
+// file manager work an undo / redo started: finish it in update()
+enum class FmJob : uint8_t
+{
+    None,
+    Copy,     // a new copy (pending)
+    Delete,   // undo of a copy
+    Recopy,   // redo of a copy
+} fmJob = FmJob::None;
+
+char undoMsg[56];
+
+UndoStep& pushStep()
+{
+    if (undoPos == kUndoSteps)
+    {
+        for (int k = 1; k < kUndoSteps; k++)
+            undoSteps[k - 1] = undoSteps[k];
+        undoPos--;
+    }
+    UndoStep& u = undoSteps[undoPos++];
+    undoCount = undoPos;
+    u = UndoStep{};
+    return u;
+}
+
+void closeOpenStep()
+{
+    if (undoPos > 0)
+        undoSteps[undoPos - 1].open = false;
+}
+
+bool samplesAfter(int slot)
+{
+    for (int i = slot + 1; i < kSampleInstrumentsCount; i++)
+        if (mtProject.instrument[i].isActive)
+            return true;
+    return false;
+}
+
+void setInstrument(int inst, int8_t tune, uint8_t vol)
+{
+    if (inst < 0 || inst >= kSampleInstrumentsCount)
+        return;
+    mtProject.instrument[inst].tune = tune;
+    mtProject.instrument[inst].volume = vol;
+    refreshVoices(TUNE_MASK | VOLUME_MASK);
+    newFileManager.setInstrumentStructChanged(inst);
+}
+} // namespace
+
+
 void functLeft() { PA->moveSelection(-1, 0); }
 void functRight() { PA->moveSelection(1, 0); }
 void functUp() { PA->moveSelection(0, 1); }
@@ -210,6 +283,7 @@ void cPadAssign::stop()
 
 void cPadAssign::selectPad(int pad)
 {
+    closeOpenStep();
     if (pad < 0 || pad >= kPads)
         return;
     selPad = pad;
@@ -227,6 +301,7 @@ int cPadAssign::padAt(float x, float y) const
 
 void cPadAssign::showBank(int bank)
 {
+    closeOpenStep();
     if (bank < 0 || bank >= kPadBanks)
         return;
     selPad = bank * kPadsPerBank + selPad % kPadsPerBank;
@@ -235,6 +310,7 @@ void cPadAssign::showBank(int bank)
 
 void cPadAssign::moveSelection(int dx, int dy)
 {
+    closeOpenStep();
     int bank = selPad / kPadsPerBank, n = selPad % kPadsPerBank;
     int col = n % 4 + dx, row = n / 4 + dy; // row 0 = pads 1-4 (bottom)
     col = col < 0 ? 0 : (col > 3 ? 3 : col);
@@ -250,6 +326,7 @@ void cPadAssign::moveParam(int steps)
 
 void cPadAssign::selectParam(int p)
 {
+    closeOpenStep();
     p = p < 0 ? 0 : (p >= ParamCount ? ParamCount - 1 : p);
     param = (uint8_t)p;
     refresh();
@@ -257,10 +334,10 @@ void cPadAssign::selectParam(int p)
 
 // 5d-2: one step of the selected setting per encoder message; edits go into
 // the project's pad map at once (saved with the project)
-void cPadAssign::changeValue(int steps)
+bool cPadAssign::applyValue(int steps)
 {
     if (selPad < 0 || selPad >= kPads || steps == 0)
-        return;
+        return false;
     strPadSlot& p = mtProject.pads.pad[selPad];
     int dir = steps > 0 ? 1 : -1;
     switch (param)
@@ -279,7 +356,7 @@ void cPadAssign::changeValue(int steps)
     {
         strInstrument* in = sampleProgram(&p);
         if (!in)
-            return;
+            return false;
         if (param == ParamTune)
         {
             in->tune = (int8_t)clampInt(in->tune + steps, MIN_INSTRUMENT_TUNE, MAX_INSTRUMENT_TUNE);
@@ -303,10 +380,10 @@ void cPadAssign::changeValue(int steps)
     case ParamChoke: setPadGroup(selPad, (uint8_t)clampInt(padGroupOf(p.mode) + steps, 0, kPadGroups)); break;
     case ParamCut: setPadCutOnRelease(selPad, dir > 0); break;
     case ParamColor: setPadColor(selPad, (uint8_t)clampInt(padColor(selPad) + dir, 0, kPadColors)); break;
-    default: return;
+    default: return false;
     }
     newFileManager.setProjectStructChanged();
-    refresh();
+    return true;
 }
 
 // ---- 5d-4: copy -----------------------------------------------------------
@@ -318,6 +395,8 @@ struct PendingCopy
     bool active = false;
     int srcPad = -1, dstPad = -1;
     uint8_t program = 0;
+    uint8_t srcProgram = 0;
+    strPadMap before;
 } pending;
 
 char copyMsg[48];
@@ -379,8 +458,10 @@ const char* cPadAssign::copyPad(int dst, bool shareProgram)
     int src = selPad;
     if (dst < 0 || dst >= kPads || src < 0 || src >= kPads || dst == src)
         return nullptr;
-    if (pending.active)
-        return "Still copying";
+    if (fmJob != FmJob::None)
+        return "Busy - try again";
+    closeOpenStep();
+    strPadMap before = mtProject.pads;
     char sName[4], dName[4];
     padName(src, sName);
     padName(dst, dName);
@@ -389,6 +470,11 @@ const char* cPadAssign::copyPad(int dst, bool shareProgram)
     if (shareProgram || s.program == kPadNoProgram || programType(s.program) == kProgramEmpty)
     {
         applyPadCopy(src, dst, s.program);
+        UndoStep& u = pushStep();
+        u.before = before;
+        u.after = mtProject.pads;
+        u.pad = (int16_t)dst;
+        snprintf(u.what, sizeof u.what, "copy %s to %s", sName, dName);
         selPad = dst;
         refresh();
         snprintf(copyMsg, sizeof copyMsg, "%s copied to %s", sName, dName);
@@ -402,6 +488,14 @@ const char* cPadAssign::copyPad(int dst, bool shareProgram)
             return "No free program slot";
         mtProject.programs.slot[slot] = mtProject.programs.slot[s.program];
         applyPadCopy(src, dst, (uint8_t)slot);
+        UndoStep& u = pushStep();
+        u.before = before;
+        u.after = mtProject.pads;
+        u.pad = (int16_t)dst;
+        u.created = (int16_t)slot;
+        u.createdMidi = true;
+        u.midi = mtProject.programs.slot[slot];
+        snprintf(u.what, sizeof u.what, "copy %s to %s", sName, dName);
         selPad = dst;
         refresh();
         snprintf(copyMsg, sizeof copyMsg, "%s copied to %s, program %d", sName, dName, slot + 1);
@@ -419,7 +513,9 @@ const char* cPadAssign::copyPad(int dst, bool shareProgram)
         sequencer.stop(); // samples move in memory: nothing may play them meanwhile
     if (!newFileManager.copyInstrumentsInWorkspace(s.program, 1, (uint8_t)slot))
         return "Busy - try again";
-    pending.active = true;
+    fmJob = FmJob::Copy;
+    pending.before = before;
+    pending.srcProgram = s.program;
     pending.srcPad = src;
     pending.dstPad = dst;
     pending.program = (uint8_t)slot;
@@ -428,31 +524,148 @@ const char* cPadAssign::copyPad(int dst, bool shareProgram)
 
 void cPadAssign::update()
 {
-    if (!pending.active)
+    if (fmJob == FmJob::None)
         return;
     uint8_t st = newFileManager.getStatus();
-    if (st == fmCopyingInstrumentsEnd)
+    bool done = st == fmCopyingInstrumentsEnd || st == fmDeleteInstrumentsEnd;
+    if (!done && st < fmError)
+        return;
+    newFileManager.clearStatus();
+    FmJob job = fmJob;
+    fmJob = FmJob::None;
+    if (!done)
     {
-        newFileManager.clearStatus();
-        pending.active = false;
-        applyPadCopy(pending.srcPad, pending.dstPad, pending.program);
-        char sName[4], dName[4];
-        padName(pending.srcPad, sName);
-        padName(pending.dstPad, dName);
-        snprintf(copyMsg, sizeof copyMsg, "%s copied to %s, program %d", sName, dName, pending.program + 1);
-        mtPopups.show(0, copyMsg);
+        mtPopups.show(0, job == FmJob::Delete ? "Undo failed" : "Copy failed");
+        return;
+    }
+    if (job != FmJob::Copy)
+    {
+        // undo / redo already put the pads back: show the program now there / gone
         if (mtInterface.isPadAssignScreenActive())
-        {
-            selPad = pending.dstPad;
             refresh();
-        }
+        return;
     }
-    else if (st >= fmError)
+    applyPadCopy(pending.srcPad, pending.dstPad, pending.program);
+    char sName[4], dName[4];
+    padName(pending.srcPad, sName);
+    padName(pending.dstPad, dName);
+    UndoStep& u = pushStep();
+    u.before = pending.before;
+    u.after = mtProject.pads;
+    u.pad = (int16_t)pending.dstPad;
+    u.created = pending.program;
+    u.createdFrom = pending.srcProgram;
+    snprintf(u.what, sizeof u.what, "copy %s to %s", sName, dName);
+    snprintf(copyMsg, sizeof copyMsg, "%s copied to %s, program %d", sName, dName, pending.program + 1);
+    mtPopups.show(0, copyMsg);
+    if (mtInterface.isPadAssignScreenActive())
     {
-        newFileManager.clearStatus();
-        pending.active = false;
-        mtPopups.show(0, "Copy failed");
+        selPad = pending.dstPad;
+        refresh();
     }
+}
+
+// ---- 5d-6: undo / redo (Mike 2026-11-14) ---------------------------------
+// Session-only, 16 steps. A step holds the pad map (settings + colors) before
+// and after, the program's Tune / Volume for Tune / Level edits, and the
+// program slot a copy created (undo deletes it, redo copies it again). Turns
+// of one setting on one pad merge into one step until something else happens.
+
+void cPadAssign::changeValue(int steps)
+{
+    if (fmJob != FmJob::None)
+        return; // a copy / undo is still running
+    const strPadSlot* sp = padSlot(selPad);
+    strInstrument* in = sampleProgram(sp);
+    int inst = (param == ParamTune || param == ParamLevel) && in ? sp->program : -1;
+    strPadMap before = mtProject.pads;
+    int8_t tune = in ? in->tune : 0;
+    uint8_t vol = in ? in->volume : 0;
+    if (!applyValue(steps))
+        return;
+
+    UndoStep* u = undoPos > 0 ? &undoSteps[undoPos - 1] : nullptr;
+    if (!(u && u->open && u->pad == selPad && u->param == param && undoPos == undoCount))
+    {
+        u = &pushStep();
+        u->before = before;
+        u->pad = (int16_t)selPad;
+        u->param = param;
+        u->open = true;
+        u->inst = (int16_t)inst;
+        u->tuneBefore = tune;
+        u->volBefore = vol;
+        char name[4];
+        padName(selPad, name);
+        snprintf(u->what, sizeof u->what, "%s %s", name, kParamNames[param]);
+    }
+    u->after = mtProject.pads;
+    if (u->inst >= 0)
+    {
+        u->tuneAfter = mtProject.instrument[u->inst].tune;
+        u->volAfter = mtProject.instrument[u->inst].volume;
+    }
+    refresh();
+}
+
+const char* cPadAssign::undo()
+{
+    closeOpenStep();
+    if (fmJob != FmJob::None)
+        return "Busy - try again";
+    if (undoPos == 0)
+        return "Nothing to undo";
+    UndoStep& u = undoSteps[undoPos - 1];
+    if (u.created >= 0 && !u.createdMidi)
+    {
+        if (samplesAfter(u.created) && sequencer.getSeqState() != Sequencer::SEQ_STATE_STOP)
+            sequencer.stop(); // later samples move down in memory
+        if (!newFileManager.deleteInstruments((uint8_t)u.created, (uint8_t)u.created))
+            return "Busy - try again";
+        fmJob = FmJob::Delete;
+    }
+    else if (u.created >= 0)
+        mtProject.programs.slot[u.created] = {};
+    undoPos--;
+    mtProject.pads = u.before;
+    setInstrument(u.inst, u.tuneBefore, u.volBefore);
+    newFileManager.setProjectStructChanged();
+    if (u.pad >= 0)
+        selPad = u.pad;
+    refresh();
+    snprintf(undoMsg, sizeof undoMsg, "Undo: %s", u.what);
+    return undoMsg;
+}
+
+const char* cPadAssign::redo()
+{
+    closeOpenStep();
+    if (fmJob != FmJob::None)
+        return "Busy - try again";
+    if (undoPos == undoCount)
+        return "Nothing to redo";
+    UndoStep& u = undoSteps[undoPos];
+    if (u.created >= 0 && !u.createdMidi)
+    {
+        if (!slotFree(u.created) || !mtProject.instrument[u.createdFrom].isActive)
+            return "Can't redo: program slot changed";
+        if (samplesAfter(u.created) && sequencer.getSeqState() != Sequencer::SEQ_STATE_STOP)
+            sequencer.stop();
+        if (!newFileManager.copyInstrumentsInWorkspace(u.createdFrom, 1, (uint8_t)u.created))
+            return "Busy - try again";
+        fmJob = FmJob::Recopy;
+    }
+    else if (u.created >= 0)
+        mtProject.programs.slot[u.created] = u.midi;
+    undoPos++;
+    mtProject.pads = u.after;
+    setInstrument(u.inst, u.tuneAfter, u.volAfter);
+    newFileManager.setProjectStructChanged();
+    if (u.pad >= 0)
+        selPad = u.pad;
+    refresh();
+    snprintf(undoMsg, sizeof undoMsg, "Redo: %s", u.what);
+    return undoMsg;
 }
 
 void cPadAssign::fillValues()
