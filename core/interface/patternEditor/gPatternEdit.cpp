@@ -1239,9 +1239,13 @@ void cPatternEditor::showRecordArmingButtons(uint8_t state, bool midiTracks)
             bool showButton = midiTracks ? buttonIdx < kMidiTracks : true;
             if (showButton)
             {
-                topText = (char*)"Live REC";
+                // MPDJ (Mike 2026-11-13): the track number on each button,
+                // "Disarmed" for the off state
+                static char armTop[8][12];
+                snprintf(armTop[buttonIdx], sizeof armTop[buttonIdx], "Live REC %d", trackIdx + 1);
+                topText = armTop[buttonIdx];
                 bottomText =
-                  sequencer.isRecArmedOnTrack(trackIdx) ? (char*)"Armed" : (char*)"Unarmed";
+                  sequencer.isRecArmedOnTrack(trackIdx) ? (char*)"Armed" : (char*)"Disarmed";
 
                 colors = sequencer.isRecArmedOnTrack(trackIdx)
                            ? display.getTheme().activeLabelsColors
