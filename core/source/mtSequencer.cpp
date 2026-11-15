@@ -3173,7 +3173,8 @@ void Sequencer::handleNoteOff(byte channel, // pochodzenie grida np. GRID_OUTSID
 }
 
 // MPDJ (step 5b-3): pad engine notes, modelled on handleNoteOn / Off's play mode
-void Sequencer::mpdjPadNoteOn(uint8_t track, uint8_t instrument, uint8_t note, uint8_t velocity, int16_t source)
+void Sequencer::mpdjPadNoteOn(uint8_t track, uint8_t instrument, uint8_t note, uint8_t velocity, int16_t source,
+                              int slice)
 {
     if (track >= kAllTracks || isTrackEngineMuted(track))
         return;
@@ -3208,8 +3209,9 @@ void Sequencer::mpdjPadNoteOn(uint8_t track, uint8_t instrument, uint8_t note, u
     else if (isSampleTrack(track))
     {
         instrumentPlayer[track].noteOff();
-        instrumentPlayer[track].noteOn(
-          instrument, note, velocityToVolume(velo), fx.FX_TYPE_VOLUME, 0, 0, 0);
+        // 5g-4: a slice layer pad plays its slice as the Slice FX does
+        instrumentPlayer[track].noteOn(instrument, note, velocityToVolume(velo), fx.FX_TYPE_VOLUME, 0,
+                                       slice >= 0 ? fx.FX_TYPE_SAMPLE_SLICE : 0, slice >= 0 ? slice : 0);
         engine.setLastUsedVoice(track);
     }
 }
@@ -3376,7 +3378,7 @@ void Sequencer::mpdjOverdubErase(int row)
         s.volume = -1;
         s.micromove = -1;
         for (auto& f : s.fx)
-            if (f.type == fx.FX_TYPE_ROLL) // a recorded Note Repeat roll goes with its note
+            if (f.type == fx.FX_TYPE_ROLL || f.type == fx.FX_TYPE_SAMPLE_SLICE) // a recorded roll / slice goes with its note
             {
                 f.type = fx.FX_TYPE_NONE;
                 f.value = 0;
@@ -3397,12 +3399,24 @@ int Sequencer::mpdjEraseHit(strPattern* pattern, int track, int row, int program
     s.volume = -1;
     s.micromove = -1;
     for (auto& f : s.fx)
-        if (f.type == fx.FX_TYPE_ROLL)
+        if (f.type == fx.FX_TYPE_ROLL || f.type == fx.FX_TYPE_SAMPLE_SLICE) // 5g-4: the slice goes too
         {
             f.type = fx.FX_TYPE_NONE;
             f.value = 0;
         }
     return 1;
+}
+
+void Sequencer::mpdjSetSlice(uint8_t track, uint8_t row, uint8_t slice, bool ui)
+{
+    strPattern* pattern = ui ? getPatternToUI() : currentPattern;
+    if (!pattern || track >= kAllTracks || row > pattern->track[0].length)
+        return;
+    strPattern::strTrack::strStep* step = &pattern->track[track].step[row];
+    int slot = (step->fx[0].type == fx.FX_TYPE_NONE || step->fx[0].type == fx.FX_TYPE_SAMPLE_SLICE) ? 0 : 1;
+    step->fx[slot].type = fx.FX_TYPE_SAMPLE_SLICE;
+    step->fx[slot].value = slice; // stored from 0, shown from 1
+    newFileManager.setActualPatternStructChanged();
 }
 
 void Sequencer::mpdjSetRoll(uint8_t track, uint8_t row, uint8_t rollVal)

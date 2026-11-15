@@ -913,7 +913,10 @@ class Sequencer
     // holds the track; sendOff = false (One shot) frees the track but lets the
     // sound ring until the next note on the track cuts it.
     // velocity: already scaled for the program (padVelocity(), mpdjPads)
-    void mpdjPadNoteOn(uint8_t track, uint8_t instrument, uint8_t note, uint8_t velocity, int16_t source);
+    void mpdjPadNoteOn(uint8_t track, uint8_t instrument, uint8_t note, uint8_t velocity, int16_t source,
+                       int slice = -1); // slice >= 0: play that slice (Slice FX, 5g-4)
+    // 5g-4: the Slice FX on a row (FX1 if empty or a Slice, else FX2); ui = the edited pattern
+    void mpdjSetSlice(uint8_t track, uint8_t row, uint8_t slice, bool ui = false);
     // cut (5b-6a): a sample voice gets the 5 ms choke fade instead of its
     // envelope release (a Gate pad with cut on release)
     void mpdjPadNoteOff(uint8_t track, int16_t source, bool sendOff, bool cut = false);

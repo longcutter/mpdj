@@ -196,6 +196,18 @@ void mpdjPadsPoll();
 // title bar's program on the cursor's track. Pad hits, Note Repeat, live REC
 // and step entry work as with the pad map
 void mpdjNotesSet(bool on);
+
+// Slice layer (5g-4): SHIFT + pad on the Pattern screen turns the pads into the
+// slices of that pad's program (Slice / Beat Slice, at least one slice): bank A
+// pad 1 = slice 1 .. C16 = slice 48, on the pad's track with its mode. A Slice
+// program plays and records C5 (or the pad's note) + the Slice FX; a Beat Slice
+// program the slice's note. Nothing in the pad map changes
+// Toggle from SHIFT + pad-map pad `pad`: same pad = off, another = switch to it;
+// returns the popup text (a static buffer)
+const char* mpdjSliceLayerToggle(int pad);
+void mpdjSliceLayerSet(bool on);
+bool mpdjSliceLayerOn();
+int mpdjSliceLayerPad(); // the source pad-map pad
 bool mpdjNotesOn();
 int mpdjNotesNote(int pad);
 bool mpdjNotesSource(strPadSlot* out); // false: nothing to play

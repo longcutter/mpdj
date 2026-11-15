@@ -152,6 +152,7 @@ struct Held
     uint8_t note = 0;
     uint8_t velo = 0;
     uint8_t group = 0;
+    int8_t slice = -1;   // slice layer (5g-4): the Slice FX the press plays, -1 = none
     std::atomic<bool> repeat{ false };
     bool rolled = false; // live REC wrote the press with a Roll (5b-7c)
     uint32_t lastHit = 0; // s_nano of the last hit // the press was written in live REC (5b-4a)
@@ -242,6 +243,9 @@ int s_cursorTrack = 0; // the Pattern screen's cursor track (set by the platform
 int s_lastPad = -1; // the last pad hit in the pad map (5b-8a: Notes mode's default source)
 bool s_notesMode = false;
 bool s_levelsMode = false;   // 16 Levels (5b-9)
+bool s_sliceMode = false;    // slice layer (5g-4)
+int s_slicePad = -1;         // its source pad-map pad
+int s_resolvedSlice = -1;    // the Slice FX of the press resolvePad last resolved
 strPadSlot s_lastSlot{};     // what the last hit played (pad map or Notes), 16 Levels' source
 bool s_lastSlotValid = false;
 char s_lastName[8] = "";
@@ -258,6 +262,22 @@ bool padIsGate(int pad)
 static bool resolvePad(int pad, strPadSlot* out, uint8_t* velocity, const char** msg)
 {
     *msg = nullptr;
+    s_resolvedSlice = -1;
+    if (s_sliceMode && s_slicePad >= 0)
+    {
+        // slice layer (5g-4): pad index = slice; the source pad's program, track, mode
+        *out = *padSlot(s_slicePad);
+        const strInstrument& ins = mtProject.instrument[out->program < kProgramSlots ? out->program : 0];
+        if (out->program == kPadNoProgram || !ins.isActive || pad >= ins.sliceNumber)
+            return false; // no slice on this pad: nothing plays, its light is dark
+        if (ins.playMode == playModeBeatSlice)
+            out->note = (int8_t)(FIRST_BEAT_SLICE_NOTE + pad);
+        else
+            s_resolvedSlice = pad;
+        if (mtProject.mpdjFullLevel)
+            *velocity = 127;
+        return true;
+    }
     if (s_levelsMode)
     {
         if (!s_lastSlotValid)
@@ -294,7 +314,7 @@ const char* mpdjPadPress(int pad, uint8_t velocity)
     const char* msg;
     if (!resolvePad(pad, &slot, &velocity, &msg))
         return msg;
-    if (!s_levelsMode)
+    if (!s_levelsMode && !s_sliceMode)
     {
         if (!s_notesMode)
             s_lastPad = pad;
@@ -308,6 +328,50 @@ const char* mpdjPadPress(int pad, uint8_t velocity)
         }
     }
     return padPress(pad, &slot, velocity);
+}
+
+// ---------------------------------------------------------------- slice layer (5g-4)
+void mpdjSliceLayerSet(bool on)
+{
+    s_sliceMode = on && s_slicePad >= 0;
+}
+
+bool mpdjSliceLayerOn()
+{
+    return s_sliceMode;
+}
+
+int mpdjSliceLayerPad()
+{
+    return s_slicePad;
+}
+
+const char* mpdjSliceLayerToggle(int pad)
+{
+    static char msg[48]; // the popup keeps the pointer
+    char name[4];
+    if (pad < 0 || pad >= kPads)
+        return nullptr;
+    padName(pad, name);
+    if (s_sliceMode && pad == s_slicePad)
+    {
+        s_sliceMode = false;
+        snprintf(msg, sizeof msg, "Slices off");
+        return msg;
+    }
+    const strPadSlot* p = padSlot(pad);
+    const strInstrument* ins =
+      (p->program != kPadNoProgram && p->program < kProgramSlots) ? &mtProject.instrument[p->program] : nullptr;
+    if (!ins || !ins->isActive || (ins->playMode != playModeSlice && ins->playMode != playModeBeatSlice) ||
+        ins->sliceNumber == 0)
+    {
+        snprintf(msg, sizeof msg, "%s: not sliced", name);
+        return msg;
+    }
+    s_slicePad = pad;
+    s_sliceMode = true;
+    snprintf(msg, sizeof msg, "Slices: %s, %d on track %d", name, ins->sliceNumber, p->track + 1);
+    return msg;
 }
 
 // ---------------------------------------------------------------- 16 Levels
@@ -361,11 +425,12 @@ const char* padPress(int pad, const strPadSlot* p, uint8_t velocity)
     h.note = note;
     h.velo = velo;
     h.group = padGroupOf(p->mode);
+    h.slice = (int8_t)s_resolvedSlice;
 
     // choke groups (5b-5c): the pad's own group cuts the rest of the group,
     // also when this track is muted
     sequencer.mpdjChoke(p->track, padGroupOf(p->mode), name);
-    sequencer.mpdjPadNoteOn(p->track, p->program, note, velo, kPadSourceBase + pad);
+    sequencer.mpdjPadNoteOn(p->track, p->program, note, velo, kPadSourceBase + pad, h.slice);
 
     // REC + playing (5b-4a): write the hit on the pad's track
     Sequencer::MpdjRecWrite w;
@@ -373,6 +438,8 @@ const char* padPress(int pad, const strPadSlot* p, uint8_t velocity)
     {
         s_held[pad].recorded = true;
         s_lastRecPad[p->track] = (int8_t)pad;
+        if (s_held[pad].slice >= 0)
+            sequencer.mpdjSetSlice(p->track, (uint8_t)w.row, (uint8_t)s_held[pad].slice); // 5g-4
         // Note Repeat (5b-7c): the press carries a Roll at the division
         uint8_t roll = s_repeatOn.load() ? mpdjRollForPeriod(s_repeatPeriod.load()) : 0;
         s_held[pad].rolled = roll != 0;
@@ -596,7 +663,7 @@ void mpdjRepeatTick(bool playing, int32_t uPos)
             continue; // just pressed: no flam
         h.lastHit = now;
         sequencer.mpdjChoke((uint8_t)h.track, h.group, nullptr);
-        sequencer.mpdjPadNoteOn((uint8_t)h.track, h.program, h.note, h.velo, kPadSourceBase + pad);
+        sequencer.mpdjPadNoteOn((uint8_t)h.track, h.program, h.note, h.velo, kPadSourceBase + pad, h.slice);
         if (playing && !h.rolled && sequencer.isRec())
         {
             uint32_t head = s_recHead.load();
@@ -635,6 +702,8 @@ void mpdjPadsPoll()
         Sequencer::MpdjRecWrite w;
         if (sequencer.mpdjPadRecWrite((uint8_t)h.track, h.program, h.note, h.velo, padVelocityToVolume(), &w))
         {
+            if (h.slice >= 0)
+                sequencer.mpdjSetSlice((uint8_t)h.track, (uint8_t)w.row, (uint8_t)h.slice); // 5g-4
             h.recorded = true;
             s_lastRecPad[h.track] = (int8_t)pad;
 #ifdef PLATFORM_MPC
@@ -664,9 +733,12 @@ int mpdjPadStepWrite(int pad, int row, uint8_t velocity)
     uint8_t note = p->note < 0 ? (uint8_t)Sequencer::STEP_NOTE_DEFAULT : (uint8_t)p->note;
     uint8_t velo = padVelocity(p->program, velocity ? velocity : 1);
     bool writeVol = padVelocityToVolume();
+    int slice = s_resolvedSlice;
     int8_t vol = sequencer.mpdjPadStepWrite(p->track, (uint8_t)row, p->program, note, velo, writeVol);
     if (vol < 0)
         return -1;
+    if (slice >= 0)
+        sequencer.mpdjSetSlice(p->track, (uint8_t)row, (uint8_t)slice, true); // 5g-4: the slice layer's slice
     if (!writeVol)
         vol = -1;
 #ifdef PLATFORM_MPC

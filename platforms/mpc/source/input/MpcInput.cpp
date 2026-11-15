@@ -987,6 +987,7 @@ void MpcInput::onButton(uint8_t note, bool down)
             {
                 // SHIFT+16 LEVELS: Notes mode on / off (5b-8a)
                 releaseCoreShift();
+                endSliceLayer(); // 5g-4: the slice layer gives way
                 mpdjNotesSet(!mpdjNotesOn());
                 mpdjLevelsSet(false);
                 stepSeq = false;
@@ -1017,6 +1018,7 @@ void MpcInput::onButton(uint8_t note, bool down)
             stepSeq = !stepSeq;
             if (stepSeq)
             {
+                endSliceLayer(); // 5g-4
                 // Notes mode / 16 Levels give way (their pads mean something else)
                 if (mpdjLevelsOn())
                     mpdjLevelsSet(false);
@@ -1103,6 +1105,7 @@ void MpcInput::onButton(uint8_t note, bool down)
 void MpcInput::toggleLevels()
 {
     bool on = !mpdjLevelsOn();
+    endSliceLayer(); // 5g-4: the slice layer gives way
     mpdjLevelsSet(on);
     stepSeq = false;
     if (mpdjNotesOn() && bankBeforeNotes >= 0)
@@ -1140,6 +1143,20 @@ void MpcInput::pollLevels()
         stepSeq = false; // leaving the Pattern screen ends STEP SEQ (as 16 Levels)
     if (mpdjLevelsOn() && !mtInterface.isPatternScreenActive())
         mpdjLevelsSet(false); // BROWSE, MAIN, any other screen
+    if (mpdjSliceLayerOn() && !mtInterface.isPatternScreenActive() && !mtInterface.isPadAssignScreenActive())
+        endSliceLayer(); // 5g-4: leaving the Pattern screen ends the slice layer
+}
+
+void MpcInput::endSliceLayer()
+{
+    if (!mpdjSliceLayerOn())
+        return;
+    mpdjSliceLayerSet(false);
+    if (bankBeforeSlices >= 0)
+    {
+        padBank = bankBeforeSlices;
+        bankBeforeSlices = -1;
+    }
 }
 
 // Notes mode (5b-8b): 16 LEVELS held + main encoder = the project scale (the
@@ -1424,12 +1441,50 @@ void MpcInput::onPad(uint8_t note, bool down, uint8_t velocity)
         padAssign.selectPad(pad);
         enginePadHeld[note] = (int8_t)pad;
         lastEngineNote = note;
-        bool notes = mpdjNotesOn(), levels = mpdjLevelsOn();
+        bool notes = mpdjNotesOn(), levels = mpdjLevelsOn(), slices = mpdjSliceLayerOn();
         mpdjNotesSet(false); // the pad map's own pad, whatever the Pattern screen's mode
         mpdjLevelsSet(false);
+        mpdjSliceLayerSet(false);
         mpdjPadPress(pad, velocity);
         mpdjNotesSet(notes);
         mpdjLevelsSet(levels);
+        mpdjSliceLayerSet(slices);
+        return;
+    }
+    if (down && mpcShift && padEngineHere())
+    {
+        // SHIFT + pad (5g-4): the pads become that pad's slices (the pad-map pad of
+        // the bank used before the layer); the same pad again ends it
+        int n = padNumber(note);
+        if (!n)
+            return;
+        releaseCoreShift();
+        int bank = mpdjSliceLayerOn() && bankBeforeSlices >= 0 ? bankBeforeSlices : padBank;
+        int pad = padIndex(bank, n);
+        bool was = mpdjSliceLayerOn();
+        const char* msg = mpdjSliceLayerToggle(pad);
+        if (mpdjSliceLayerOn())
+        {
+            if (!was)
+            {
+                if (mpdjNotesOn() && bankBeforeNotes >= 0)
+                {
+                    bank = bankBeforeNotes;
+                    bankBeforeNotes = -1;
+                }
+                mpdjNotesSet(false);
+                mpdjLevelsSet(false);
+                bankBeforeSlices = bank;
+            }
+            padBank = 0; // slices 1-16
+        }
+        else if (was && bankBeforeSlices >= 0)
+        {
+            padBank = bankBeforeSlices;
+            bankBeforeSlices = -1;
+        }
+        if (msg)
+            mtPopups.show(0, msg);
         return;
     }
     if (down && padEngineHere())
