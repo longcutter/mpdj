@@ -5,6 +5,7 @@
 #include "audio/AudioProbe.h"
 #include "audio/MpcAudio.h"
 #include "input/LedProbe.h"
+#include "usb/UsbTest.h"
 #include "sideload/EngineHost.h"
 #include "sideload/Sideload.h"
 
@@ -95,6 +96,8 @@ int main()
     auto envOn = [](const char* n) { const char* v = getenv(n); return v && *v && *v != '0'; };
     if (envOn("MPDJ_LED_PROBE"))
         return runLedProbe();
+    if (envOn("MPDJ_USB_TEST"))
+        return runUsbTest(); // milestone 10b, step 1
     if (envOn("MPDJ_AUDIO_CONTROLS"))
         return AudioProbe::listControls();
     if (envOn("MPDJ_LATENCY_TEST"))
