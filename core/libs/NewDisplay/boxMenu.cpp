@@ -160,6 +160,8 @@ void cBoxMenu::update()
             int textY = posY + boxSpacing + (boxSpacing + boxH) * row + boxH / 2;
 
             char* text = data->textList[currentBoxIdx];
+            if (!text)
+                continue; // MPDJ: a box without text (address 0 is readable on the MCU)
             int textLen = strlen(text);
             char* spacePtr = nullptr;
 
