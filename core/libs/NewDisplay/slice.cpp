@@ -88,6 +88,32 @@ void cSlicePoints::update()
 
     API_LINE_WIDTH(16);
 
+    // MPDJ (5g): a bar along the top over the selected slice, and the End mark
+    if (points->selFrom >= 0 && points->selTo > points->selFrom)
+    {
+        API_COLOR(colors[1]);
+        API_LINE_WIDTH(32);
+        API_BEGIN(LINES);
+        API_VERTEX2F(points->selFrom + posX, posY + 3);
+        API_VERTEX2F(points->selTo + posX, posY + 3);
+        API_END();
+        API_LINE_WIDTH(16);
+    }
+    if (points->endMark >= 0)
+    {
+        int16_t x = points->endMark + posX;
+        API_COLOR(points->selected + 1 == points->sliceCount ? colors[1] : colors[0]);
+        API_BEGIN(LINES);
+        API_VERTEX2F(x, posY - 1);
+        API_VERTEX2F(x, posY + height);
+        API_END();
+        API_BEGIN(LINE_STRIP); // a flag pointing left: this is where the last slice stops
+        API_VERTEX2F(x, posY - 2);
+        API_VERTEX2F(x - 8, posY - 6);
+        API_VERTEX2F(x, posY - 10);
+        API_END();
+    }
+
     uint16_t start = 0;
     constexpr int selectedDiff = 9;
 

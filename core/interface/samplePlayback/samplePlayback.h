@@ -160,6 +160,29 @@ class cSamplePlayback : public ModuleBase
     // MPDJ: while set, start / end / loop point moves step one point unit (1/65536
     // of the sample) instead of one screen pixel (MPC Q-Links, slow turn = fine)
     bool mpdjFineStep = false;
+#ifdef PLATFORM_MPC
+    // MPDJ (5g): MPC-style slicing on Slice / Beat Slice programs (code at the end of
+    // fSamplePlay.cpp). One page of labels: Slice, Start, End, Method, Amount, Apply,
+    // Play Thru, Play Mode; selectedPlace 0-5 = labels 1-6, 6 = the play mode list,
+    // 7 = Play Thru. Slices are linked (mpdjSlices.h)
+    enum SliceMethod : uint8_t { kSliceManual, kSliceAuto, kSliceEvenly, kSliceBeats, kSliceMethods };
+    uint8_t mpdjSliceMethod = kSliceEvenly; // screen state, not saved
+    char mpdjSliceText[8][16] = {};
+    int mpdjPadSlice = -1;                  // slice the held pad plays (release ends it)
+    bool mpdjSliceUi() const;
+    void mpdjShowSliceLabels();
+    void mpdjSliceValues();
+    void mpdjSliceTurn(int knob, int32_t eighths); // Q-Link point knob, 1/8 screen pixels
+    void mpdjSliceTouchKnob(int knob);
+    void mpdjSliceZoom(int16_t value);
+    void mpdjSlicePad(int slice, bool down);
+    void mpdjSliceTapWave(int x);
+    void mpdjSliceChanged(bool all);
+    void mpdjSliceSelect(int slice);
+    bool mpdjSliceButton(uint8_t n, uint8_t state);
+    bool mpdjSliceEncoder(int16_t value);
+    uint16_t mpdjSliceKnobPoint(int knob) const;
+#endif
 
     //----------------------------------
     // spectrum + points

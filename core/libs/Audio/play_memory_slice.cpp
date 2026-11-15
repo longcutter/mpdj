@@ -1,6 +1,7 @@
 #include "Audio.h"
 #include "play_memory.h"
 #include "utility/dspinst.h"
+#include "mpdjSlices.h"
 
 AUDIO_CORE_FLASH void AudioPlayMemory::playSlice(uint8_t instrIdx, int8_t note)
 {
@@ -39,7 +40,7 @@ AUDIO_CORE_FLASH void AudioPlayMemory::playSlice(uint8_t instrIdx, int8_t note)
                     (mtProject.instrument[instrIdx].sliceNumber > 1) &&
                     ((mtProject.instrument[instrIdx].sliceNumber - 1) != forcedSlice))
                      ? mtProject.instrument[instrIdx].slices[forcedSlice + 1]
-                     : MAX_16BIT;
+                     : mpdjSliceTrimEnd(&mtProject.instrument[instrIdx]); // MPDJ (5g): the last slice stops at End
     }
     else
     {
@@ -53,7 +54,7 @@ AUDIO_CORE_FLASH void AudioPlayMemory::playSlice(uint8_t instrIdx, int8_t note)
                      mtProject.instrument[instrIdx].selectedSlice))
                      ? mtProject.instrument[instrIdx]
                          .slices[mtProject.instrument[instrIdx].selectedSlice + 1]
-                     : MAX_16BIT;
+                     : mpdjSliceTrimEnd(&mtProject.instrument[instrIdx]); // MPDJ (5g): the last slice stops at End
     }
 
     if (samplePointsSource != nullptr)

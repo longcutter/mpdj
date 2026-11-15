@@ -12,6 +12,7 @@
 #include "fileManager.h"
 #include "mtConfig.h"
 #include "mtSliceManager.h"
+#include "mpdjSlices.h"
 #include "VoiceStreamManager.h"
 #include <cmath>
 
@@ -448,6 +449,30 @@ void cSamplePlayback::processSlicePoints()
             slicePoints.slice[i] = -1;
         }
     }
+#ifdef PLATFORM_MPC
+    // MPDJ (5g): End mark and the selected slice's span (sliceControl.h)
+    slicePoints.endMark = slicePoints.selFrom = slicePoints.selTo = -1;
+    if (mpdjSliceUi() && zoom.zoomWidth > 0)
+    {
+        auto toX = [&](int32_t p) -> int32_t { return ((p - zoom.zoomStart) * 599) / zoom.zoomWidth; };
+        int32_t e = mpdjSliceTrimEnd(editorInstrument);
+        if (e >= zoom.zoomStart && e <= zoom.zoomEnd)
+            slicePoints.endMark = toX(e);
+        if (editorInstrument->sliceNumber > 0)
+        {
+            int sel = editorInstrument->selectedSlice;
+            int32_t a = toX(editorInstrument->slices[sel]);
+            int32_t b = toX(mpdjSliceEnd(editorInstrument, sel));
+            a = a < 0 ? 0 : (a > 599 ? 599 : a);
+            b = b < 0 ? 0 : (b > 599 ? 599 : b);
+            if (b > a)
+            {
+                slicePoints.selFrom = a;
+                slicePoints.selTo = b;
+            }
+        }
+    }
+#endif
 }
 
 void cSamplePlayback::selectCorrectPoints()
@@ -674,6 +699,10 @@ static void functMiniMiddle(uint8_t state)
 static void functPads(uint8_t pad, uint8_t state, int16_t velo)
 {
     (void)velo;
+#ifdef PLATFORM_MPC
+    if (SP->mpdjSliceUi())
+        return; // MpcInput sends the MPC pads to mpdjSlicePad here
+#endif
 
     bool isBeatSlice =
       mtProject.instrument[mtProject.values.lastUsedInstrument].playMode == playModeBeatSlice;
@@ -705,6 +734,10 @@ static void functPads(uint8_t pad, uint8_t state, int16_t velo)
 
 static void functButton0(uint8_t state)
 {
+#ifdef PLATFORM_MPC
+    if (SP->mpdjSliceButton(0, state))
+        return;
+#endif
     if ((SP->editorInstrument->playMode == playModeBeatSlice) ||
         (SP->editorInstrument->playMode == playModeSlice))
     {
@@ -735,6 +768,10 @@ static void functButton0(uint8_t state)
 
 static void functButton1(uint8_t state)
 {
+#ifdef PLATFORM_MPC
+    if (SP->mpdjSliceButton(1, state))
+        return;
+#endif
     if ((state > buttonPress) && (state != UINT8_MAX))
     {
         return;
@@ -823,6 +860,10 @@ static void functButton1(uint8_t state)
 
 static void functButton2(uint8_t state)
 {
+#ifdef PLATFORM_MPC
+    if (SP->mpdjSliceButton(2, state))
+        return;
+#endif
     if ((state > buttonPress) && (state != UINT8_MAX))
     {
         return;
@@ -918,6 +959,10 @@ static void functButton2(uint8_t state)
 
 static void functButton3(uint8_t state)
 {
+#ifdef PLATFORM_MPC
+    if (SP->mpdjSliceButton(3, state))
+        return;
+#endif
     if ((state > buttonPress) && (state != UINT8_MAX))
     {
         return;
@@ -1018,6 +1063,10 @@ static void functButton3(uint8_t state)
 
 static void functButton4(uint8_t state)
 {
+#ifdef PLATFORM_MPC
+    if (SP->mpdjSliceButton(4, state))
+        return;
+#endif
     if ((state > buttonPress) && (state != UINT8_MAX))
     {
         return;
@@ -1113,6 +1162,10 @@ static void functButton4(uint8_t state)
 
 static void functButton5()
 {
+#ifdef PLATFORM_MPC
+    if (SP->mpdjSliceButton(5, buttonPress))
+        return;
+#endif
     if (SP->editorInstrument->playMode == playModeWavetable)
     {
         return;
@@ -1149,6 +1202,10 @@ static void functButton5()
 
 static void functPlayMode(uint8_t button)
 {
+#ifdef PLATFORM_MPC
+    if (button == interfaceButton6 && SP->mpdjSliceButton(6, buttonPress))
+        return; // label 7 is Play Thru on the MPC slice page
+#endif
     SP->cancelMultiFrame();
     SP->clearAllNodes();
 
@@ -1174,6 +1231,10 @@ static void functPlayMode(uint8_t button)
 
 static void functEncoder(int16_t value)
 {
+#ifdef PLATFORM_MPC
+    if (SP->frameData.multiSelActiveNum == 0 && SP->mpdjSliceEncoder(value))
+        return;
+#endif
     if (SP->frameData.multiSelActiveNum != 0)
     {
         SP->stepThroughNodes(value);
@@ -3423,3 +3484,311 @@ static void functMenu(uint8_t state)
         mtMenuPopup.hideModulePopup(SP);
     }
 }
+
+//==============================================================================================================
+// MPDJ (5g): MPC-style slicing on Slice / Beat Slice programs (MPC only). Slices
+// are linked (mpdjSlices.h): QL1 = slice 1's start, QL2 = End (where the last slice
+// stops), QL3 / QL4 = the selected slice's start / end. Pads select and play
+// slices (bank A pad 1 = slice 1), a touch on the waveform selects the slice there.
+// One page of labels: Slice, Start, End, Method, Amount, Apply, Play Thru, Play Mode.
+#ifdef PLATFORM_MPC
+static const char* const kSliceMethodNames[cSamplePlayback::kSliceMethods] = { "Manual", "Auto", "Evenly", "Beats" };
+
+bool cSamplePlayback::mpdjSliceUi() const
+{
+    return editorInstrument && loadedInstrumentType == mtSampleTypeWaveFile &&
+           (editorInstrument->playMode == playModeSlice || editorInstrument->playMode == playModeBeatSlice);
+}
+
+void cSamplePlayback::mpdjShowSliceLabels()
+{
+    sliceScreenMode2 = false;
+    display.setRemoveControlStyle(label[5], controlStyleSpecialFx2);
+
+    display.setControlText(label[0], "Slice");
+    display.setControlText(label[1], "Start");
+    display.setControlText(label[2], "End");
+    display.setControlText(label[3], "Method");
+    display.setControlText(label[5], "Apply");
+
+    // Play Mode on the last slot only; label 7 (slot 7 on screen) = Play Thru
+    display.setControlPosition(label[6], (800 / 8) * 7 + (800 / 16), 424);
+    display.setControlSize(label[6], 800 / 8 - 6, 55);
+    display.setRemoveControlStyle(label[6], controlStyleShowBitmap);
+    display.setControlText(label[6], "Play Mode");
+
+    display.setControlPosition(label[7], (800 / 8) * 6 + (800 / 16), 424);
+    display.setControlSize(label[7], 800 / 8 - 6, 55);
+    display.setControlValue(label[7], 1);
+    display.setControlStyle2(label[7], controlStyleCenterX | controlStyleCenterY | controlStyleFont2);
+    display.setControlText(label[7], "Play Thru");
+    display.setControlShow(label[7]);
+
+    if (selectedPlace == 5 || selectedPlace > 7)
+        selectedPlace = 0;
+    mpdjSliceValues();
+    for (uint8_t i = 0; i < 8; i++)
+        display.refreshControl(label[i]);
+}
+
+void cSamplePlayback::mpdjSliceValues()
+{
+    if (!mpdjSliceUi())
+        return;
+    strInstrument* ins = editorInstrument;
+    int n = ins->sliceNumber;
+    int sel = ins->selectedSlice < n ? ins->selectedSlice : 0;
+    float total = samplePosToTime(ins->sample.length);
+
+    if (n > 0)
+    {
+        snprintf(mpdjSliceText[0], sizeof(mpdjSliceText[0]), "%d/%d", sel + 1, n);
+        snprintf(mpdjSliceText[1], sizeof(mpdjSliceText[1]), "%.3f s", total * ins->slices[sel] / MAX_16BIT);
+        snprintf(mpdjSliceText[2], sizeof(mpdjSliceText[2]), "%.3f s", total * mpdjSliceEnd(ins, sel) / MAX_16BIT);
+    }
+    else
+    {
+        strcpy(mpdjSliceText[0], "-");
+        strcpy(mpdjSliceText[1], "-");
+        snprintf(mpdjSliceText[2], sizeof(mpdjSliceText[2]), "%.3f s", total * mpdjSliceTrimEnd(ins) / MAX_16BIT);
+    }
+    snprintf(mpdjSliceText[3], sizeof(mpdjSliceText[3]), "%s", kSliceMethodNames[mpdjSliceMethod]);
+    switch (mpdjSliceMethod)
+    {
+        case kSliceEvenly:
+            display.setControlText(label[4], "Slices");
+            snprintf(mpdjSliceText[4], sizeof(mpdjSliceText[4]), "%d", mtConfig.common.equalSliceNumber);
+            break;
+        default:
+            display.setControlText(label[4], "Amount");
+            strcpy(mpdjSliceText[4], "-");
+            break;
+    }
+    strcpy(mpdjSliceText[5], "");
+    strcpy(mpdjSliceText[7], ins->slicePlayThru ? "On" : "Off");
+
+    for (int i = 0; i < 8; i++)
+    {
+        if (i == 6)
+            continue;
+        display.setControlText2(label[i], mpdjSliceText[i]);
+        display.refreshControl(label[i]);
+    }
+}
+
+// After slices change: streamed samples re-read the moved slice's cache (-1 = all),
+// the project is marked changed, the marks and labels redraw
+void cSamplePlayback::mpdjSliceChanged(bool all)
+{
+    int instr = mtProject.values.lastUsedInstrument;
+    if (isSampleInstrument(instr) && mtProject.sampleMemory[instr].isStreamed)
+    {
+        if (all)
+            voiceStreamManager.refreshInstrumentSliceCache(instr);
+        else
+        {
+            voiceStreamManager.refreshInstrumentSingleSliceCache(instr, editorInstrument->selectedSlice);
+            if (editorInstrument->selectedSlice + 1 < editorInstrument->sliceNumber)
+                voiceStreamManager.refreshInstrumentSingleSliceCache(instr, editorInstrument->selectedSlice + 1);
+        }
+    }
+    newFileManager.setInstrumentStructChanged(instr);
+    refreshSlicePoints = 1;
+    mpdjSliceValues();
+}
+
+void cSamplePlayback::mpdjSliceSelect(int slice)
+{
+    if (slice < 0 || slice >= editorInstrument->sliceNumber)
+        return;
+    modSliceSelect(slice, true); // also moves the view to the slice
+    refreshSlicePoints = 1;
+    mpdjSliceValues();
+}
+
+uint16_t cSamplePlayback::mpdjSliceKnobPoint(int knob) const
+{
+    const strInstrument* ins = editorInstrument;
+    int n = ins->sliceNumber, sel = ins->selectedSlice;
+    switch (knob)
+    {
+        case 0: return n > 0 ? ins->slices[0] : 0;
+        case 1: return mpdjSliceTrimEnd(ins);
+        case 2: return n > 0 ? ins->slices[sel] : 0;
+        default: return mpdjSliceEnd(ins, n > 0 ? sel : -1);
+    }
+}
+
+static void mpdjFollowPoint(cSamplePlayback* sp, uint16_t point)
+{
+    sp->zoom.zoomPosition = point;
+    if ((int32_t)point > sp->zoom.zoomEnd || (int32_t)point < sp->zoom.zoomStart)
+        sp->refreshSpectrum = 1;
+}
+
+void cSamplePlayback::mpdjSliceTurn(int knob, int32_t eighths)
+{
+    if (!mpdjSliceUi() || eighths == 0)
+        return;
+    strInstrument* ins = editorInstrument;
+    bool created = false;
+    if (ins->sliceNumber == 0)
+    {
+        mpdjSliceEnsureOne(ins); // the first turn makes slice 1 (the whole sample)
+        created = true;
+    }
+    int32_t units = (int32_t)((int64_t)eighths * zoom.zoomWidth / 4800);
+    if (units == 0)
+        units = eighths > 0 ? 1 : -1;
+    int sel = ins->selectedSlice, last = ins->sliceNumber - 1;
+    bool moved = false;
+    switch (knob)
+    {
+        case 0: moved = mpdjSliceMoveStart(ins, 0, units); break;
+        case 1: moved = mpdjSliceMoveEnd(ins, last, units); break;
+        case 2: moved = mpdjSliceMoveStart(ins, sel, units); break;
+        default: moved = mpdjSliceMoveEnd(ins, sel, units); break;
+    }
+    if (knob == 2 || knob == 3)
+    {
+        uint8_t place = knob == 2 ? 1 : 2;
+        if (selectedPlace != place)
+        {
+            selectedPlace = place;
+            activateLabelsBorder();
+        }
+    }
+    if (moved || created)
+    {
+        mpdjFollowPoint(this, mpdjSliceKnobPoint(knob));
+        mpdjSliceChanged(created || knob == 0 || knob == 1);
+    }
+}
+
+void cSamplePlayback::mpdjSliceTouchKnob(int knob)
+{
+    if (!mpdjSliceUi())
+        return;
+    strInstrument* ins = editorInstrument;
+    if (knob == 0 && ins->sliceNumber > 0)
+        mpdjSliceSelect(0);
+    else if (knob == 1 && ins->sliceNumber > 0)
+        mpdjSliceSelect(ins->sliceNumber - 1);
+    selectedPlace = (knob == 0 || knob == 2) ? 1 : 2;
+    activateLabelsBorder();
+    // centre the view on the point (a no-op at zoom 1)
+    zoom.zoomPosition = mpdjSliceKnobPoint(knob);
+    zoom.lastChangedPoint = 0;
+    refreshSpectrum = 1;
+    refreshSlicePoints = 1;
+}
+
+void cSamplePlayback::mpdjSliceZoom(int16_t value)
+{
+    changeZoom(value);
+    refreshSlicePoints = 1;
+}
+
+void cSamplePlayback::mpdjSliceTapWave(int x)
+{
+    if (!mpdjSliceUi() || editorInstrument->sliceNumber == 0)
+        return;
+    if (x < 0)
+        x = 0;
+    if (x > 599)
+        x = 599;
+    int32_t pos = zoom.zoomStart + (int32_t)x * zoom.zoomWidth / 599;
+    mpdjSliceSelect(mpdjSliceAt(editorInstrument, (uint16_t)(pos < 0 ? 0 : pos > MAX_16BIT ? MAX_16BIT : pos)));
+}
+
+// A pad: select the slice and play it (Slice: note 60 plays the selected slice;
+// Beat Slice: the note picks the slice). Release ends it (Gate-style audition)
+void cSamplePlayback::mpdjSlicePad(int slice, bool down)
+{
+    if (!mpdjSliceUi())
+        return;
+    bool beat = editorInstrument->playMode == playModeBeatSlice;
+    if (!down)
+    {
+        if (mpdjPadSlice == slice)
+        {
+            uint8_t note = beat ? FIRST_BEAT_SLICE_NOTE + slice : 60;
+            noteOffHandle(Sequencer::GRID_OUTSIDE_PATTERN, note, 0, slice);
+            mpdjPadSlice = -1;
+        }
+        return;
+    }
+    if (slice >= editorInstrument->sliceNumber)
+        return; // no slice there (5g-3: Manual slicing adds one)
+    if (mpdjPadSlice >= 0)
+        mpdjSlicePad(mpdjPadSlice, false);
+    mpdjSliceSelect(slice);
+    uint8_t note = beat ? FIRST_BEAT_SLICE_NOTE + slice : 60;
+    noteOnHandle(Sequencer::GRID_OUTSIDE_PATTERN, note, 127, slice);
+    mpdjPadSlice = slice;
+}
+
+bool cSamplePlayback::mpdjSliceButton(uint8_t n, uint8_t state)
+{
+    if (!mpdjSliceUi())
+        return false;
+    if (state != buttonPress)
+        return true;
+    cancelMultiFrame();
+    clearAllNodes();
+    if (n <= 4)
+    {
+        selectedPlace = n;
+        if (n == 1 || n == 2)
+            mpdjFollowPoint(this, mpdjSliceKnobPoint(n + 1));
+    }
+    else if (n == 5)
+    {
+        switch (mpdjSliceMethod)
+        {
+            case kSliceAuto: functAutoSlice(); return true;
+            case kSliceEvenly: functEqualSlice(); return true; // a popup first when slices exist
+            default: return true;
+        }
+    }
+    else if (n == 6)
+        selectedPlace = 7; // Play Thru
+    activateLabelsBorder();
+    refreshSlicePoints = 1;
+    return true;
+}
+
+bool cSamplePlayback::mpdjSliceEncoder(int16_t value)
+{
+    if (!mpdjSliceUi())
+        return false;
+    switch (selectedPlace)
+    {
+        case 0: modSliceSelect(value); mpdjSliceValues(); break;
+        case 1: mpdjSliceTurn(2, (int32_t)value * (mpdjFineStep ? 1 : 8)); break;
+        case 2: mpdjSliceTurn(3, (int32_t)value * (mpdjFineStep ? 1 : 8)); break;
+        case 3:
+        {
+            // 5g-1 offers the Tracker's two methods; Manual and Beats come in 5g-2 / 5g-3
+            static const uint8_t avail[] = { kSliceAuto, kSliceEvenly };
+            int idx = mpdjSliceMethod == kSliceAuto ? 0 : 1;
+            idx += value > 0 ? 1 : -1;
+            idx = idx < 0 ? 0 : (idx > 1 ? 1 : idx);
+            mpdjSliceMethod = avail[idx];
+            mpdjSliceValues();
+            break;
+        }
+        case 4:
+            if (mpdjSliceMethod == kSliceEvenly)
+            {
+                modEqualSliceNumber(value);
+                mpdjSliceValues();
+            }
+            break;
+        case 6: return false; // the play mode list
+        case 7: modSlicePlayThru(value); mpdjSliceValues(); break;
+        default: break;
+    }
+    return true;
+}
+#endif

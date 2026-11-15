@@ -2,6 +2,7 @@
 #include "PlatformImpl.h"
 #include "Tracker.h"
 #include "mpdjPrograms.h"
+#include "mpdjSlices.h"
 #include "audio/AudioProbe.h"
 #include "audio/MpcAudio.h"
 #include "input/LedProbe.h"
@@ -102,6 +103,8 @@ int main()
     if (int rc = programsSelfTest(); rc >= 0)
         return rc;
     if (int rc = padsSelfTest(); rc >= 0)
+        return rc;
+    if (int rc = slicesSelfTest(); rc >= 0)
         return rc;
 
     trackerInstance = Tracker::getInstance();

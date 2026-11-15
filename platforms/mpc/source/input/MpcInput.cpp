@@ -1307,6 +1307,16 @@ void MpcInput::onPad(uint8_t note, bool down, uint8_t velocity)
         erasePadHeld[note & 127] = -1;
         return;
     }
+    if (mtInterface.isSamplePlayerScreenActive() && samplePlayback.mpdjSliceUi())
+    {
+        // 5g-1: on a Slice / Beat Slice program pads select and play slices:
+        // bank A pad 1 = slice 1 (bottom left), B = 17-32, C = 33-48
+        int n = padNumber(note);
+        int slice = padBank * 16 + n - 1;
+        if (n && slice < MAX_SLICE_NUMBER)
+            samplePlayback.mpdjSlicePad(slice, down);
+        return;
+    }
     if (stepSeq && mtInterface.isPatternScreenActive())
     {
         // STEP SEQ (5f-4): pad N = row (bank * 16 + N) of the sound's track;
@@ -1884,6 +1894,7 @@ struct PointMap
     uint8_t* refreshPoints = nullptr;
     bool listSelected = false;          // play mode / effect list is the selected item
     uint32_t sampleLength = 0;          // frames, for the zoom steps
+    bool slices = false;                // MPDJ (5g): Slice / Beat Slice: samplePlayback.mpdjSlice* do the work
 };
 
 bool pointMap(PointMap& m)
@@ -1926,8 +1937,19 @@ bool pointMap(PointMap& m)
         }
         bool loop = ins->playMode == playModeLoopForward || ins->playMode == playModeLoopBackward ||
                     ins->playMode == playModePingpong;
+        if (sp.mpdjSliceUi())
+        {
+            // 5g: QL1 = slice 1's start, QL2 = End, QL3 / QL4 = the selected slice's start / end
+            m.slices = true;
+            m.zoom = &sp.zoom;
+            m.refreshSpectrum = &sp.refreshSpectrum;
+            m.refreshPoints = &sp.refreshSlicePoints;
+            m.listSelected = sp.selectedPlace == 6;
+            m.sampleLength = ins->sample.length;
+            return true;
+        }
         if (!loop && ins->playMode != playModeSingleShot)
-            return false; // slice, beat slice: keep navigation (slicing gets its own map later)
+            return false;
         m.button[0] = interfaceButton1;
         m.value[0] = &ins->startPoint;
         m.button[1] = interfaceButton4;
@@ -1992,6 +2014,21 @@ bool MpcInput::pointScreenTurn(int knob, int steps)
     PointMap m;
     if (!pointMap(m))
         return false;
+    if (m.slices)
+    {
+        // same speeds as the point knobs, counted in 1/8 screen pixels:
+        // slow = 1/8 px (at least one point unit), normal = 1 px, fast = 4 px
+        uint32_t now = platform.getTimer()->millis();
+        uint32_t dt = now - pointMsgMs[knob];
+        pointMsgMs[knob] = now;
+        qlinkTurnMs = now;
+        int32_t eighths = dt >= pointFineMs ? steps : (dt < pointFastMs ? steps * 32 : steps * 8);
+        samplePlayback.mpdjSliceTurn(knob, eighths);
+        if (trace)
+            printf("input: slice knob %d %+d (%u ms) -> %u\n", knob + 1, (int)eighths, (unsigned)dt,
+                   samplePlayback.mpdjSliceKnobPoint(knob));
+        return true;
+    }
     if (m.button[knob] < 0)
         return true; // no point on this knob here (1-shot, editor): do nothing
     uint32_t now = platform.getTimer()->millis();
@@ -2035,6 +2072,13 @@ bool MpcInput::pointScreenTouch(int knob, bool down)
     PointMap m;
     if (!pointMap(m))
         return false;
+    if (m.slices)
+    {
+        qlinkTouched[knob] = down;
+        if (down)
+            samplePlayback.mpdjSliceTouchKnob(knob); // selects the point and centres the view
+        return true;
+    }
     qlinkTouched[knob] = down && m.button[knob] >= 0;
     if (m.button[knob] < 0)
         return true;
@@ -2061,9 +2105,18 @@ bool MpcInput::pointScreenZoom(int steps)
     if (qlinkMode != 1 || touchedButton >= 0)
         return false; // a finger on a label: the encoder turns that label's value
     PointMap m;
-    if (!pointMap(m) || m.listSelected || m.zoomButton < 0)
+    if (!pointMap(m) || m.listSelected || (m.zoomButton < 0 && !m.slices))
         return false;
-    holdScreenButton(m.zoomButton);
+    if (m.slices)
+    {
+        // slice page: the encoder zooms while nothing or Start / End is selected, and
+        // turns the value when Slice, Method, Amount or Play Thru is (5g-1)
+        uint8_t p = samplePlayback.selectedPlace;
+        if (p == 0 || p == 3 || p == 4 || p == 7)
+            return false;
+    }
+    if (!m.slices)
+        holdScreenButton(m.zoomButton);
     qlinkTurnMs = platform.getTimer()->millis();
     // The Tracker zooms in linear steps of the samples-per-pixel resolution
     // ((max - min) / 100 per click, GP.spectrumChangeZoom), so the first clicks
@@ -2084,7 +2137,10 @@ bool MpcInput::pointScreenZoom(int steps)
         if (value == 0)
             value = steps > 0 ? 1 : -1;
     }
-    turnValue(value);
+    if (m.slices)
+        samplePlayback.mpdjSliceZoom(value); // the slice page has no Zoom label (5g)
+    else
+        turnValue(value);
     if (trace)
         printf("input: zoom %+d clicks -> %+d steps, %.2fx\n", steps, value, m.zoom->zoomValue);
     return true;
@@ -2157,6 +2213,9 @@ void MpcInput::onScreenTap(float x, float y)
         padAssign.selectPad(padAssign.padAt(x, y)); // select only, no sound (Mike 2026-11-14)
     else if (mtInterface.isTrackMuteScreenActive())
         trackMute.toggle(trackMute.trackAt(x, y)); // 5e-1
+    else if (mtInterface.isSamplePlayerScreenActive() && samplePlayback.mpdjSliceUi() && x < 600 && y >= 31 &&
+             y < 400)
+        samplePlayback.mpdjSliceTapWave((int)x); // 5g-1: select the slice under the finger
 }
 
 void MpcInput::setEditParam(int p)

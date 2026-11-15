@@ -12,6 +12,9 @@ static const uint16_t framesPlaces[7][4] = {
     { (800 / 8) * 5 + 1, 424, 800 / 8 - 2, 55 },
     { (800 / 8) * 6 + 1, 31, 800 / 4 - 3, 391 },
 };
+#ifdef PLATFORM_MPC
+static const uint16_t mpdjPlayThruPlace[4] = { (800 / 8) * 6 + 1, 424, 800 / 8 - 2, 55 }; // MPDJ (5g)
+#endif
 
 void cSamplePlayback::initDisplayControls()
 {
@@ -156,6 +159,12 @@ void cSamplePlayback::showDefaultScreen()
 
     display.setControlText(label[6], "Play Mode");
     display.setControlHide(label[7]);
+#ifdef PLATFORM_MPC
+    frameData.placesCount = 7; // the slice page adds place 7 (Play Thru)
+    // the slice page moves label 7 to slot 6 (Play Thru); popups expect it on slot 7
+    display.setControlPosition(label[7], (800 / 8) * 7 + (800 / 16), 424);
+    display.setControlSize(label[7], 800 / 8 - 6, 55);
+#endif
 
     display.setControlColors(label[0], display.getTheme().activeLabelsColors);
     display.setControlColors(label[1], display.getTheme().activeLabelsColors);
@@ -184,6 +193,17 @@ void cSamplePlayback::showDefaultScreen()
             display.setControlShow(slicePointsControl);
             display.refreshControl(slicePointsControl);
 
+#ifdef PLATFORM_MPC
+            if (mpdjSliceUi())
+            {
+                hideWavetablePositionCursor();
+                frameData.places[7] = mpdjPlayThruPlace;
+                frameData.placesCount = 8;
+                mpdjShowSliceLabels();
+            }
+            else
+#endif
+            {
             display.setAddControlStyle(label[5], controlStyleSpecialFx2);
             display.setControlData(label[5], &labelDataMore);
             display.setControlColors(label[5], display.getTheme().moreButtonColors);
@@ -238,6 +258,7 @@ void cSamplePlayback::showDefaultScreen()
                     selectedPlace = 2;
                 }
             }
+            } // MPDJ: end of the Tracker's slice pages
         }
         else if (editorInstrument->playMode == playModeGranular)
         {
@@ -435,6 +456,12 @@ void cSamplePlayback::showWavetableWindowSize()
 
 void cSamplePlayback::showZoomValue()
 {
+#ifdef PLATFORM_MPC
+    if (mpdjSliceUi())
+    {
+        return; // no Zoom label on the MPC slice page (the main encoder zooms)
+    }
+#endif
     sprintf(zoomTextValue, "%.2f", zoom.zoomValue);
 
     int labelIdx = 5;
@@ -643,6 +670,11 @@ void cSamplePlayback::showAutoSlicePopup()
     display.setControlShow(label[7]);
     display.setControlText(label[6], "Cancel");
     display.setControlText(label[7], "Confirm");
+#ifdef PLATFORM_MPC
+    display.setControlPosition(label[7], (800 / 8) * 7 + (800 / 16), 424); // back from the slice page's slot 6
+    display.setControlSize(label[7], 800 / 8 - 6, 55);
+    display.setControlText2(label[7], "");
+#endif
     display.refreshControl(label[6]);
     display.refreshControl(label[7]);
     display.setControlValue(label[6], 0);
@@ -665,6 +697,13 @@ void cSamplePlayback::showAutoSlicePopup()
 
 void cSamplePlayback::showSlicesSelectValue()
 {
+#ifdef PLATFORM_MPC
+    if (mpdjSliceUi())
+    {
+        mpdjSliceValues();
+        return;
+    }
+#endif
     if (editorInstrument->sliceNumber > 0)
     {
         sprintf(sliceSelectTextValue,
@@ -687,6 +726,13 @@ void cSamplePlayback::showSlicesSelectValue()
 
 void cSamplePlayback::showSlicesAdjustValue()
 {
+#ifdef PLATFORM_MPC
+    if (mpdjSliceUi())
+    {
+        mpdjSliceValues();
+        return;
+    }
+#endif
     if (editorInstrument->sliceNumber > 0)
     {
         float timeValue = samplePosToTime(editorInstrument->sample.length);
@@ -711,6 +757,13 @@ void cSamplePlayback::showSlicesAdjustValue()
 
 void cSamplePlayback::showSlicesEqualNumberValue()
 {
+#ifdef PLATFORM_MPC
+    if (mpdjSliceUi())
+    {
+        mpdjSliceValues();
+        return;
+    }
+#endif
     sprintf(equalSliceNumberText, "%d", mtConfig.common.equalSliceNumber);
     display.setControlText2(label[2], equalSliceNumberText);
     display.setControlShow(label[2]);
@@ -719,6 +772,13 @@ void cSamplePlayback::showSlicesEqualNumberValue()
 
 void cSamplePlayback::showSlicesPlayThruValue()
 {
+#ifdef PLATFORM_MPC
+    if (mpdjSliceUi())
+    {
+        mpdjSliceValues();
+        return;
+    }
+#endif
     display.setControlText2(label[3], editorInstrument->slicePlayThru ? "On" : "Off");
     display.setControlShow(label[3]);
     display.refreshControl(label[3]);
