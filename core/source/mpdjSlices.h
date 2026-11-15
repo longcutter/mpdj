@@ -29,4 +29,8 @@ void mpdjSliceEnsureOne(strInstrument* ins);
 // MPDJ_SLICES_TEST=1: checks the rules above, prints, exits (-1 = not asked)
 int slicesSelfTest();
 
+// Frames between the engine's playhead and the speaker (the output buffer); the
+// MPC audio thread sets it, live slicing places a slice where it was heard (5g-3)
+extern uint32_t mpdjOutputLatencyFrames;
+
 #endif

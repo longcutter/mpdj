@@ -526,6 +526,23 @@ void MpcInput::pollPadLights()
         }
         return;
     }
+    if (mtInterface.isSamplePlayerScreenActive() && samplePlayback.mpdjSliceUi())
+    {
+        // Slice page (5g): the bank's 16 slices: dim white, the selected one brighter,
+        // the playing one full; in Manual the pad that would add the next slice dim red
+        float base = setting == 1 ? 0.05f : 0.10f, top = setting == 1 ? 0.40f : 1.0f;
+        for (int n = 0; n < 16; n++)
+        {
+            int l = setting == 0 ? 0 : samplePlayback.mpdjPadLight(padBank * 16 + n);
+            float k = l == 1 ? base : l == 2 ? base + (top - base) * 0.4f : l == 3 ? top : l == 4 ? base * 1.5f : 0;
+            uint8_t w = (uint8_t)(127 * k + 0.5f);
+            if (l == 4)
+                setPadLed(n, w, 0, 0);
+            else
+                setPadLed(n, w, w, w);
+        }
+        return;
+    }
     if (stepSeq && mtInterface.isPatternScreenActive())
     {
         // STEP SEQ (5f-4): the 16 rows of this page: the sound's color bright
@@ -745,6 +762,14 @@ void MpcInput::onButton(uint8_t note, bool down)
             return;
         }
         closeFxList(true);
+    }
+    if (down && note == kNoteErase && mpcShift && mtInterface.isSamplePlayerScreenActive() &&
+        samplePlayback.mpdjSliceUi())
+    {
+        closeProgramPicker(); // SHIFT held opened the program list; this is a SHIFT combo
+        releaseCoreShift();
+        samplePlayback.mpdjAskClear(); // 5g-3: SHIFT+ERASE = clear the slices (confirm popup)
+        return;
     }
     if (down && note >= kNoteBankA && note <= kNoteBankD)
     {
@@ -1314,7 +1339,12 @@ void MpcInput::onPad(uint8_t note, bool down, uint8_t velocity)
         int n = padNumber(note);
         int slice = padBank * 16 + n - 1;
         if (n && slice < MAX_SLICE_NUMBER)
-            samplePlayback.mpdjSlicePad(slice, down);
+        {
+            if (down && noteDown[kNoteErase])
+                samplePlayback.mpdjSliceRemove(slice); // 5g-3: ERASE + pad removes that slice
+            else
+                samplePlayback.mpdjSlicePad(slice, down);
+        }
         return;
     }
     if (stepSeq && mtInterface.isPatternScreenActive())

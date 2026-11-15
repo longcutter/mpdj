@@ -2,6 +2,8 @@
 #include "mpdjSlices.h"
 #include "mtStructs.h"
 
+uint32_t mpdjOutputLatencyFrames = 0;
+
 uint16_t mpdjSliceTrimEnd(const strInstrument* ins)
 {
     if (ins->sliceNumber == 0)

@@ -1,3 +1,4 @@
+#include "mpdjSlices.h"
 #include "MpcAudio.h"
 
 #include "AlsaPcm.h"
@@ -267,6 +268,7 @@ void* audioThread(void*)
         unsigned fill = out.bufferFrames - (in.isOpen() ? kBlock : 0);
         for (unsigned f = 0; f + kBlock <= fill; f += kBlock)
             out.write(silence, kBlock);
+        mpdjOutputLatencyFrames = out.bufferFrames; // 5g-3: live slicing lands where it was heard
         if (in.isOpen())
             in.start();
     }

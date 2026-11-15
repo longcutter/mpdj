@@ -3171,6 +3171,10 @@ static void functShift(uint8_t state)
 
 static void functDelete()
 {
+#ifdef PLATFORM_MPC
+    if (SP->mpdjSliceUi())
+        return; // 5g-3: ERASE + pad removes a slice, SHIFT+ERASE clears them (MpcInput)
+#endif
     if (SP->editorInstrument->playMode == playModeSlice ||
         SP->editorInstrument->playMode == playModeBeatSlice)
 
@@ -3592,6 +3596,7 @@ void cSamplePlayback::mpdjSliceValues()
             break;
     }
     strcpy(mpdjSliceText[5], "");
+    display.setControlText(label[5], mpdjSliceMethod == kSliceManual ? "Clear" : "Apply");
     strcpy(mpdjSliceText[7], ins->slicePlayThru ? "On" : "Off");
 
     for (int i = 0; i < 8; i++)
@@ -3735,6 +3740,34 @@ void cSamplePlayback::mpdjSlicePad(int slice, bool down)
     if (!mpdjSliceUi())
         return;
     bool beat = editorInstrument->playMode == playModeBeatSlice;
+    strInstrument* ins = editorInstrument;
+    bool manual = mpdjSliceMethod == kSliceManual;
+    if (!down && manual)
+        return; // Manual: pads play one shot, so slices can be tapped while the sample runs
+    if (down && manual && ins->sliceNumber == 0 && slice == 0)
+    {
+        mpdjSliceEnsureOne(ins); // pad 1 plays the whole sample from Start
+        mpdjSliceChanged(true);
+    }
+    else if (down && manual && slice == ins->sliceNumber && ins->sliceNumber < MAX_SLICE_NUMBER)
+    {
+        // the next unused pad while the last slice plays: a new slice at the playhead,
+        // where it was heard (minus the output buffer); the sound keeps playing
+        int last = ins->sliceNumber - 1;
+        if (mpdjPadSlice != last || mpdjPadVoice < 0 ||
+            !instrumentPlayer[mpdjPadVoice].getWaveStartAddressIfPlaying(0) || ins->sample.length == 0)
+            return; // ignored unless the last slice is playing (Mike 2026-11-15)
+        int32_t pos = instrumentPlayer[mpdjPadVoice].getWavePosition();
+        pos -= (int32_t)((int64_t)mpdjOutputLatencyFrames * MAX_16BIT / ins->sample.length);
+        const int32_t kMinGap = 64; // about 4 ms on a 4 s sample
+        if (pos <= ins->slices[last] + kMinGap || pos >= (int32_t)mpdjSliceTrimEnd(ins) - kMinGap)
+            return;
+        ins->slices[ins->sliceNumber++] = (uint16_t)pos;
+        ins->selectedSlice = ins->sliceNumber - 1;
+        mpdjPadSlice = ins->selectedSlice; // the voice now plays the new slice
+        mpdjSliceChanged(true);
+        return;
+    }
     if (!down)
     {
         if (mpdjPadSlice == slice)
@@ -3753,6 +3786,46 @@ void cSamplePlayback::mpdjSlicePad(int slice, bool down)
     uint8_t note = beat ? FIRST_BEAT_SLICE_NOTE + slice : 60;
     noteOnHandle(Sequencer::GRID_OUTSIDE_PATTERN, note, 127, slice);
     mpdjPadSlice = slice;
+    mpdjPadVoice = (int8_t)engine.getLastUsedVoice();
+}
+
+void cSamplePlayback::mpdjSliceRemove(int slice)
+{
+    if (!mpdjSliceUi() || slice < 0 || slice >= editorInstrument->sliceNumber)
+        return;
+    editorInstrument->selectedSlice = (uint8_t)slice;
+    sliceManager.removeSlice(editorInstrument); // the slice before takes its span
+    snprintf(mpdjPopupText, sizeof(mpdjPopupText), "Slice %d removed", slice + 1);
+    mtPopups.show(0, mpdjPopupText);
+    if (mpdjPadSlice >= editorInstrument->sliceNumber)
+        mpdjPadSlice = -1;
+    mpdjSliceChanged(true);
+}
+
+void cSamplePlayback::mpdjAskClear()
+{
+    if (!mpdjSliceUi() || editorInstrument->sliceNumber == 0)
+        return;
+    mpdjApplyPending = true;
+    mpdjPendingClear = true;
+    overwriteSliceSource = overwriteEqualSlice;
+    showAutoSlicePopup();
+    setAutoSlicePopupFunct();
+}
+
+int cSamplePlayback::mpdjPadLight(int slice) const
+{
+    if (!mpdjSliceUi())
+        return 0;
+    const strInstrument* ins = editorInstrument;
+    if (slice >= ins->sliceNumber)
+        return (mpdjSliceMethod == kSliceManual && slice == ins->sliceNumber &&
+                (slice == 0 || mpdjPadSlice == slice - 1))
+                 ? 4
+                 : 0;
+    if (slice == mpdjPadSlice && mpdjPadVoice >= 0 && instrumentPlayer[mpdjPadVoice].getWaveStartAddressIfPlaying(0))
+        return 3;
+    return slice == ins->selectedSlice ? 2 : 1;
 }
 
 bool cSamplePlayback::mpdjSliceButton(uint8_t n, uint8_t state)
@@ -3792,9 +3865,8 @@ bool cSamplePlayback::mpdjSliceEncoder(int16_t value)
         case 2: mpdjSliceTurn(3, (int32_t)value * (mpdjFineStep ? 1 : 8)); break;
         case 3:
         {
-            // Manual comes with 5g-3
             int idx = (int)mpdjSliceMethod + (value > 0 ? 1 : -1);
-            idx = idx < kSliceAuto ? kSliceAuto : (idx >= kSliceMethods ? kSliceMethods - 1 : idx);
+            idx = idx < 0 ? 0 : (idx >= kSliceMethods ? kSliceMethods - 1 : idx);
             mpdjSliceMethod = (uint8_t)idx;
             mpdjSliceValues();
             break;
@@ -3828,11 +3900,17 @@ void cSamplePlayback::mpdjApply()
         functAutoSlice();
         return;
     }
+    if (mpdjSliceMethod == kSliceManual)
+    {
+        mpdjAskClear();
+        return;
+    }
     if (mpdjSliceMethod != kSliceEvenly && mpdjSliceMethod != kSliceBeats)
         return;
     if (editorInstrument->sliceNumber > 0)
     {
         mpdjApplyPending = true;
+        mpdjPendingClear = false;
         overwriteSliceSource = overwriteEqualSlice;
         showAutoSlicePopup();
         setAutoSlicePopupFunct();
@@ -3844,6 +3922,16 @@ void cSamplePlayback::mpdjApply()
 void cSamplePlayback::mpdjDoApply()
 {
     strInstrument* ins = editorInstrument;
+    if (mpdjPendingClear)
+    {
+        mpdjPendingClear = false;
+        ins->sliceNumber = 0;
+        ins->selectedSlice = 0;
+        mpdjPadSlice = -1;
+        mtPopups.show(0, "Slices cleared");
+        mpdjSliceChanged(true);
+        return;
+    }
     int32_t from = ins->sliceNumber > 0 ? ins->slices[0] : 0;
     int32_t to = mpdjSliceTrimEnd(ins);
     if (to <= from)

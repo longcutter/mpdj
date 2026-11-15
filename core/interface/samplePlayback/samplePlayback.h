@@ -166,10 +166,15 @@ class cSamplePlayback : public ModuleBase
     // Play Thru, Play Mode; selectedPlace 0-5 = labels 1-6, 6 = the play mode list,
     // 7 = Play Thru. Slices are linked (mpdjSlices.h)
     enum SliceMethod : uint8_t { kSliceManual, kSliceAuto, kSliceEvenly, kSliceBeats, kSliceMethods };
-    uint8_t mpdjSliceMethod = kSliceEvenly; // screen state, not saved
+    uint8_t mpdjSliceMethod = kSliceManual; // screen state, not saved
     uint8_t mpdjAutoSens = 1;               // Auto: 0 Low, 1 Mid (the Tracker's), 2 High
     uint8_t mpdjBeatDiv = 2;                // Beats: index into 1 bar, 1/2, 1/4, 1/8, 1/16
-    bool mpdjApplyPending = false;          // Evenly / Beats waiting for the overwrite popup
+    bool mpdjApplyPending = false;          // Evenly / Beats / Clear waiting for the overwrite popup
+    bool mpdjPendingClear = false;          // the popup is for Clear (Manual's Apply, SHIFT+ERASE)
+    int8_t mpdjPadVoice = -1;               // voice the pad audition started
+    void mpdjSliceRemove(int slice);        // ERASE + pad
+    void mpdjAskClear();                    // SHIFT+ERASE
+    int mpdjPadLight(int slice) const;      // 0 dark, 1 slice, 2 selected, 3 playing, 4 next (Manual)
     char mpdjPopupText[32] = {};
     void mpdjApply();
     void mpdjDoApply();
