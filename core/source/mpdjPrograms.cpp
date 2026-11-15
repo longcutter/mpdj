@@ -1,4 +1,5 @@
 // MPDJ additions (MIT, see NOTICE.md): typed program slots. See mpdjPrograms.h.
+#include "mpdjLoopSync.h"
 #include "mpdjPrograms.h"
 
 #include "mtSequencer.h"
@@ -171,11 +172,14 @@ bool programsReadFromFile(const strMpdjProjectData& in)
     for (int i = 0; i < kProgramSlots; i++)
     {
         strProgramSlot s = in.programs[i];
+        // Loop Sync (5g-6): saved since version 6
+        uint8_t loopSync = (in.version >= 6 && s.loopSync < kLoopSyncCount) ? s.loopSync : 0;
         // Sample vs empty comes from the slot's sample data once it's loaded
         if (s.type != kProgramMidi)
             s = {};
         else if (s.midi.channel < 1 || s.midi.channel > 16)
             s.midi.channel = 1;
+        s.loopSync = loopSync;
         mtProject.programs.slot[i] = s;
     }
     return true;

@@ -13,6 +13,8 @@
 #include "mtConfig.h"
 #include "mtSliceManager.h"
 #include "mpdjSlices.h"
+#include "mpdjLoopSync.h"
+#include "mpdjPrograms.h"
 #include "mtSliceDetector.h"
 #include "VoiceStreamManager.h"
 #include <cmath>
@@ -91,6 +93,11 @@ void cSamplePlayback::update()
 {
 #ifdef PLATFORM_MPC
     mpdjSlicePoll(); // 5g-5: slice undo steps
+    if (mpdjLoopUi() && loopSyncApply(mtProject.values.lastUsedInstrument))
+    {
+        refreshPoints = 1; // 5g-6: Loop Start moved, or the tempo / Tune changed
+        showLoopPoint2Value();
+    }
 #endif
     refreshLiveParams();
 
@@ -342,6 +349,9 @@ void cSamplePlayback::stop()
 
 void cSamplePlayback::setDefaultScreenFunct()
 {
+#ifdef PLATFORM_MPC
+    mpdjPopupOpen = false;
+#endif
     ip->unblockAllInputs();
     // funkcje
     ip->clearButtonsRange(interfaceButton0, interfaceButton7);
@@ -381,6 +391,9 @@ void cSamplePlayback::setDefaultScreenFunct()
 
 void cSamplePlayback::setAutoSlicePopupFunct()
 {
+#ifdef PLATFORM_MPC
+    mpdjPopupOpen = true;
+#endif
     ip->clearButtonsRange(interfaceButton0, interfaceButton7);
     ip->clearAllPots();
 
@@ -1238,6 +1251,11 @@ static void functEncoder(int16_t value)
 #ifdef PLATFORM_MPC
     if (SP->frameData.multiSelActiveNum == 0 && SP->mpdjSliceEncoder(value))
         return;
+    if (SP->frameData.multiSelActiveNum == 0 && SP->mpdjLoopUi() && SP->selectedPlace == 5)
+    {
+        SP->mpdjLoopSyncTurn(value); // 5g-6
+        return;
+    }
 #endif
     if (SP->frameData.multiSelActiveNum != 0)
     {
@@ -3663,7 +3681,7 @@ static void mpdjFollowPoint(cSamplePlayback* sp, uint16_t point)
 
 void cSamplePlayback::mpdjSliceTurn(int knob, int32_t eighths)
 {
-    if (!mpdjSliceUi() || eighths == 0)
+    if (!mpdjSliceUi() || eighths == 0 || mpdjPopupOpen)
         return;
     strInstrument* ins = editorInstrument;
     bool created = false;
@@ -3702,7 +3720,7 @@ void cSamplePlayback::mpdjSliceTurn(int knob, int32_t eighths)
 
 void cSamplePlayback::mpdjSliceTouchKnob(int knob)
 {
-    if (!mpdjSliceUi())
+    if (!mpdjSliceUi() || mpdjPopupOpen)
         return;
     strInstrument* ins = editorInstrument;
     if (knob == 0 && ins->sliceNumber > 0)
@@ -3726,7 +3744,7 @@ void cSamplePlayback::mpdjSliceZoom(int16_t value)
 
 void cSamplePlayback::mpdjSliceTapWave(int x)
 {
-    if (!mpdjSliceUi() || editorInstrument->sliceNumber == 0)
+    if (!mpdjSliceUi() || editorInstrument->sliceNumber == 0 || mpdjPopupOpen)
         return;
     if (x < 0)
         x = 0;
@@ -3740,7 +3758,7 @@ void cSamplePlayback::mpdjSliceTapWave(int x)
 // Beat Slice: the note picks the slice). Release ends it (Gate-style audition)
 void cSamplePlayback::mpdjSlicePad(int slice, bool down)
 {
-    if (!mpdjSliceUi())
+    if (!mpdjSliceUi() || (down && mpdjPopupOpen))
         return;
     bool beat = editorInstrument->playMode == playModeBeatSlice;
     strInstrument* ins = editorInstrument;
@@ -3794,7 +3812,7 @@ void cSamplePlayback::mpdjSlicePad(int slice, bool down)
 
 void cSamplePlayback::mpdjSliceRemove(int slice)
 {
-    if (!mpdjSliceUi() || slice < 0 || slice >= editorInstrument->sliceNumber)
+    if (!mpdjSliceUi() || slice < 0 || slice >= editorInstrument->sliceNumber || mpdjPopupOpen)
         return;
     editorInstrument->selectedSlice = (uint8_t)slice;
     sliceManager.removeSlice(editorInstrument); // the slice before takes its span
@@ -4035,7 +4053,7 @@ void cSamplePlayback::mpdjSlicePoll()
 
 const char* cSamplePlayback::mpdjSliceUndo(bool redo)
 {
-    if (!mpdjSliceUi())
+    if (!mpdjSliceUi() || mpdjPopupOpen)
         return nullptr;
     mpdjSlicePoll(); // a change from this very moment counts first
     SliceState* from = redo ? mpdjRedo : mpdjUndo;
@@ -4058,6 +4076,40 @@ const char* cSamplePlayback::mpdjSliceUndo(bool redo)
     snprintf(mpdjPopupText, sizeof(mpdjPopupText), "%s: %d slice%s", redo ? "Redo" : "Undo", back.count,
              back.count == 1 ? "" : "s");
     return mpdjPopupText;
+}
+// Loop Sync (5g-6)
+bool cSamplePlayback::mpdjLoopUi() const
+{
+    return editorInstrument && loadedInstrumentType == mtSampleTypeWaveFile &&
+           (editorInstrument->playMode == playModeLoopForward || editorInstrument->playMode == playModeLoopBackward ||
+            editorInstrument->playMode == playModePingpong);
+}
+
+void cSamplePlayback::mpdjLoopSyncLabel()
+{
+    uint8_t v = mtProject.programs.slot[mtProject.values.lastUsedInstrument].loopSync;
+    display.setControlText(label[5], "Loop Sync");
+    display.setControlText2(label[5], loopSyncName(v));
+    display.setControlShow(label[5]);
+    display.refreshControl(label[5]);
+}
+
+void cSamplePlayback::mpdjLoopSyncTurn(int16_t value)
+{
+    int idx = mtProject.values.lastUsedInstrument;
+    if (idx < 0 || idx >= kProgramSlots)
+        return;
+    uint8_t& v = mtProject.programs.slot[idx].loopSync;
+    int n = (int)v + (value > 0 ? 1 : -1);
+    n = n < 0 ? 0 : (n >= kLoopSyncCount ? kLoopSyncCount - 1 : n);
+    if (n == v)
+        return;
+    v = (uint8_t)n;
+    newFileManager.setProjectStructChanged(); // the setting lives in the project's MPDJ block
+    loopSyncApply(idx);
+    refreshPoints = 1;
+    showLoopPoint2Value();
+    mpdjLoopSyncLabel();
 }
 #endif
 

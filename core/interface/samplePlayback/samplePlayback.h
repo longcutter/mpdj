@@ -171,6 +171,7 @@ class cSamplePlayback : public ModuleBase
     uint8_t mpdjBeatDiv = 2;                // Beats: index into 1 bar, 1/2, 1/4, 1/8, 1/16
     bool mpdjApplyPending = false;          // Evenly / Beats / Clear waiting for the overwrite popup
     bool mpdjPendingClear = false;          // the popup is for Clear (Manual's Apply, SHIFT+ERASE)
+    bool mpdjPopupOpen = false;             // the overwrite popup is up: knobs, pads and touch wait
     int8_t mpdjPadVoice = -1;               // voice the pad audition started
     void mpdjSliceRemove(int slice);        // ERASE + pad
     void mpdjAskClear();                    // SHIFT+ERASE
@@ -194,6 +195,11 @@ class cSamplePlayback : public ModuleBase
     void mpdjSlicePut(const SliceState& s);
     void mpdjSlicePoll();
     const char* mpdjSliceUndo(bool redo); // popup text
+    // Loop Sync (5g-6, mpdjLoopSync.h): label 6 in the loop play modes (the main
+    // encoder zooms on the MPC, so the Zoom label isn't needed)
+    bool mpdjLoopUi() const;
+    void mpdjLoopSyncTurn(int16_t value);
+    void mpdjLoopSyncLabel();
     char mpdjPopupText[32] = {};
     void mpdjApply();
     void mpdjDoApply();

@@ -1,3 +1,4 @@
+#include "mpdjLoopSync.h"
 #include "MpcInput.h"
 
 #include "PlatformImpl.h"
@@ -213,6 +214,7 @@ void MpcInput::poll()
     mpdjPadsPoll(); // Note Repeat hits to record (5b-7c)
     trackMute.syncQueued(); // Track Mute changes applied at the bar / pattern (5e-3)
     mpdjOverdubPoll();      // OVER DUB: erased rows -> save flag; pass ends with REC (5f-2)
+    loopSyncPollAll(platform.getTimer()->millis()); // Loop Sync follows tempo / Tune (5g-6)
     pollLevels();
     pollPadLights();
     if (sideloadComboMs && mpcShift &&
@@ -1987,6 +1989,8 @@ struct PointMap
     bool listSelected = false;          // play mode / effect list is the selected item
     uint32_t sampleLength = 0;          // frames, for the zoom steps
     bool slices = false;                // MPDJ (5g): Slice / Beat Slice: samplePlayback.mpdjSlice* do the work
+    bool directZoom = false;            // 5g-6: zoom without a Zoom label (loop modes: label 6 = Loop Sync)
+    bool loopSyncKnob = false;          // 5g-6: QL4 steps the Loop Sync length (without selecting its label)
 };
 
 bool pointMap(PointMap& m)
@@ -2052,6 +2056,12 @@ bool pointMap(PointMap& m)
             m.value[2] = &ins->loopPoint1;
             m.button[3] = interfaceButton3;
             m.value[3] = &ins->loopPoint2;
+            m.directZoom = true; // 5g-6: label 6 is Loop Sync
+            if (mtProject.programs.slot[mtProject.values.lastUsedInstrument].loopSync)
+            {
+                // Loop Sync on: QL4 steps the length (Loop End follows Loop Start)
+                m.loopSyncKnob = true;
+            }
         }
         else
         {
@@ -2119,6 +2129,14 @@ bool MpcInput::pointScreenTurn(int knob, int steps)
         if (trace)
             printf("input: slice knob %d %+d (%u ms) -> %u\n", knob + 1, (int)eighths, (unsigned)dt,
                    samplePlayback.mpdjSliceKnobPoint(knob));
+        return true;
+    }
+    if (m.loopSyncKnob && knob == 3)
+    {
+        steps = divideQLink(knob, steps, 3); // a short list, at the screen-button value speed
+        if (steps)
+            samplePlayback.mpdjLoopSyncTurn(steps);
+        qlinkTurnMs = platform.getTimer()->millis();
         return true;
     }
     if (m.button[knob] < 0)
@@ -2199,6 +2217,8 @@ bool MpcInput::pointScreenZoom(int steps)
     PointMap m;
     if (!pointMap(m) || m.listSelected || (m.zoomButton < 0 && !m.slices))
         return false;
+    if (m.directZoom && samplePlayback.selectedPlace == 5)
+        return false; // 5g-6: Loop Sync selected: the encoder turns it
     if (m.slices)
     {
         // slice page: the encoder zooms while nothing or Start / End is selected, and
@@ -2207,7 +2227,7 @@ bool MpcInput::pointScreenZoom(int steps)
         if (p == 0 || p == 3 || p == 4 || p == 7)
             return false;
     }
-    if (!m.slices)
+    if (!m.slices && !m.directZoom)
         holdScreenButton(m.zoomButton);
     qlinkTurnMs = platform.getTimer()->millis();
     // The Tracker zooms in linear steps of the samples-per-pixel resolution
@@ -2229,8 +2249,8 @@ bool MpcInput::pointScreenZoom(int steps)
         if (value == 0)
             value = steps > 0 ? 1 : -1;
     }
-    if (m.slices)
-        samplePlayback.mpdjSliceZoom(value); // the slice page has no Zoom label (5g)
+    if (m.slices || m.directZoom)
+        samplePlayback.mpdjSliceZoom(value); // no Zoom label on the slice page (5g) or in the loop modes (5g-6)
     else
         turnValue(value);
     if (trace)

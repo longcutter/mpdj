@@ -1,6 +1,8 @@
 // MPDJ additions (MIT, see NOTICE.md): slice rules for MPC-style slicing (step 5g)
 #include "mpdjSlices.h"
 #include "mtStructs.h"
+#include "mpdjLoopSync.h"
+#include "mpdjPrograms.h"
 
 uint32_t mpdjOutputLatencyFrames = 0;
 
@@ -136,6 +138,39 @@ int slicesSelfTest()
     check(mpdjSliceTrimEnd(&ins) == MAX_16BIT, "End before the last start is ignored");
     mpdjSliceMoveEnd(&ins, 3, -100);
     check(ins.endPoint == MAX_16BIT - 100, "moving it then starts from the file end");
+
+    // Loop Sync (5g-6): 120 BPM, a 10 s sample, loop from 0.1 of the way in
+    {
+        strInstrument saved = mtProject.instrument[0];
+        strProgramSlot savedSlot = mtProject.programs.slot[0];
+        float savedTempo = mtProject.values.globalTempo;
+        strInstrument& in = mtProject.instrument[0];
+        in.isActive = 1;
+        in.sample.length = 441000;
+        in.playMode = playModeLoopForward;
+        in.loopPoint1 = 6553;
+        in.loopPoint2 = 60000;
+        in.endPoint = MAX_16BIT;
+        in.tune = 0;
+        in.fineTune = 0;
+        mtProject.values.globalTempo = 120;
+        mtProject.programs.slot[0].loopSync = 4; // 1/4 = 0.5 s = 3277 point units
+        check(loopSyncEnd(0) == 6553 + 3277, "Loop Sync 1/4 at 120 BPM = 0.5 s");
+        in.tune = 12; // an octave up plays twice as fast: twice the samples for 0.5 s
+        check(loopSyncEnd(0) == 6553 + 6554, "Tune +12 doubles the loop in samples");
+        in.tune = 0;
+        mtProject.programs.slot[0].loopSync = 8; // 4 bars = 8 s -> past End: stops at End
+        in.endPoint = 40000;
+        check(loopSyncEnd(0) == 39999, "no room: the loop runs to End");
+        mtProject.programs.slot[0].loopSync = 0;
+        check(loopSyncEnd(0) == -1, "Free: no change");
+        in.playMode = playModeSingleShot;
+        mtProject.programs.slot[0].loopSync = 4;
+        check(loopSyncEnd(0) == -1, "1-shot: no change");
+        mtProject.instrument[0] = saved;
+        mtProject.programs.slot[0] = savedSlot;
+        mtProject.values.globalTempo = savedTempo;
+    }
 
     printf("slices test: %s (%d failure%s)\n", failures ? "FAILED" : "passed", failures, failures == 1 ? "" : "s");
     return failures ? 1 : 0;

@@ -41,7 +41,7 @@ struct strProgramSlot
         uint8_t channel; // 1-16
         uint8_t port;    // 0 = all outputs (ports come with milestone 10)
     } midi;
-    uint8_t reserved;
+    uint8_t loopSync; // 5g-6 (block version 6): Loop Sync length, 0 = Free (mpdjLoopSync.h); was reserved, 0
 };
 static_assert(sizeof(strProgramSlot) == 4);
 
@@ -89,7 +89,7 @@ static constexpr size_t kMpdjProjectDataV1Size = 8 + 4 * kProgramSlots; // versi
 static constexpr size_t kMpdjProjectDataV2Size = kMpdjProjectDataV1Size + 32; // version 2 ended here
 static constexpr size_t kMpdjProjectDataV3Size = kMpdjProjectDataV2Size + 4 * kPads; // version 3 ended here
 static_assert(sizeof(strMpdjProjectData) == kMpdjProjectDataV3Size + kPads);
-static constexpr uint8_t kMpdjProjectDataVersion = 5; // 5 (5f-1): flags in the header, same size
+static constexpr uint8_t kMpdjProjectDataVersion = 6; // 5 (5f-1): flags in the header; 6 (5g-6): loopSync in the slots; same size
 
 // Slot types for the current project (mtProject.programs)
 ProgramType programType(int idx);

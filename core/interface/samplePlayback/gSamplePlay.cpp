@@ -461,6 +461,11 @@ void cSamplePlayback::showZoomValue()
     {
         return; // no Zoom label on the MPC slice page (the main encoder zooms)
     }
+    if (mpdjLoopUi())
+    {
+        mpdjLoopSyncLabel(); // 5g-6: label 6 = Loop Sync in the loop modes
+        return;
+    }
 #endif
     sprintf(zoomTextValue, "%.2f", zoom.zoomValue);
 
