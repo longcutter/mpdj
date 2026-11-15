@@ -13,6 +13,7 @@
 #include "mtConfig.h"
 #include "mtSliceManager.h"
 #include "mpdjSlices.h"
+#include "mtSliceDetector.h"
 #include "VoiceStreamManager.h"
 #include <cmath>
 
@@ -2471,6 +2472,17 @@ static void functEqualSlice()
 
 static void functAutoSlicConfirmOverwrite()
 {
+#ifdef PLATFORM_MPC
+    if (SP->mpdjApplyPending)
+    {
+        SP->mpdjApplyPending = false;
+        SP->mpdjDoApply();
+        SP->showDefaultScreen();
+        SP->setDefaultScreenFunct();
+        SP->refreshSlicePoints = 1;
+        return;
+    }
+#endif
     if ((SP->editorInstrument->playMode == playModeSlice) ||
         (SP->editorInstrument->playMode == playModeBeatSlice))
     {
@@ -2507,6 +2519,9 @@ static void functAutoSlicConfirmOverwrite()
 
 static void functCancelOverwrite()
 {
+#ifdef PLATFORM_MPC
+    SP->mpdjApplyPending = false;
+#endif
     SP->showDefaultScreen();
     SP->setDefaultScreenFunct();
 }
@@ -3493,6 +3508,10 @@ static void functMenu(uint8_t state)
 // One page of labels: Slice, Start, End, Method, Amount, Apply, Play Thru, Play Mode.
 #ifdef PLATFORM_MPC
 static const char* const kSliceMethodNames[cSamplePlayback::kSliceMethods] = { "Manual", "Auto", "Evenly", "Beats" };
+static const char* const kAutoSensNames[3] = { "Low", "Mid", "High" };
+static const float kAutoSensScale[3] = { 1.3f, 1.0f, 0.82f }; // times the detector's threshold
+static const char* const kBeatDivNames[5] = { "1 bar", "1/2", "1/4", "1/8", "1/16" };
+static const float kBeatDivQuarters[5] = { 4.0f, 2.0f, 1.0f, 0.5f, 0.25f }; // 4/4: a bar = 4 quarter notes
 
 bool cSamplePlayback::mpdjSliceUi() const
 {
@@ -3558,6 +3577,14 @@ void cSamplePlayback::mpdjSliceValues()
         case kSliceEvenly:
             display.setControlText(label[4], "Slices");
             snprintf(mpdjSliceText[4], sizeof(mpdjSliceText[4]), "%d", mtConfig.common.equalSliceNumber);
+            break;
+        case kSliceAuto:
+            display.setControlText(label[4], "Sensitivity");
+            snprintf(mpdjSliceText[4], sizeof(mpdjSliceText[4]), "%s", kAutoSensNames[mpdjAutoSens]);
+            break;
+        case kSliceBeats:
+            display.setControlText(label[4], "Every");
+            snprintf(mpdjSliceText[4], sizeof(mpdjSliceText[4]), "%s", kBeatDivNames[mpdjBeatDiv]);
             break;
         default:
             display.setControlText(label[4], "Amount");
@@ -3744,12 +3771,8 @@ bool cSamplePlayback::mpdjSliceButton(uint8_t n, uint8_t state)
     }
     else if (n == 5)
     {
-        switch (mpdjSliceMethod)
-        {
-            case kSliceAuto: functAutoSlice(); return true;
-            case kSliceEvenly: functEqualSlice(); return true; // a popup first when slices exist
-            default: return true;
-        }
+        mpdjApply();
+        return true;
     }
     else if (n == 6)
         selectedPlace = 7; // Play Thru
@@ -3769,26 +3792,95 @@ bool cSamplePlayback::mpdjSliceEncoder(int16_t value)
         case 2: mpdjSliceTurn(3, (int32_t)value * (mpdjFineStep ? 1 : 8)); break;
         case 3:
         {
-            // 5g-1 offers the Tracker's two methods; Manual and Beats come in 5g-2 / 5g-3
-            static const uint8_t avail[] = { kSliceAuto, kSliceEvenly };
-            int idx = mpdjSliceMethod == kSliceAuto ? 0 : 1;
-            idx += value > 0 ? 1 : -1;
-            idx = idx < 0 ? 0 : (idx > 1 ? 1 : idx);
-            mpdjSliceMethod = avail[idx];
+            // Manual comes with 5g-3
+            int idx = (int)mpdjSliceMethod + (value > 0 ? 1 : -1);
+            idx = idx < kSliceAuto ? kSliceAuto : (idx >= kSliceMethods ? kSliceMethods - 1 : idx);
+            mpdjSliceMethod = (uint8_t)idx;
             mpdjSliceValues();
             break;
         }
         case 4:
+        {
+            int d = value > 0 ? 1 : -1;
             if (mpdjSliceMethod == kSliceEvenly)
-            {
                 modEqualSliceNumber(value);
-                mpdjSliceValues();
-            }
+            else if (mpdjSliceMethod == kSliceAuto)
+                mpdjAutoSens = (uint8_t)(mpdjAutoSens + d < 0 ? 0 : (mpdjAutoSens + d > 2 ? 2 : mpdjAutoSens + d));
+            else if (mpdjSliceMethod == kSliceBeats)
+                mpdjBeatDiv = (uint8_t)(mpdjBeatDiv + d < 0 ? 0 : (mpdjBeatDiv + d > 4 ? 4 : mpdjBeatDiv + d));
+            mpdjSliceValues();
             break;
+        }
         case 6: return false; // the play mode list
         case 7: modSlicePlayThru(value); mpdjSliceValues(); break;
         default: break;
     }
     return true;
 }
+// Apply (5g-2): Auto = the Tracker's detector over the whole file at the chosen
+// sensitivity; Evenly / Beats cut from slice 1's start (0 without slices) to End,
+// Beats at the project tempo in 4/4. Existing slices: the overwrite popup first
+void cSamplePlayback::mpdjApply()
+{
+    if (mpdjSliceMethod == kSliceAuto)
+    {
+        mtSliceDetector::mpdjSensScale = kAutoSensScale[mpdjAutoSens];
+        functAutoSlice();
+        return;
+    }
+    if (mpdjSliceMethod != kSliceEvenly && mpdjSliceMethod != kSliceBeats)
+        return;
+    if (editorInstrument->sliceNumber > 0)
+    {
+        mpdjApplyPending = true;
+        overwriteSliceSource = overwriteEqualSlice;
+        showAutoSlicePopup();
+        setAutoSlicePopupFunct();
+        return;
+    }
+    mpdjDoApply();
+}
+
+void cSamplePlayback::mpdjDoApply()
+{
+    strInstrument* ins = editorInstrument;
+    int32_t from = ins->sliceNumber > 0 ? ins->slices[0] : 0;
+    int32_t to = mpdjSliceTrimEnd(ins);
+    if (to <= from)
+        return;
+    int n = 0;
+    if (mpdjSliceMethod == kSliceEvenly)
+    {
+        n = mtConfig.common.equalSliceNumber;
+        if (n < 1)
+            n = 1;
+        for (int i = 0; i < n; i++)
+            ins->slices[i] = (uint16_t)(from + (int64_t)(to - from) * i / n);
+    }
+    else
+    {
+        float tempo = mtProject.values.globalTempo > 0 ? mtProject.values.globalTempo : DEFAULT_TEMPO;
+        float seconds = 60.0f / tempo * kBeatDivQuarters[mpdjBeatDiv];
+        float sampleSeconds = (float)ins->sample.length / 44100.0f;
+        float step = sampleSeconds > 0 ? seconds / sampleSeconds * MAX_16BIT : 0;
+        if (step < 1.0f)
+            step = 1.0f;
+        while (n < MAX_SLICE_NUMBER)
+        {
+            int32_t p = from + (int32_t)lrintf(step * n);
+            if (p >= to)
+                break;
+            ins->slices[n++] = (uint16_t)p;
+        }
+        snprintf(mpdjPopupText, sizeof(mpdjPopupText), "Beats %s: %d slices%s", kBeatDivNames[mpdjBeatDiv], n,
+                 n == MAX_SLICE_NUMBER ? " (max)" : "");
+        mtPopups.show(0, mpdjPopupText);
+    }
+    ins->sliceNumber = (uint8_t)n;
+    ins->selectedSlice = 0;
+    ins->endPoint = (uint16_t)to; // End stays where it was (also when it had been ignored)
+    mpdjFollowPoint(this, ins->slices[0]);
+    mpdjSliceChanged(true);
+}
 #endif
+

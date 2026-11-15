@@ -27,6 +27,7 @@ class mtSliceDetector
     void update();
     uint8_t getState();
     uint8_t getProgress();
+    static float mpdjSensScale; // MPDJ (5g-2): threshold scale, < 1 = more slices
 
   private:
     uint32_t preciseDetect(uint32_t position);

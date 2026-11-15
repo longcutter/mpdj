@@ -5,6 +5,7 @@
 __NOINIT(EXTERNAL_RAM) uint32_t measureBuffer[INSTANT_BUFFER_SIZE];
 
 mtSliceDetector sliceDetector;
+float mtSliceDetector::mpdjSensScale = 1.0f;
 
 void mtSliceDetector::start(int16_t* addr, uint32_t len, uint16_t* sliceTab, uint8_t* sliceNumber)
 {
@@ -51,6 +52,9 @@ void mtSliceDetector::update()
         sensCoeff = ((-0.00000000015625) * localVariance) + 1.62951;
         if (sensCoeff < 1.2f)
             sensCoeff = 1.2f;
+        sensCoeff *= mpdjSensScale; // MPDJ (5g-2): Auto slice sensitivity, 1 = the Tracker's
+        if (sensCoeff < 1.02f)
+            sensCoeff = 1.02f;
 
         if ((currentInstantAverage > sensCoeff * localAverage) &&
             (position > (lastDetected + LAST_DETECTED_DEATH_ZONE)))
@@ -72,6 +76,9 @@ void mtSliceDetector::update()
         sensCoeff = ((-0.00000000015625) * localVariance) + 1.62951;
         if (sensCoeff < 1.2f)
             sensCoeff = 1.2f;
+        sensCoeff *= mpdjSensScale; // MPDJ (5g-2): Auto slice sensitivity, 1 = the Tracker's
+        if (sensCoeff < 1.02f)
+            sensCoeff = 1.02f;
 
         for (uint16_t i = 0; i < LOCAL_BUFFER_SIZE / INSTANT_BUFFER_SIZE; i++)
         {
