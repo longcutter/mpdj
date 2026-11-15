@@ -393,6 +393,11 @@ uint8_t cProjectEditor::loadProjectValues()
     sampleRecorder.recorderConfig.radioFreq = mtProject.values.radioFreq;
     sampleRecorder.recorderConfig.source =
       mtProject.values.source >= sourceCount ? 0 : mtProject.values.source;
+#ifdef PLATFORM_MPC
+    // MPDJ: no radio on the MPC; a project saved with the Radio source opens on Line in
+    if (sampleRecorder.recorderConfig.source == cSampleRecorder::sourceTypeRadio)
+        sampleRecorder.recorderConfig.source = cSampleRecorder::sourceTypeLineIn;
+#endif
 
     //----------------------------------------------------------------------------------------------------
     // performance mode i inne

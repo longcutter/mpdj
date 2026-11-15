@@ -24,7 +24,7 @@ constexpr uint8_t generalMenuGroupCount = 9;
 #elif defined(PLATFORM_MPC) // no USB group (USB storage / USB audio are Tracker+ hardware)
 constexpr uint8_t baseMenuGroupCount = 6;
 constexpr uint8_t projectMenuGroupCount = 10;
-constexpr uint8_t generalMenuGroupCount = 20; // + Button lights, Tap tempo flash, 3 pad settings (5b-4d), Notes mode plays (5b-8a), Timing correct, Pad lights (5c-1)
+constexpr uint8_t generalMenuGroupCount = 20; // MPC list: 20 items (no Radio region / Pads brightness since the Config clean-up); must equal the items below, extra items are silently dropped
 #elif defined(PLATFORM_IMX)
 constexpr uint8_t baseMenuGroupCount = 7;
 constexpr uint8_t projectMenuGroupCount = 10;
@@ -114,7 +114,7 @@ const strItemTypeListText setupPatternArrangement{ &mtConfig.general.patternArra
 const strItemTypeListText setupPatternInfo{ &mtConfig.general.patternInfo, 3, patternInfoTexts };
 const strItemTypeListTextWithAction setupLineInOutType{ &mtConfig.general.lineInOutType, 3,  lineInOutType, setLineInOutType };
 
-#ifndef TRACKER_MINI
+#if !defined(TRACKER_MINI) && !defined(PLATFORM_MPC) // MPDJ: the MPC has no radio
 cMenuItem melRadioReg(menuGeneral,
                       "Radio region",
                       radioRegDesc,
@@ -138,11 +138,13 @@ cMenuItem melDispFont(menuGeneral,
                       &setupDispFont);
 
 #ifndef TRACKER_MINI
+#ifndef PLATFORM_MPC // MPDJ: Config > General > Pad lights replaces it
 cMenuItem melPadsBright(menuGeneral,
                         "Pads brightness",
                         padsBrightDesc,
                         menuTypeItemListTextWithAction,
                         &setupPadsBrightness);
+#endif
 #ifdef PLATFORM_MPC
 const strItemTypeListText setupButtonLights{ &mtConfig.general.buttonLights, 4, buttonLightsTexts };
 const strItemTypeListText setupTapFlash{ &mtConfig.general.tapTempoFlash, 3, tapFlashTexts };

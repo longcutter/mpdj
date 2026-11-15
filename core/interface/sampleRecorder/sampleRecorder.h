@@ -12,6 +12,17 @@ const char* const ptrSourcesNamesLabels[5] = {
     (char* const)"Line in", (char* const)"Radio", (char* const)"Mic LG",
     (char* const)"Mic HG",  (char* const)"USB",
 };
+#ifdef PLATFORM_MPC
+// MPDJ (Config clean-up): the MPC has no radio. The list on screen skips it; the source
+// values (sourceType, saved in projects) keep their numbers. A saved Radio source opens as Line in
+const uint8_t sourceListCount = 4;
+const char* const ptrSourceListLabels[4] = {
+    (char* const)"Line in", (char* const)"Mic LG", (char* const)"Mic HG", (char* const)"USB",
+};
+inline uint8_t sourceToListIdx(uint8_t source) { return source >= 2 ? source - 1 : 0; }
+inline uint8_t listIdxToSource(uint8_t idx) { return idx >= 1 ? idx + 1 : 0; }
+#define MPDJ_SOURCE_LIST 1
+#endif
 #else
 const uint8_t sourceCount = 4;
 const char* const ptrSourcesNamesLabels[5] = {
@@ -82,6 +93,13 @@ struct strUndoCrop
 
 class Sgtl5000;
 class Radio;
+
+#ifndef MPDJ_SOURCE_LIST
+const uint8_t sourceListCount = sourceCount;
+#define ptrSourceListLabels ptrSourcesNamesLabels
+inline uint8_t sourceToListIdx(uint8_t source) { return source; }
+inline uint8_t listIdxToSource(uint8_t idx) { return idx; }
+#endif
 
 class cSampleRecorder : public ModuleBase
 {

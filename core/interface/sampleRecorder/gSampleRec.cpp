@@ -122,10 +122,10 @@ void cSampleRecorder::initDisplayControls()
     radioSpaceCover = display.createControl<cLabel>(&prop2);
 
     strControlProperties prop4;
-    sourceList.linesCount = sourceCount;
-    sourceList.start = recorderConfig.source;
-    sourceList.length = sourceCount;
-    sourceList.data = (char**)ptrSourcesNamesLabels;
+    sourceList.linesCount = sourceListCount;
+    sourceList.start = sourceToListIdx(recorderConfig.source);
+    sourceList.length = sourceListCount;
+    sourceList.data = (char**)ptrSourceListLabels;
     prop4.x = 0 + 2;
     prop4.y = 29;
     prop4.w = 800 / 8 - 3;
@@ -665,10 +665,10 @@ void cSampleRecorder::showFreqValue()
 
 void cSampleRecorder::showSourceList()
 {
-    sourceList.start = recorderConfig.source;
-    sourceList.length = sourceCount;
-    sourceList.linesCount = sourceCount;
-    sourceList.data = (char**)ptrSourcesNamesLabels;
+    sourceList.start = sourceToListIdx(recorderConfig.source);
+    sourceList.length = sourceListCount;
+    sourceList.linesCount = sourceListCount;
+    sourceList.data = (char**)ptrSourceListLabels;
 
     display.setControlData(sourceListControl, &sourceList);
     display.setControlShow(sourceListControl);

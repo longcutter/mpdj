@@ -2492,7 +2492,7 @@ void cSampleRecorder::setDefaultSource()
     recorderConfig.source = sourceTypeLineIn;
     activateAudioInputSource(recorderConfig.source);
 
-    display.setControlValue(sourceListControl, recorderConfig.source);
+    display.setControlValue(sourceListControl, sourceToListIdx(recorderConfig.source));
     display.refreshControl(sourceListControl);
 
     calcGainBarVal();
@@ -2630,16 +2630,19 @@ void cSampleRecorder::changeZoom(int16_t value)
 
 void cSampleRecorder::changeSourceSelection(int16_t value, bool rollListOver)
 {
-    if (recorderConfig.source + value < 0)
-        recorderConfig.source = 0;
-    else if (recorderConfig.source + value >= sourceCount)
-        recorderConfig.source = (rollListOver ? 0 : sourceCount - 1);
+    // MPDJ: move through the on-screen list (the MPC's has no Radio entry)
+    int16_t idx = sourceToListIdx(recorderConfig.source);
+    if (idx + value < 0)
+        idx = 0;
+    else if (idx + value >= sourceListCount)
+        idx = (rollListOver ? 0 : sourceListCount - 1);
     else
-        recorderConfig.source += value;
+        idx += value;
+    recorderConfig.source = listIdxToSource(idx);
 
     activateAudioInputSource(recorderConfig.source);
 
-    display.setControlValue(sourceListControl, recorderConfig.source);
+    display.setControlValue(sourceListControl, idx);
     display.refreshControl(sourceListControl);
 
     calcGainBarVal();
