@@ -147,6 +147,8 @@ void cEdit::update()
     API_COLOR(colors[2]);
     API_LINE_WIDTH(16);
     API_BEGIN(LINES);
+    if (!text)
+        text = ""; // MPDJ: null text (address 0 is readable on the MCU)
     uint16_t localTextLength = strlen(text);
     uint16_t localTextWidth = getTextWidth(font, text, localTextLength);
     uint16_t cursorPosition = getTextWidth(font, text, value);

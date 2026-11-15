@@ -214,7 +214,7 @@ void cLabel::update()
 
         uint8_t strPtr = 0;
         int16_t x = posX, y = posY;
-        int16_t txtLen = strlen(text);
+        int16_t txtLen = text ? strlen(text) : 0; // MPDJ: null text (address 0 is readable on the MCU)
 
         if (style & controlStyleCenterX)
         {
@@ -409,6 +409,8 @@ void cLabel::drawTextUnderline(const char* text,
 {
     textY = textY + textFont->height - (textFont->height / 5);
 
+    if (!text)
+        return; // MPDJ: null text (address 0 is readable on the MCU)
     int textLen = getTextWidth(textFont, text, strlen(text));
 
     if (textStyle & OPT_CENTERX)
