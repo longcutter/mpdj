@@ -948,6 +948,13 @@ void MpcInput::onButton(uint8_t note, bool down)
                 mtPopups.show(0, mpcShift ? padAssign.redo() : padAssign.undo());
                 break;
             }
+            if (mtInterface.isSamplePlayerScreenActive() && samplePlayback.mpdjSliceUi())
+            {
+                // 5g-5: the slice page's own undo
+                if (const char* msg = samplePlayback.mpdjSliceUndo(mpcShift))
+                    mtPopups.show(0, msg);
+                break;
+            }
             if (!onPattern)
                 break;
             if (mpcShift)

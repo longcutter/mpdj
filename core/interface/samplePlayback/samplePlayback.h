@@ -175,6 +175,25 @@ class cSamplePlayback : public ModuleBase
     void mpdjSliceRemove(int slice);        // ERASE + pad
     void mpdjAskClear();                    // SHIFT+ERASE
     int mpdjPadLight(int slice) const;      // 0 dark, 1 slice, 2 selected, 3 playing, 4 next (Manual)
+    // Undo (5g-5): UNDO / SHIFT+UNDO on the slice page, 16 steps, session only. A step
+    // is the program's slices, End and Play Thru before a burst of changes (changes
+    // closer than 0.7 s together are one step), found by comparing with a shadow copy
+    struct SliceState
+    {
+        int8_t program = -1;
+        uint8_t count = 0, selected = 0, playThru = 0;
+        uint16_t end = 0;
+        uint16_t slices[MAX_SLICE_NUMBER] = {};
+        bool same(const SliceState& o) const;
+    };
+    static constexpr int kSliceUndo = 16;
+    SliceState mpdjShadow, mpdjUndo[kSliceUndo], mpdjRedo[kSliceUndo];
+    int mpdjUndoCount = 0, mpdjRedoCount = 0;
+    uint32_t mpdjLastChangeMs = 0;
+    void mpdjSliceTake(SliceState& s) const;
+    void mpdjSlicePut(const SliceState& s);
+    void mpdjSlicePoll();
+    const char* mpdjSliceUndo(bool redo); // popup text
     char mpdjPopupText[32] = {};
     void mpdjApply();
     void mpdjDoApply();

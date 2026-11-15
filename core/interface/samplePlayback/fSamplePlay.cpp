@@ -89,6 +89,9 @@ constexpr uint32_t PLAY_REFRESH_US = 5000;
 
 void cSamplePlayback::update()
 {
+#ifdef PLATFORM_MPC
+    mpdjSlicePoll(); // 5g-5: slice undo steps
+#endif
     refreshLiveParams();
 
     if (refreshSpectrum)
@@ -3969,6 +3972,92 @@ void cSamplePlayback::mpdjDoApply()
     ins->endPoint = (uint16_t)to; // End stays where it was (also when it had been ignored)
     mpdjFollowPoint(this, ins->slices[0]);
     mpdjSliceChanged(true);
+}
+// Undo (5g-5)
+bool cSamplePlayback::SliceState::same(const SliceState& o) const
+{
+    return program == o.program && count == o.count && selected == o.selected && playThru == o.playThru &&
+           end == o.end && memcmp(slices, o.slices, sizeof slices) == 0;
+}
+
+void cSamplePlayback::mpdjSliceTake(SliceState& s) const
+{
+    const strInstrument* ins = editorInstrument;
+    s.program = (int8_t)mtProject.values.lastUsedInstrument;
+    s.count = ins->sliceNumber;
+    s.selected = ins->selectedSlice;
+    s.playThru = ins->slicePlayThru;
+    s.end = ins->endPoint;
+    memcpy(s.slices, ins->slices, sizeof s.slices);
+}
+
+void cSamplePlayback::mpdjSlicePut(const SliceState& s)
+{
+    strInstrument* ins = editorInstrument;
+    ins->sliceNumber = s.count;
+    ins->selectedSlice = s.selected;
+    ins->slicePlayThru = s.playThru;
+    ins->endPoint = s.end;
+    memcpy(ins->slices, s.slices, sizeof s.slices);
+    mpdjPadSlice = -1;
+    mpdjShadow = s;
+    mpdjSliceChanged(true);
+}
+
+void cSamplePlayback::mpdjSlicePoll()
+{
+    if (!mpdjSliceUi())
+        return;
+    SliceState now;
+    mpdjSliceTake(now);
+    if (now.same(mpdjShadow))
+        return;
+    uint32_t ms = mtInterface.getPlatform()->getTimer()->millis();
+    if (mpdjShadow.program != now.program)
+    {
+        // another program (or the first look): start over, nothing to undo yet
+        mpdjUndoCount = mpdjRedoCount = 0;
+    }
+    else if (mpdjUndoCount == 0 || ms - mpdjLastChangeMs > 700)
+    {
+        // the start of a change: remember how it was
+        if (mpdjUndoCount == kSliceUndo)
+        {
+            memmove(&mpdjUndo[0], &mpdjUndo[1], sizeof(SliceState) * (kSliceUndo - 1));
+            mpdjUndoCount--;
+        }
+        mpdjUndo[mpdjUndoCount++] = mpdjShadow;
+        mpdjRedoCount = 0;
+    }
+    mpdjLastChangeMs = ms;
+    mpdjShadow = now;
+}
+
+const char* cSamplePlayback::mpdjSliceUndo(bool redo)
+{
+    if (!mpdjSliceUi())
+        return nullptr;
+    mpdjSlicePoll(); // a change from this very moment counts first
+    SliceState* from = redo ? mpdjRedo : mpdjUndo;
+    int& fromCount = redo ? mpdjRedoCount : mpdjUndoCount;
+    SliceState* to = redo ? mpdjUndo : mpdjRedo;
+    int& toCount = redo ? mpdjUndoCount : mpdjRedoCount;
+    if (fromCount == 0)
+        return redo ? "Nothing to redo" : "Nothing to undo";
+    SliceState cur;
+    mpdjSliceTake(cur);
+    if (toCount == kSliceUndo)
+    {
+        memmove(&to[0], &to[1], sizeof(SliceState) * (kSliceUndo - 1));
+        toCount--;
+    }
+    to[toCount++] = cur;
+    SliceState back = from[--fromCount];
+    mpdjSlicePut(back);
+    mpdjLastChangeMs = 0;
+    snprintf(mpdjPopupText, sizeof(mpdjPopupText), "%s: %d slice%s", redo ? "Redo" : "Undo", back.count,
+             back.count == 1 ? "" : "s");
+    return mpdjPopupText;
 }
 #endif
 
