@@ -5,6 +5,7 @@
 #include "mpdjSlices.h"
 #include "mpdjBatchTest.h"
 #include "mpdjFeatures.h"
+#include "Recovery.h"
 #include "audio/AudioProbe.h"
 #include "audio/MpcAudio.h"
 #include "input/LedProbe.h"
@@ -115,6 +116,7 @@ int main()
     if (int rc = slicesSelfTest(); rc >= 0)
         return rc;
 
+    Recovery::atLaunch(); // File > Restore, or the launch snapshot (2026-11-16)
     trackerInstance = Tracker::getInstance();
     platform.init();
     if (auto startDisplay = trackerInstance->getStartDisplayFunc())
@@ -147,6 +149,7 @@ int main()
     MpcAudio::stop();
     EngineHost::stop();
     platform.input.close(); // controller LEDs off
+    Recovery::atCleanExit();
     printf("Bye.\n");
     return 0;
 }
