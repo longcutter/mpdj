@@ -19,12 +19,13 @@ static cPadAssign* PA = &padAssign;
 namespace
 {
 const char* const kParamNames[cPadAssign::ParamCount] = { "Program", "Track", "Tune",  "Level",   "Mode",
-                                                          "Choke",   "Cut",   "Color", "Dynamics", "Curve" };
+                                                          "Choke",   "Cut",   "Color", "Dynamics", "Curve", "Slice" };
 const char* const kListNames[cPadAssign::ParamCount] = { "Program",        "Track", "Tune",     "Level",
                                                          "Mode",           "Choke group",
-                                                         "Cut on release", "Color", "Dynamics", "Velocity curve" };
+                                                         "Cut on release", "Color", "Dynamics", "Velocity curve",
+                                                         "Slice" };
 
-// 8 screen labels for 10 settings: they show 1-8, or 3-10 while Dynamics / Curve is selected
+// 8 screen labels for 11 settings: they show 1-8, or 4-11 while Dynamics / Curve / Slice is
 int labelBase(int param) { return param >= 8 ? cPadAssign::ParamCount - 8 : 0; }
 
 uint32_t rgb(const uint8_t* c)
@@ -140,6 +141,22 @@ void closeOpenStep()
     if (undoPos > 0)
         undoSteps[undoPos - 1].open = false;
 }
+} // namespace
+} // namespace
+
+void cPadAssign::recordStep(const strPadMap& before, const char* what)
+{
+    closeOpenStep();
+    UndoStep& u = pushStep();
+    u.before = before;
+    u.after = mtProject.pads;
+    snprintf(u.what, sizeof u.what, "%s", what);
+}
+
+namespace
+{
+namespace
+{
 
 bool samplesAfter(int slot)
 {
@@ -387,6 +404,18 @@ bool cPadAssign::applyValue(int steps)
     case ParamColor: setPadColor(selPad, padColorStep(padColor(selPad), dir, false)); break;
     case ParamDynamics: setPadDynamics(selPad, padDynamics(selPad) + 5 * steps); break;
     case ParamCurve: setPadCurveSetting(selPad, clampInt(padCurveSetting(selPad) + dir, 0, kPadCurveSettings - 1)); break;
+    case ParamSlice:
+    {
+        // Whole (-1), then the program's slices; only Slice / Beat Slice programs
+        strInstrument* in = sampleProgram(&p);
+        if (!in || (in->playMode != playModeSlice && in->playMode != playModeBeatSlice) || in->sliceNumber == 0)
+            return false;
+        int s = clampInt(padSlice(selPad) + steps, -1, in->sliceNumber - 1);
+        if (s == padSlice(selPad))
+            return false;
+        setPadSlice(selPad, s);
+        break;
+    }
     default: return false;
     }
     newFileManager.setProjectStructChanged();
@@ -741,6 +770,21 @@ void cPadAssign::fillValues()
 #endif
         snprintf(paramValues[ParamCurve], sizeof paramValues[0], "%s", padCurveName(cs));
     snprintf(labelValues[ParamCurve], sizeof labelValues[0], "%s", padCurveName(cs));
+    {
+        strInstrument* in = sampleProgram(p);
+        bool sliced = in && (in->playMode == playModeSlice || in->playMode == playModeBeatSlice) && in->sliceNumber > 0;
+        int s = padSlice(selPad);
+        if (!sliced)
+            snprintf(paramValues[ParamSlice], sizeof paramValues[0], "%s", s >= 0 ? "(not sliced)" : "-");
+        else if (s < 0)
+            snprintf(paramValues[ParamSlice], sizeof paramValues[0], "Whole");
+        else
+            snprintf(paramValues[ParamSlice], sizeof paramValues[0], "%d of %d", s + 1, in->sliceNumber);
+        if (s < 0)
+            snprintf(labelValues[ParamSlice], sizeof labelValues[0], "%s", sliced ? "Whole" : "-");
+        else
+            snprintf(labelValues[ParamSlice], sizeof labelValues[0], "%d", s + 1);
+    }
 }
 
 void cPadAssign::refresh()
@@ -764,7 +808,10 @@ void cPadAssign::refresh()
             char gs[6] = "";
             if (g)
                 snprintf(gs, sizeof gs, " G%u", g);
-            snprintf(c.marks, sizeof c.marks, "T%d%s%s", p->track + 1, gs, padCutOf(p->mode) ? " Cut" : "");
+            char ss[6] = ""; // the pad's slice (2026-11-16)
+            if (padSlice(pad) >= 0)
+                snprintf(ss, sizeof ss, " S%d", padSlice(pad) + 1);
+            snprintf(c.marks, sizeof c.marks, "T%d%s%s%s", p->track + 1, ss, gs, padCutOf(p->mode) ? " Cut" : "");
             c.color = empty ? 0 : rgb(padColorRgb(pad, p->track));
         }
         c.empty = empty;

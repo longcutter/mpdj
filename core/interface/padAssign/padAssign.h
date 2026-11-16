@@ -24,6 +24,7 @@ class cPadAssign : public ModuleBase
         ParamColor,
         ParamDynamics, // 2026-11-16: per-pad dynamics and velocity curve
         ParamCurve,
+        ParamSlice, // 2026-11-16: the slice a pad plays (slice layer to bank)
         ParamCount
     };
 
@@ -59,6 +60,8 @@ class cPadAssign : public ModuleBase
     // 5d-6: UNDO / SHIFT+UNDO on Pad Assign; return a popup message
     const char* undo();
     const char* redo();
+    // a pad-map change made elsewhere (slice layer to bank): one undo step here
+    static void recordStep(const strPadMap& before, const char* what);
 
     void refresh();
 

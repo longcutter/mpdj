@@ -891,8 +891,11 @@ void MpcInput::onButton(uint8_t note, bool down)
     {
         // COPY + BANK in the slice layer (2026-11-16): the shown 16 slices onto that bank
         // as pads with the source pad's settings; the layer ends on that bank
+        strPadMap before = mtProject.pads;
         if (const char* msg = mpdjSliceLayerToBank(padBank, note - kNoteBankA))
         {
+            if (memcmp(&before, &mtProject.pads, sizeof before) != 0)
+                cPadAssign::recordStep(before, msg); // undo on Pad Assign
             mtPopups.show(0, msg);
             endSliceLayer();
             padBank = note - kNoteBankA;
