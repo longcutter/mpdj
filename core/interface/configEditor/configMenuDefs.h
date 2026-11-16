@@ -276,6 +276,7 @@ const char* const screensaverKindTexts[] = { "Logo", "Starfield" };
 const char screensaverDesc[] = { "After a while with no control touched the screen shows a moving picture; any control brings the screen back (that first press does nothing else; pads still play)." };
 const char screensaverTimeDesc[] = { "How long without a control touched before the screensaver starts." };
 const char screensaverKindDesc[] = { "Logo: the MPDJ logo drifting, its colour cycling. Starfield: stars flying faster with the music." };
+const char visualsNowDesc[] = { "Show the screensaver's visuals now (also SHIFT+MENU), full brightness. Pads keep playing; any button, knob or touch ends them." };
 const char screensaverDimDesc[] = { "Turn the backlight down to a quarter while the screensaver runs." };
 const char* const patternViewTexts[] = { "FX", "Mic / Vol", "All six", "8 tracks" };
 const char* const eightColumnTexts[] = { "Note", "Volume", "Micromove", "FX1", "FX2" };

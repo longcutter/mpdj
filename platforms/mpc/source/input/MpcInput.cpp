@@ -139,6 +139,8 @@ constexpr uint8_t kNoteProgramEdit = 2;
 constexpr uint8_t kNoteCopy = 122;
 constexpr uint8_t kNoteMain = 52;
 constexpr uint8_t kNoteErase = 9;
+constexpr uint8_t kNoteMenu = 123;
+MpcInput* s_input = nullptr; // for Config's Show visuals now
 
 // MPC pad note (bank A layout) -> pad number 1..16 (1 = bottom left).
 int padNumber(uint8_t note)
@@ -177,6 +179,11 @@ void MpcInput::open(SwitchGroupImpl* b, SwitchGroupImpl* p, EncoderImpl* e, Disp
     encoder = e;
     disp = d;
     fb = d ? &d->output() : nullptr;
+    s_input = this;
+    mpdjShowVisualsHook = [] {
+        if (s_input)
+            s_input->showVisuals();
+    };
     trace = envFlag("MPDJ_INPUT_TRACE");
     qlinkDivider = atoi(envStr("MPDJ_QLINK_DIV", "4"));
     if (qlinkDivider < 1)
@@ -242,6 +249,7 @@ bool MpcInput::wake()
     if (!saverOn)
         return false;
     saverOn = false;
+    visualsOnDemand = false;
     if (disp)
     {
         disp->visuals().stop();
@@ -251,6 +259,20 @@ bool MpcInput::wake()
     if (trace)
         printf("input: screensaver off\n");
     return true;
+}
+
+// Visuals on demand (2026-11-16, Mike): SHIFT+MENU or Config > Display > Show
+// visuals now. The screensaver's kind at full brightness; the pads keep playing
+// under it, any button, knob or touch ends it.
+void MpcInput::showVisuals()
+{
+    if (!disp || saverOn)
+        return;
+    saverOn = true;
+    visualsOnDemand = true;
+    disp->visuals().start(mtConfig.general.screensaverKind);
+    if (trace)
+        printf("input: visuals on demand (%s)\n", Visuals::name(mtConfig.general.screensaverKind));
 }
 
 void MpcInput::pollSaver()
@@ -734,9 +756,15 @@ void MpcInput::onMidi(uint8_t status, uint8_t d1, uint8_t d2)
     bool noteOn = type == 0x90 && d2 > 0;
     bool noteOff = type == 0x80 || (type == 0x90 && d2 == 0);
 
-    // the screensaver: pads wake it and still play; anything else only wakes it
+    // the screensaver: pads wake it and still play; anything else only wakes it.
+    // Visuals on demand stay up while the pads play.
     if (ch == 9)
-        wake();
+    {
+        if (visualsOnDemand && saverOn)
+            lastInputMs = platform.getTimer()->millis();
+        else
+            wake();
+    }
     else if (ch == 0)
     {
         if (noteOff && swallowNote[d1])
@@ -912,6 +940,12 @@ void MpcInput::onButton(uint8_t note, bool down)
             buttons->release(buttonHeld[note]);
             buttonHeld[note] = -1;
         }
+        return;
+    }
+
+    if (note == kNoteMenu && mpcShift)
+    {
+        showVisuals(); // visuals on demand (2026-11-16)
         return;
     }
 
