@@ -865,6 +865,8 @@ class Sequencer
     void fillRandomVolume(int16_t fillStep, int16_t fromVal, int16_t toVal, int16_t density);
 
     bool isEuclideanStep(uint8_t offset, int16_t density);
+    // MPDJ (2026-11-16): Euclidean fill rotation, steps later (set by the Fill popup)
+    int16_t mpdjEuclidRotate = 0;
 
     bool isStepToFillNote(strPattern::strTrack::strStep* step,
                           uint8_t offset,

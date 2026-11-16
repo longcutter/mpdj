@@ -237,6 +237,8 @@ void Sequencer::fillRandomFx(int16_t fxIndex,
 bool Sequencer::isEuclideanStep(uint8_t offset, int16_t density)
 {
     int length = selection.lastStep - selection.firstStep + 1;
+    if (mpdjEuclidRotate && length > 0) // MPDJ: the hits move later by the rotation
+        offset = (uint8_t)((((int)offset - mpdjEuclidRotate) % length + length) % length);
     float euclStepSize = (float)length / density;
     float nearestStep = round(offset / euclStepSize) * euclStepSize;
     float diff = nearestStep - (float)offset;
