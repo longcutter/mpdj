@@ -890,3 +890,18 @@ void cSongPlayer::drawSelection()
         API_BLEND_FUNC(SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
     }
 }
+
+// MPDJ (touch, 2026-11-16): the pattern list on the right (210 wide, rows of 27 from y + 62)
+int cSongPlayer::mpdjRowAt(int x, int y) const
+{
+    if (list == nullptr || !(style & controlStyleShow))
+        return -1;
+    int left = posX + width - 210, top = posY + 62;
+    if (x < left || x >= posX + width || y < top)
+        return -1;
+    int row = (y - top) / 27;
+    int lines = list->length < list->linesCount ? list->length : list->linesCount;
+    if (row >= lines)
+        return -1;
+    return textListPos + row;
+}

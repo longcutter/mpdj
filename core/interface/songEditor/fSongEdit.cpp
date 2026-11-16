@@ -1787,3 +1787,23 @@ void cSongEditor::mpdjUndo()
     functUndo();
 }
 #endif
+
+// MPDJ (touch, 2026-11-16): a tap on the pattern list selects that song slot (the list
+// becomes the active place); same rules as the knobs (stopped, or edit mode)
+void cSongEditor::mpdjTapListRow(int row)
+{
+    if (isBusy || row < 0)
+        return;
+    if (selectedPlace != 1)
+    {
+        selectedPlace = 1;
+        activateLabelsBorder();
+    }
+    for (int guard = 0; guard < 64 && row != selectedSongPosition; guard++)
+    {
+        int before = selectedSongPosition;
+        changeSongPositionSelection(row - selectedSongPosition);
+        if (selectedSongPosition == before)
+            break;
+    }
+}

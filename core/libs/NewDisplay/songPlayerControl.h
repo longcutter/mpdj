@@ -95,6 +95,8 @@ class cSongPlayer : public cDisplayControl
     int16_t textFont;
     uint8_t keyboardShift = 0;
     uint16_t textListPos = 0;
+    // MPDJ (touch, 2026-11-16): the pattern-list row under (x, y), or -1
+    int mpdjRowAt(int x, int y) const;
 
   private:
     void showList();
