@@ -825,12 +825,19 @@ AUDIO_CORE_RAM void Sequencer::play_microStep(int row)
         // MPDJ (2026-11-16): per-track swing. With some tracks left straight the clock
         // stays straight and the swung tracks' second 16ths are delayed instead, by
         // (2 x swing % - 100) % of a row (the same place the clock swing puts them)
-        if (!playerRow.cancelStep && stepToSend.note >= 0 && (playerRow.actual_pos & 1) &&
-            !player.swing.isActive && mtProject.mpdjSwing > 50 && mtProject.mpdjSwing <= 75 &&
-            mtProject.mpdjSwingOff != 0 && !(mtProject.mpdjSwingOff & (1u << row)))
+        if (!playerRow.cancelStep && stepToSend.note >= 0 && !player.swing.isActive && !mpdjClockSwing() &&
+            !(mtProject.mpdjSwingOff & (1u << row)))
         {
-            int d = mpdjSwingDelay(mtProject.mpdjSwing);
-            playerRow.micromove.set(playerRow.micromove.isActive ? playerRow.micromove.offsetValue + d : d);
+            int d = mpdjGrooveDelay(playerRow.actual_pos, mtProject.mpdjSwing, mtProject.mpdjSwingGrid);
+            if (mtProject.mpdjHumanize)
+                d += utilMathRandom::random(0, mtProject.mpdjHumanize + 1); // late only
+            if (d > 0)
+                playerRow.micromove.set(playerRow.micromove.isActive ? playerRow.micromove.offsetValue + d : d);
+#ifdef PLATFORM_MPC
+            static int trace = getenv("MPDJ_GROOVE_TRACE") ? 1 : 0;
+            if (trace)
+                printf("groove: track %d row %d delay %d\n", row + 1, playerRow.actual_pos + 1, d);
+#endif
         }
 
         if (!playerRow.cancelStep)
@@ -2358,7 +2365,7 @@ AUDIO_CORE_RAM float Sequencer::getTimerPeriod_us(void)
     }
     // MPDJ: project swing when no Swing effect has taken over (the effect wins
     // until STOP, as on the Tracker); same timing: rows alternate long / short
-    else if (mtProject.mpdjSwing > 50 && mtProject.mpdjSwing <= 75 && mtProject.mpdjSwingOff == 0)
+    else if (mtProject.mpdjSwing > 50 && mtProject.mpdjSwing <= 75 && mpdjClockSwing())
     {
         // MPC percent: the first 16th of each pair lasts swing % of the pair
         // (66 ~ triplet feel); the Tracker's own Swing effect scales differently

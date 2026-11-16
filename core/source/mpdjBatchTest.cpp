@@ -87,6 +87,12 @@ void swing()
     check(Sequencer::mpdjSwingDelay(50) == 0, "50 % = no delay");
     check(Sequencer::mpdjSwingDelay(66) == 15, "66 % = 15 / 48 of a row");
     check(Sequencer::mpdjSwingDelay(75) == 24, "75 % = half a row");
+    check(Sequencer::mpdjGrooveDelay(1, 66, 0) == 15 && Sequencer::mpdjGrooveDelay(2, 66, 0) == 0,
+          "16ths: odd rows only");
+    check(Sequencer::mpdjGrooveDelay(2, 75, 1) == 48 && Sequencer::mpdjGrooveDelay(1, 75, 1) == 0 &&
+            Sequencer::mpdjGrooveDelay(6, 75, 1) == 48,
+          "8ths: the second 8th of each beat");
+    check(Sequencer::mpdjGrooveDelay(1, 50, 0) == 0, "50 % = straight");
 }
 
 void capture()
