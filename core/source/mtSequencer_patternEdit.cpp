@@ -1978,6 +1978,11 @@ void Sequencer::makeFxValLabelWithAlgin(char* ptr,
                 uint8_t m = 1 + idx % fx.CHANCE_CYCLE_STEPS;
                 snprintf(ptr, len, "S%u%u", n, m);
             }
+            else if (valueFromFx >= fx.CHANCE_FIRST && valueFromFx <= fx.CHANCE_NOT_FILL)
+            {
+                static const char* const kNames[4] = { "1ST", "!1S", "FIL", "!FL" }; // MPDJ
+                strncpy(ptr, kNames[valueFromFx - fx.CHANCE_FIRST], len);
+            }
             break;
         }
         case fx.FX_TYPE_MIDI_CHORD: strncpy(ptr, chordDefName[valAfterCorrection], len); break;

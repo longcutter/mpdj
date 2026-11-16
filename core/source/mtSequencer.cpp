@@ -2279,6 +2279,15 @@ AUDIO_CORE_RAM bool Sequencer::evaluateChanceFx(uint8_t row, uint8_t value)
         playerRow.lastCondFired = fired;
         return fired;
     }
+    else if (value >= fx.CHANCE_FIRST && value <= fx.CHANCE_NOT_FILL)
+    {
+        bool fired = value == fx.CHANCE_FIRST      ? playerRow.passCount == 0
+                     : value == fx.CHANCE_NOT_FIRST ? playerRow.passCount != 0
+                     : value == fx.CHANCE_FILL      ? mpdjFill
+                                                    : !mpdjFill;
+        playerRow.lastCondFired = fired;
+        return fired;
+    }
 
     return true;
 }
