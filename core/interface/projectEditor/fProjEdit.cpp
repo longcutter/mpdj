@@ -1025,7 +1025,6 @@ static void functKeyboardAutoName()
 // MPDJ Kits (Mike 2026-11-16): Save Kit writes one bank's 16 program slots (the bank
 // last played from the pad map; screen button 3 steps through A-D) as /Kits/<name>
 static uint8_t s_kitBank = 0;
-static bool s_kitReplaceAsked = false;
 static char s_kitBankText[2][16];
 
 static void showKitBank()
@@ -1040,9 +1039,29 @@ static void showKitBank()
 
 static void functSaveKitBank()
 {
+    char suggested[16];
+    snprintf(suggested, sizeof suggested, "Kit %c", 'A' + s_kitBank);
     s_kitBank = (s_kitBank + 1) % 4;
-    s_kitReplaceAsked = false;
+    if (strcmp(PE->keyboardManager.getName(), suggested) == 0) // still the suggestion: follow the bank
+    {
+        snprintf(suggested, sizeof suggested, "Kit %c", 'A' + s_kitBank);
+        PE->keyboardManager.fillName(suggested);
+        PE->keyboardManager.activateKeyboard(31);
+    }
     showKitBank();
+}
+
+static void functSaveKitResume();
+
+static void functSaveKitOverwrite()
+{
+    static char msg[80];
+    PE->ip->unblockAllInputs();
+    mpdjKits::saveBank(s_kitBank, PE->keyboardManager.getName(), msg, sizeof msg);
+    mtPopups.hideInfoPopup();
+    PE->showDefaultScreen();
+    PE->setDefaultScreenFunct();
+    mtPopups.show(0, msg);
 }
 
 static void functSaveKitCancel()
@@ -1057,10 +1076,15 @@ static void functSaveKitConfirm()
     const char* name = PE->keyboardManager.getName();
     if (!name || !*name)
         return;
-    if (mpdjKits::exists(name) && !s_kitReplaceAsked)
+    if (mpdjKits::exists(name))
     {
-        s_kitReplaceAsked = true;
-        mtPopups.show(0, "That kit exists:", "Save again to replace it");
+        // stays up until Cancel (back to the name) or Overwrite (Mike 2026-11-16)
+        PE->ip->blockAllInputsExceptScreenButtons();
+        PE->ip->clearButtonsRange(interfaceButton0, interfaceButton7);
+        PE->ip->setButtonObj(interfaceButton6, buttonPress, functSaveKitResume);
+        PE->ip->setButtonObj(interfaceButton7, buttonPress, functSaveKitOverwrite);
+        PE->keyboardManager.deactivateKeyboard();
+        PE->showOverwriteWindow();
         return;
     }
     static char msg[80];
@@ -1069,10 +1093,8 @@ static void functSaveKitConfirm()
     mtPopups.show(0, msg);
 }
 
-static void functSaveKit()
+static void functSaveKitButtons()
 {
-    s_kitBank = (uint8_t)mpdjKits::lastPlayedBank();
-    s_kitReplaceAsked = false;
     PE->ip->clearButtonsRange(interfaceButton0, interfaceButton7);
     PE->ip->setButtonObj(interfaceButton0, buttonPress, functKeyboardConfirmKey);
     PE->ip->setButtonObj(interfaceButton1, buttonPress, functKeyboardAutoName);
@@ -1080,6 +1102,23 @@ static void functSaveKit()
     PE->ip->setButtonObj(interfaceButton6, buttonPress, functSaveKitCancel);
     PE->ip->setButtonObj(interfaceButton7, buttonPress, functSaveKitConfirm);
     PE->ip->setButtonObj(interfaceButtonInsert, buttonPress, functKeyboardConfirmKey);
+}
+
+// the overwrite window's Cancel: back to the keyboard with the name as it was
+static void functSaveKitResume()
+{
+    PE->ip->unblockAllInputs();
+    mtPopups.hideInfoPopup();
+    functSaveKitButtons();
+    PE->keyboardManager.activateKeyboard(31);
+    PE->showKeyboard("Save Kit");
+    showKitBank();
+}
+
+static void functSaveKit()
+{
+    s_kitBank = (uint8_t)mpdjKits::lastPlayedBank();
+    functSaveKitButtons();
     static char name[16];
     snprintf(name, sizeof name, "Kit %c", 'A' + s_kitBank);
     PE->keyboardManager.fillName(name);
