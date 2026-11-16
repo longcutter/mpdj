@@ -2575,6 +2575,29 @@ bool MpcInput::tapListRow(float x, float y)
         return l ? l->mpdjRowAt((int)x, (int)y) : -1;
     };
     int r;
+    // a program list popup (the step popup's program list, SHIFT held on program screens)
+    enumStepPopups sp = mtPopups.getStepPopupState();
+    if (sp == stepPopupInstr || sp == stepPopupOnlyMidiInstr || sp == stepPopupOnlySynthAndMidiInstr)
+    {
+        if ((r = rowIn(mtPopups.mpdjStepPopupList())) >= 0)
+        {
+            mtPopups.setStepPopupValue(r);
+            if (trace)
+                printf("input: program list row %d\n", r);
+        }
+        return true; // taps elsewhere do nothing while it's up
+    }
+    cPatternEditor& pe = patternEditor;
+    if (mtInterface.isPatternScreenActive() && pe.fillState)
+    {
+        const hControl lists[6] = { pe.param3PopupListControl, -1, pe.param2PopupListControl,
+                                    pe.param1PopupListControl, pe.intstrumentsFromPopupListControl,
+                                    pe.intstrumentsToPopupListControl };
+        for (uint8_t place = 0; place < 6; place++)
+            if (lists[place] >= 0 && (r = rowIn(lists[place])) >= 0)
+                return pe.mpdjTapFillList(place, r), true;
+        return false;
+    }
     if (mtInterface.isSampleLoaderScreenActive())
     {
         if ((r = rowIn(sampleImporter.explorerListControl)) >= 0)

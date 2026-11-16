@@ -5396,3 +5396,39 @@ void cPatternEditor::mpdjSetView(uint8_t view)
     showActualParamOnBar();
 }
 #endif
+
+// MPDJ (touch, 2026-11-16): Fill popup lists: Where? (place 0), the scale / effect
+// (2), Fill type (3), program from / to (4 / 5). The tap selects that place and walks
+// its value to the row with the screen's own steps (some clamp to +-5 a call)
+void cPatternEditor::mpdjTapFillList(uint8_t place, int row)
+{
+    if (!fillState || row < 0)
+        return;
+    setFillPlace(place);
+    if (fillPlace != place)
+        return;
+    mpdjRotEdit = false;
+    uint8_t idx = getFillDataIdx();
+    auto current = [&]() -> int {
+        switch (place)
+        {
+            case 0: return fillData[idx].fillStep;
+            case 2: return fillData[idx].param + (editParam == EditNote ? 0 : 1);
+            case 3: return fillData[idx].type;
+            case 4: return fillData[idx].from;
+            case 5: return fillData[idx].to;
+            default: return row;
+        }
+    };
+    for (int guard = 0; guard < 64; guard++)
+    {
+        int d = row - current();
+        if (!d)
+            break;
+        int before = current();
+        changeFillData(d > 5 ? 5 : (d < -5 ? -5 : d));
+        if (current() == before)
+            break;
+    }
+    activateFillPopupBorder();
+}
