@@ -165,7 +165,21 @@ class cSamplePlayback : public ModuleBase
     // fSamplePlay.cpp). One page of labels: Slice, Start, End, Method, Amount, Apply,
     // Play Thru, Play Mode; selectedPlace 0-5 = labels 1-6, 6 = the play mode list,
     // 7 = Play Thru. Slices are linked (mpdjSlices.h)
-    enum SliceMethod : uint8_t { kSliceManual, kSliceAuto, kSliceEvenly, kSliceBeats, kSliceMethods };
+    enum SliceMethod : uint8_t { kSliceManual, kSliceAuto, kSliceEvenly, kSliceBeats, kSliceChop, kSliceMethods };
+    // Chop (2026-11-16): each slice written out as its own WAV (Samples/Chops/<name>/) and
+    // loaded into the next empty program slot, one after another (mpdjChopPoll)
+    struct ChopRun
+    {
+        bool active = false;
+        int8_t source = -1;
+        uint8_t count = 0, done = 0;
+        uint8_t slots[MAX_SLICE_NUMBER] = {};
+        char dir[96] = {}, base[28] = {};
+    } mpdjChop;
+    int mpdjChopSlots(uint8_t* out, int want) const; // the empty slots the chops would fill
+    void mpdjChopStart();
+    bool mpdjChopNext();
+    void mpdjChopPoll();
     uint8_t mpdjSliceMethod = kSliceManual; // screen state, not saved
     uint8_t mpdjAutoSens = 1;               // Auto: 0 Low, 1 Mid (the Tracker's), 2 High
     uint8_t mpdjBeatDiv = 2;                // Beats: index into 1 bar, 1/2, 1/4, 1/8, 1/16

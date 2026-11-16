@@ -94,6 +94,7 @@ void cSamplePlayback::update()
 {
 #ifdef PLATFORM_MPC
     mpdjSlicePoll(); // 5g-5: slice undo steps
+    mpdjChopPoll();  // Chop: the next slice once the last one is saved
     if (mpdjLoopUi() && loopSyncApply(mtProject.values.lastUsedInstrument))
     {
         refreshPoints = 1; // 5g-6: Loop Start moved, or the tempo / Tune changed
@@ -3533,7 +3534,8 @@ static void functMenu(uint8_t state)
 // slices (bank A pad 1 = slice 1), a touch on the waveform selects the slice there.
 // One page of labels: Slice, Start, End, Method, Amount, Apply, Play Thru, Play Mode.
 #ifdef PLATFORM_MPC
-static const char* const kSliceMethodNames[cSamplePlayback::kSliceMethods] = { "Manual", "Auto", "Evenly", "Beats" };
+static const char* const kSliceMethodNames[cSamplePlayback::kSliceMethods] = { "Manual", "Auto", "Evenly", "Beats",
+                                                                                "Chop" };
 static const char* const kAutoSensNames[3] = { "Low", "Mid", "High" };
 static const float kAutoSensScale[3] = { 1.3f, 1.0f, 0.82f }; // times the detector's threshold
 static const char* const kBeatDivNames[5] = { "1 bar", "1/2", "1/4", "1/8", "1/16" };
@@ -3612,13 +3614,28 @@ void cSamplePlayback::mpdjSliceValues()
             display.setControlText(label[4], "Every");
             snprintf(mpdjSliceText[4], sizeof(mpdjSliceText[4]), "%s", kBeatDivNames[mpdjBeatDiv]);
             break;
+        case kSliceChop:
+        {
+            display.setControlText(label[4], "To slots");
+            uint8_t slots[MAX_SLICE_NUMBER];
+            int want = ins->sliceNumber, got = mpdjChopSlots(slots, want);
+            if (want <= 0)
+                strcpy(mpdjSliceText[4], "no slices");
+            else if (got < want)
+                snprintf(mpdjSliceText[4], sizeof(mpdjSliceText[4]), "%d free", got);
+            else
+                snprintf(mpdjSliceText[4], sizeof(mpdjSliceText[4]), "%d-%d", slots[0] + 1, slots[got - 1] + 1);
+            break;
+        }
         default:
             display.setControlText(label[4], "Amount");
             strcpy(mpdjSliceText[4], "-");
             break;
     }
     strcpy(mpdjSliceText[5], "");
-    display.setControlText(label[5], mpdjSliceMethod == kSliceManual ? "Clear" : "Apply");
+    display.setControlText(label[5], mpdjSliceMethod == kSliceManual ? "Clear"
+                                     : mpdjSliceMethod == kSliceChop ? "Chop"
+                                                                     : "Apply");
     strcpy(mpdjSliceText[7], ins->slicePlayThru ? "On" : "Off");
 
     for (int i = 0; i < 8; i++)
@@ -3935,6 +3952,11 @@ void cSamplePlayback::mpdjApply()
         mpdjAskClear();
         return;
     }
+    if (mpdjSliceMethod == kSliceChop)
+    {
+        mpdjChopStart();
+        return;
+    }
     if (mpdjSliceMethod != kSliceEvenly && mpdjSliceMethod != kSliceBeats)
         return;
     if (editorInstrument->sliceNumber > 0)
@@ -4122,3 +4144,142 @@ void cSamplePlayback::mpdjLoopSyncTurn(int16_t value)
 }
 #endif
 
+
+#ifdef PLATFORM_MPC
+//==============================================================================================
+// Chop (2026-11-16; "Chop to programs" from the 5g plan): the destructive cut. Each slice
+// of the program is written out as its own WAV in Samples/Chops/<program name>/ and
+// loaded into the next empty program slot (the Sample Recorder's save + load path,
+// one slice after another). The source program and its slices stay as they are;
+// slots that hold something are never touched, so there is nothing to confirm.
+
+int cSamplePlayback::mpdjChopSlots(uint8_t* out, int want) const
+{
+    int n = 0;
+    for (int i = 0; i < kSampleInstrumentsCount && n < want; i++)
+        if (!mtProject.instrument[i].isActive && programType(i) == kProgramEmpty)
+            out[n++] = (uint8_t)i;
+    return n;
+}
+
+void cSamplePlayback::mpdjChopStart()
+{
+    int src = mtProject.values.lastUsedInstrument;
+    strInstrument* ins = editorInstrument;
+    if (mpdjChop.active || src < 0 || src >= kSampleInstrumentsCount || !ins)
+        return;
+    if (ins->sliceNumber == 0)
+    {
+        mtPopups.show(0, "Slice first, then Chop");
+        return;
+    }
+    const strSampleMemory& mem = mtProject.sampleMemory[src];
+    if (mem.isStreamed || !mem.address[strSampleMemory::kLeft])
+    {
+        mtPopups.show(0, "Chop needs the sample in memory", "(this one streams)");
+        return;
+    }
+    int got = mpdjChopSlots(mpdjChop.slots, ins->sliceNumber);
+    if (got < ins->sliceNumber)
+    {
+        snprintf(mpdjPopupText, sizeof mpdjPopupText, "%d slices, %d empty slots", ins->sliceNumber, got);
+        mtPopups.show(0, mpdjPopupText);
+        return;
+    }
+    // memory: the slices together are at most the whole sample once more
+    uint32_t bytes = ins->sample.length * 2u * (mem.isStereo ? 2u : 1u);
+    if (mtProject.used_memory + bytes > mtProject.max_memory)
+    {
+        mtPopups.show(0, "Not enough sample memory");
+        return;
+    }
+    // names: the sample's file name without its extension
+    snprintf(mpdjChop.base, sizeof mpdjChop.base, "%s", ins->sample.file_name);
+    if (char* dot = strrchr(mpdjChop.base, '.'))
+        if (dot != mpdjChop.base)
+            *dot = 0;
+    for (char* c = mpdjChop.base; *c; c++)
+        if (*c == '/' || *c == '\\' || *c == ':')
+            *c = '_';
+    if (!*mpdjChop.base)
+        snprintf(mpdjChop.base, sizeof mpdjChop.base, "Program %d", src + 1);
+    snprintf(mpdjChop.dir, sizeof mpdjChop.dir, "/Samples/Chops/%s", mpdjChop.base);
+    mpdjChop.source = (int8_t)src;
+    mpdjChop.count = ins->sliceNumber;
+    mpdjChop.done = 0;
+    mpdjChop.active = true;
+    ip->blockAllInputs();
+    if (!mpdjChopNext())
+    {
+        mpdjChop.active = false;
+        ip->unblockAllInputs();
+        mtPopups.show(0, "Chop: couldn't write the file");
+    }
+}
+
+// starts saving slice mpdjChop.done; false if the file manager refused
+bool cSamplePlayback::mpdjChopNext()
+{
+    const strInstrument& ins = mtProject.instrument[mpdjChop.source];
+    const strSampleMemory& mem = mtProject.sampleMemory[mpdjChop.source];
+    int i = mpdjChop.done;
+    uint32_t len = ins.sample.length;
+    uint32_t from = (uint32_t)((uint64_t)ins.slices[i] * len / MAX_16BIT);
+    uint32_t to = (uint32_t)((uint64_t)mpdjSliceEnd(&ins, i) * len / MAX_16BIT);
+    if (to > len)
+        to = len;
+    if (to <= from)
+        to = from + 1 <= len ? from + 1 : len;
+    int16_t* l = mem.address[strSampleMemory::kLeft] + from;
+    int16_t* r = (mem.isStereo && mem.address[strSampleMemory::kRight]) ? mem.address[strSampleMemory::kRight] + from : l;
+    char name[40];
+    snprintf(name, sizeof name, "%s %02d", mpdjChop.base, i + 1);
+    snprintf(mpdjPopupText, sizeof mpdjPopupText, "Chop %d / %d", i + 1, mpdjChop.count);
+    mtPopups.show(0, mpdjPopupText);
+    return newFileManager.saveRecordedSound(mpdjChop.dir, name, std::make_optional((int8_t)mpdjChop.slots[i]), l, r,
+                                            to - from);
+}
+
+void cSamplePlayback::mpdjChopPoll()
+{
+    if (!mpdjChop.active)
+        return;
+    uint8_t status = newFileManager.getStatus();
+    if (status == fmSaveRecordedSoundEnd)
+    {
+        newFileManager.clearStatus();
+        mpdjChop.done++;
+        if (mpdjChop.done < mpdjChop.count && mpdjChopNext())
+            return;
+        bool all = mpdjChop.done >= mpdjChop.count;
+        mpdjChop.active = false;
+        ip->unblockAllInputs();
+        if (all)
+            snprintf(mpdjPopupText, sizeof mpdjPopupText, "Chopped %d: slots %d-%d", mpdjChop.count,
+                     mpdjChop.slots[0] + 1, mpdjChop.slots[mpdjChop.count - 1] + 1);
+        else
+            snprintf(mpdjPopupText, sizeof mpdjPopupText, "Chop stopped after %d", mpdjChop.done);
+        mtPopups.show(0, mpdjPopupText);
+        printf("chop: %s -> %d of %d slices, %s (source program %d keeps %d slices; editor on %d, last used %d)\n",
+               mpdjChop.base, mpdjChop.done, mpdjChop.count, mpdjChop.dir, mpdjChop.source + 1,
+               mtProject.instrument[mpdjChop.source].sliceNumber,
+               editorInstrument ? (int)(editorInstrument - mtProject.instrument) + 1 : 0,
+               mtProject.values.lastUsedInstrument + 1);
+        newFileManager.setProjectStructChanged();
+        // the file manager's progress popup redrew the screen in between: the slice page again
+        mpdjSliceMethod = kSliceChop;
+        showDefaultScreen();
+        setDefaultScreenFunct();
+        refreshSlicePoints = 1;
+        mpdjSliceValues();
+    }
+    else if (status >= fmError)
+    {
+        newFileManager.clearStatus();
+        mpdjChop.active = false;
+        ip->unblockAllInputs();
+        snprintf(mpdjPopupText, sizeof mpdjPopupText, "Chop failed at %d", mpdjChop.done + 1);
+        mtPopups.show(0, mpdjPopupText);
+    }
+}
+#endif
