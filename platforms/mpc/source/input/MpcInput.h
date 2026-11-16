@@ -72,6 +72,8 @@ class MpcInput
     uint32_t tapHoldMs = 0; // TAP TEMPO press time while it may become a hold
     void pollTapHold();
     int divideQLink(int knob, int steps, int divIdx = -1);
+    bool quickControlsHere();
+    void quickControlTurn(int knob, int steps);
     void songJumpArea(int steps);
     void stepEditParam(int steps);
     void setEditColumn(int param, bool micVol);

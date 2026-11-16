@@ -270,6 +270,7 @@ const char* const tcDefaultTexts[2] = { "Off", "On" };
 const char* const fullLevelTexts[2] = { "Off", "On" };
 const char* const popupTimeTexts[7] = { "0.5 s", "1 s", "1.5 s", "2 s", "3 s", "4 s", "5 s" };
 const char popupTimeDesc[] = { "How long popup messages stay on screen (Full Level on, Notes: Minor, View: ...). Longer notices that need reading keep their own time." };
+const char quickControlDesc[] = { "Q-Link mode 4 (press Q-LINK until the 4th light): the effect this knob writes into the step under the Pattern cursor, or into every marked step that already has it." };
 const char fullLevelDesc[] = { "FULL LEVEL in new projects. On: pads play and record at the Pad full hit level, however hard they are hit (16 Levels keeps its levels). Each project keeps its own FULL LEVEL setting." };
 const char* const padLightsTexts[3] = { "Off", "Dim", "Bright" };
 const char padLightsDesc[] = { "Pad lights on the Pattern screen: dark when a pad's program slot is empty, a dim color when it holds a program, brighter (by velocity) when it plays, from the pad or the pattern." };

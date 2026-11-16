@@ -14,6 +14,7 @@
 #include "core/interface.h"
 #include "core/interfaceMenuPopup.h"
 #endif
+#include "mpdjQuick.h"
 
 // clang-format off
 
@@ -22,7 +23,7 @@ constexpr uint8_t baseMenuGroupCount = 8;
 constexpr uint8_t projectMenuGroupCount = 10;
 constexpr uint8_t generalMenuGroupCount = 9;
 #elif defined(PLATFORM_MPC) // no USB group (USB storage / USB audio are Tracker+ hardware)
-constexpr uint8_t baseMenuGroupCount = 6;
+constexpr uint8_t baseMenuGroupCount = 7; // + Q-Links (2026-11-15)
 constexpr uint8_t projectMenuGroupCount = 10;
 constexpr uint8_t generalMenuGroupCount = 20; // MPC list: 20 items (no Radio region / Pads brightness since the Config clean-up); must equal the items below, extra items are silently dropped
 #elif defined(PLATFORM_IMX)
@@ -47,6 +48,9 @@ cMenuGroup menuBase(menuBase, 0, baseMenuGroupCount);
 
 cMenuGroup menuProject(menuBase, "Project Settings", projectMenuGroupCount);
 cMenuGroup menuGeneral(menuBase, "General", generalMenuGroupCount);
+#ifdef PLATFORM_MPC
+cMenuGroup menuQLinks(menuBase, "Q-Links", mpdjQuick::kKnobs);
+#endif
 cMenuGroup menuMidi(menuBase, "MIDI", 11);
 
 #if defined(PLATFORM_IMX) && !defined(PLATFORM_MPC)
@@ -185,6 +189,17 @@ const strItemTypeListText setupFullLevel{ &mtConfig.general.fullLevelDefault, 2,
 cMenuItem melFullLevel(menuGeneral, "Full level default", fullLevelDesc, menuTypeItemListText, &setupFullLevel);
 const strItemTypeListText setupPopupTime{ &mtConfig.general.popupTime, 7, popupTimeTexts };
 cMenuItem melPopupTime(menuGeneral, "Popup time", popupTimeDesc, menuTypeItemListText, &setupPopupTime);
+#endif
+#ifdef PLATFORM_MPC
+// MPDJ (Q-Link mode 4): the effect on each Q-Link
+const strItemTypeListText setupQuick1{ &mtConfig.general.quickControl[0], mpdjQuick::kCount, mpdjQuick::kName };
+const strItemTypeListText setupQuick2{ &mtConfig.general.quickControl[1], mpdjQuick::kCount, mpdjQuick::kName };
+const strItemTypeListText setupQuick3{ &mtConfig.general.quickControl[2], mpdjQuick::kCount, mpdjQuick::kName };
+const strItemTypeListText setupQuick4{ &mtConfig.general.quickControl[3], mpdjQuick::kCount, mpdjQuick::kName };
+cMenuItem melQuick1(menuQLinks, "Mode 4: Q-Link 1", quickControlDesc, menuTypeItemListText, &setupQuick1);
+cMenuItem melQuick2(menuQLinks, "Mode 4: Q-Link 2", quickControlDesc, menuTypeItemListText, &setupQuick2);
+cMenuItem melQuick3(menuQLinks, "Mode 4: Q-Link 3", quickControlDesc, menuTypeItemListText, &setupQuick3);
+cMenuItem melQuick4(menuQLinks, "Mode 4: Q-Link 4", quickControlDesc, menuTypeItemListText, &setupQuick4);
 #endif
 cMenuItem melHexMode(menuGeneral,
                      "Numbering mode",

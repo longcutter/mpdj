@@ -1,3 +1,4 @@
+#include "mpdjQuick.h"
 #include "mtStructs.h"
 #include "mpdjTracks.h"
 #include "patternEditor/patternEditor.h"
@@ -5247,3 +5248,45 @@ static void functMenu(uint8_t state)
         mtMenuPopup.hideModulePopup(PTE);
     }
 }
+
+#ifdef PLATFORM_MPC
+// MPDJ: Q-Link mode 4, quick controls (mpdjQuick.h). Writes the knob's effect into
+// the cursor step or the marked steps (edit mode only, like every Tracker edit)
+void cPatternEditor::mpdjQuickControl(uint8_t knob, int steps, const char** line1, const char** line2)
+{
+    static char l1[48], l2[24];
+    *line1 = l1;
+    *line2 = l2;
+    uint8_t idx = mtConfig.general.quickControl[knob & 3];
+    if (idx >= mpdjQuick::kCount)
+        idx = mpdjQuick::kDefault[knob & 3];
+    uint8_t type = mpdjQuick::kFxType[idx];
+    const char* name = mpdjQuick::kName[idx];
+    bool multi = isMultiSelection();
+    if (multi)
+        snprintf(l1, sizeof l1, "Q-Link %d  %s  marked steps", knob + 1, name);
+    else
+        snprintf(l1, sizeof l1, "Q-Link %d  %s  step %d", knob + 1, name, trackerPattern.actualStep + 1);
+    if (!editMode)
+    {
+        snprintf(l2, sizeof l2, "Press REC to edit");
+        return;
+    }
+    sendSelection();
+    int16_t value;
+    if (!sequencer.mpdjQuickChange(type, steps, &value))
+        snprintf(l2, sizeof l2, "FX columns full");
+    else if (value < 0)
+        snprintf(l2, sizeof l2, multi ? "None to change" : "---");
+    else
+    {
+        char v[8] = { 0 };
+        sequencer.makeFxValLabelWithAlgin(v, 4, type, (uint8_t)value, Sequencer::fxValLabelAlign_right);
+        const char* p = v;
+        while (*p == ' ')
+            p++;
+        snprintf(l2, sizeof l2, "%s", p);
+    }
+    refreshPattern();
+}
+#endif

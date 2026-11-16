@@ -1765,7 +1765,7 @@ void MpcInput::onRelative(uint8_t cc, uint8_t value)
     if (cc < kCcQLink1 || cc >= kCcQLink1 + 4)
         return;
     int knob = cc - kCcQLink1;
-    if (cPatternEditor::keyboardManager.getState() && knob <= 1 && qlinkMode == 1)
+    if (cPatternEditor::keyboardManager.getState() && knob <= 1 && (qlinkMode == 1 || qlinkMode == 4))
     {
         // the on-screen keyboard (naming): QL1 = left / right, QL2 = up / down, one
         // key per step on every screen (Mike 2026-11-15); up from the top row goes
@@ -1786,8 +1786,13 @@ void MpcInput::onRelative(uint8_t cc, uint8_t value)
         }
         return;
     }
-    if (qlinkMode == 1 && pointScreenTurn(knob, steps))
+    if (qlinkMode == 4 && quickControlsHere())
+    {
+        quickControlTurn(knob, steps);
         return;
+    }
+    if ((qlinkMode == 1 || qlinkMode == 4) && pointScreenTurn(knob, steps))
+        return; // mode 4 away from the Pattern grid navigates as mode 1
     if (qlinkScreenMode())
     {
         qlinkScreenTurn(knob, steps);
@@ -1834,8 +1839,7 @@ void MpcInput::onRelative(uint8_t cc, uint8_t value)
 }
 
 // ---------------------------------------------------------------- Q-Link modes
-// Q-LINK cycles 1 > 2 > 3 (mode 4, program quick controls, is still to be
-// decided). In modes 2 and 3 the four knobs stand for the screen buttons
+// Q-LINK cycles 1 > 2 > 3 > 4; mode 4 = quick controls (see quickControlTurn). In modes 2 and 3 the four knobs stand for the screen buttons
 // under the red box (1-4 or 5-8): touching a knob holds that screen button,
 // turning it holds the button and turns the jog, which is how the Tracker+
 // changes the parameter above a button. When a finger on the label holds the
@@ -1845,7 +1849,7 @@ namespace
 {
 constexpr uint32_t kQLinkReleaseMs = 600; // untouched knob: let go of its button after this
 constexpr uint32_t kValuePopupMs = 1500;
-constexpr int kQLinkModes = 3;
+constexpr int kQLinkModes = 4;
 } // namespace
 
 void MpcInput::cycleQLinkMode()
@@ -1859,7 +1863,7 @@ void MpcInput::cycleQLinkMode()
 // second page, Render / Invert / Duplicate / Expand / Shrink / Copy / Paste).
 bool MpcInput::qlinkScreenMode()
 {
-    if (qlinkMode == 1)
+    if (qlinkMode == 1 || qlinkMode == 4)
         return false;
     if (mtInterface.isPatternScreenActive() && patternEditor.actualActionButtonsPage != 0)
         return false;
@@ -1887,7 +1891,7 @@ void MpcInput::setQLinkMode(int mode, bool announce)
     if (announce)
     {
         static const char* const kNames[] = { "", "Q-Links: navigate", "Q-Links: buttons 1-4",
-                                              "Q-Links: buttons 5-8" };
+                                              "Q-Links: buttons 5-8", "Q-Links: quick controls" };
         mtPopups.show(0, kNames[mode]);
     }
     if (trace)
@@ -1921,7 +1925,7 @@ void MpcInput::qlinkTouch(int knob, bool down)
         qlinkTouched[knob] = false;
         return;
     }
-    if (qlinkMode == 1 && pointScreenTouch(knob, down))
+    if ((qlinkMode == 1 || qlinkMode == 4) && pointScreenTouch(knob, down))
         return;
     if (!qlinkScreenMode())
     {
@@ -1944,6 +1948,30 @@ void MpcInput::qlinkScreenTurn(int knob, int steps)
     holdScreenButton(interfaceButton0 + (qlinkMode - 2) * 4 + knob);
     qlinkTurnMs = platform.getTimer()->millis();
     turnValue(steps);
+}
+
+// Q-Link mode 4, quick controls (Mike 2026-11-15; mpdjQuick.h): on the Pattern
+// grid each knob writes its effect (Config > Q-Links) into the step under the
+// cursor, or into the marked steps; a popup shows the effect and the value (for
+// Config's Popup time). Elsewhere (other screens, Fill, a selected label,
+// popups) mode 4 navigates as mode 1.
+bool MpcInput::quickControlsHere()
+{
+    return mtInterface.isPatternScreenActive() && patternEditor.fillState == 0 &&
+           patternEditor.selectedPlace < 0 && !mtPopups.isNoteKeyboardPopupActive() &&
+           mtPopups.getStepPopupState() == stepPopupNone && !cPatternEditor::keyboardManager.getState();
+}
+
+void MpcInput::quickControlTurn(int knob, int steps)
+{
+    steps = divideQLink(knob, steps, 3); // the value speed of modes 2-3
+    if (!steps)
+        return;
+    const char *line1, *line2;
+    patternEditor.mpdjQuickControl((uint8_t)knob, steps, &line1, &line2);
+    mtPopups.show(0, line1, line2);
+    if (trace)
+        printf("input: quick control %d %+d: %s / %s\n", knob + 1, steps, line1, line2);
 }
 
 // Turn the jog; when a finger on a label holds its screen button, show that
@@ -2253,7 +2281,7 @@ bool MpcInput::pointScreenTouch(int knob, bool down)
 
 bool MpcInput::pointScreenZoom(int steps)
 {
-    if (qlinkMode != 1 || touchedButton >= 0)
+    if ((qlinkMode != 1 && qlinkMode != 4) || touchedButton >= 0)
         return false; // a finger on a label: the encoder turns that label's value
     PointMap m;
     if (!pointMap(m) || m.listSelected || (m.zoomButton < 0 && !m.slices))
@@ -2454,8 +2482,8 @@ void MpcInput::tapPatternCell(float x, float y)
     for (int dr = row - 7; dr; dr += dr > 0 ? -1 : 1)
         dr > 0 ? pe.nextStep() : pe.previousStep(); // does nothing while playing outside edit mode
     setEditParam(param);
-    if (qlinkMode != 1)
-        setQLinkMode(1, true);
+    if (qlinkMode == 2 || qlinkMode == 3)
+        setQLinkMode(1, true); // mode 4 stays: tap a cell, then turn a quick control
     if (trace)
         printf("input: tap (%.0f, %.0f) -> track %d row %+d param %d\n", x, y, track + 1, row - 7, param);
 

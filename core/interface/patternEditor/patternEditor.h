@@ -59,6 +59,10 @@ class cPatternEditor : public ModuleBase
 
     void refreshPatternFromOutsideModule();
     void refreshPattern();
+#ifdef PLATFORM_MPC
+    // MPDJ Q-Link mode 4 (mpdjQuick.h): knob 0-3 turned; popup lines out
+    void mpdjQuickControl(uint8_t knob, int steps, const char** line1, const char** line2);
+#endif
     void readPatternState();
     void setPlayheadRangeFromSelection();
 

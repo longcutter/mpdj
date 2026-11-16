@@ -12,6 +12,7 @@
 
 #include "convertOldFileVersionVolume.h"
 #include "mtConfig.h"
+#include "mpdjQuick.h"
 
 void firmwareVersionChangeMini();
 void firmwareVersionChange();
@@ -425,6 +426,9 @@ void checkConfig()
         mtConfig.general.fullLevelDefault = 0;
     if (mtConfig.general.popupTime > 6)
         mtConfig.general.popupTime = 0;
+    for (int i = 0; i < mpdjQuick::kKnobs; i++)
+        if (mtConfig.general.quickControl[i] >= mpdjQuick::kCount)
+            mtConfig.general.quickControl[i] = mpdjQuick::kDefault[i];
 #endif
     if (mtConfig.general.performanceSource > 1)
         mtConfig.general.performanceSource = 0;
@@ -597,6 +601,8 @@ void resetConfig()
     mtConfig.general.trackMuteTiming = 0; // Now
     mtConfig.general.fullLevelDefault = 0; // Off
     mtConfig.general.popupTime = 0;        // 0.5 s (Mike 2026-11-14)
+    for (int i = 0; i < mpdjQuick::kKnobs; i++)
+        mtConfig.general.quickControl[i] = mpdjQuick::kDefault[i];
 #endif
 
     // interface ----------------------------------------

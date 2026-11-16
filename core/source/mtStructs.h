@@ -1201,6 +1201,9 @@ struct strMtConfig
         // MPDJ (2026-11-14): how long a popup message stays (index into
         // kPopupTimesMs: 0.5, 1, 1.5, 2, 3, 4, 5 s; default 0.5 s, Mike)
         uint8_t popupTime = 0;
+        // MPDJ (Q-Link mode 4, 2026-11-15): the effect on each Q-Link, an index
+        // into mpdjQuick::kName (Volume, Micromove, Panning, Reverse by default)
+        uint8_t quickControl[4] = { 0, 1, 2, 3 };
 #endif
     } general;
 
