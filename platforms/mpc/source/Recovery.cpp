@@ -9,6 +9,7 @@
 #include <string>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <time.h>
 
 namespace
@@ -30,10 +31,24 @@ bool isDir(const std::string& p)
 
 bool exists(const std::string& p) { return access(p.c_str(), F_OK) == 0; }
 
-long fileSize(const std::string& p)
+// review 2026-11-16: patterns and project.mt have a fixed size, so size alone missed
+// changes; size + modification time, and the copy takes the source's time
+bool sameFile(const std::string& a, const std::string& b)
+{
+    struct stat sa, sb;
+    if (stat(a.c_str(), &sa) != 0 || stat(b.c_str(), &sb) != 0)
+        return false;
+    return sa.st_size == sb.st_size && sa.st_mtime == sb.st_mtime;
+}
+
+void keepTime(const std::string& from, const std::string& to)
 {
     struct stat st;
-    return stat(p.c_str(), &st) == 0 ? (long)st.st_size : -1;
+    if (stat(from.c_str(), &st) == 0)
+    {
+        struct timespec ts[2] = { st.st_atim, st.st_mtim };
+        utimensat(AT_FDCWD, to.c_str(), ts, 0);
+    }
 }
 
 bool copyFile(const std::string& from, const std::string& to)
@@ -74,13 +89,14 @@ int mirror(const std::string& from, const std::string& to, bool always)
             std::string a = from + "/" + e->d_name, b = to + "/" + e->d_name;
             if (isDir(a))
                 continue;
-            if (always || fileSize(a) != fileSize(b))
+            if (always || !sameFile(a, b))
             {
                 if (!copyFile(a, b))
                 {
                     closedir(d);
                     return -1;
                 }
+                keepTime(a, b);
                 copied++;
             }
         }
@@ -115,14 +131,20 @@ void atLaunch()
 {
     if (!mpdjOn(MpdjFeature::Recovery))
         return;
-    std::string ws = root() + "/Workspace", snap = root() + "/Workspace.restore";
+    std::string ws = root() + "/Workspace", snap = root() + "/.mpdj-restore";
     std::string running = snap + "/.running", restore = snap + "/RESTORE";
+    std::string complete = snap + "/.complete"; // a snapshot that finished copying
     if (exists(restore) && isDir(ws))
     {
-        int n = mirrorWorkspace(snap, ws, true);
         remove(restore.c_str());
-        printf("recovery: workspace restored from Workspace.restore (%d files)%s\n", n,
-               n < 0 ? " - FAILED part way" : "");
+        if (!exists(complete))
+            printf("recovery: restore asked, but the snapshot is incomplete - nothing changed\n");
+        else
+        {
+            int n = mirrorWorkspace(snap, ws, true);
+            printf("recovery: workspace restored from .mpdj-restore (%d files)%s\n", n,
+                   n < 0 ? " - FAILED part way" : "");
+        }
     }
     else if (exists(running))
         printf("recovery: the last session didn't end cleanly; the snapshot from before it is kept "
@@ -131,9 +153,14 @@ void atLaunch()
     {
         struct timespec t0, t1;
         clock_gettime(CLOCK_MONOTONIC, &t0);
+        mkdir(snap.c_str(), 0755);
+        remove(complete.c_str()); // until this copy finishes
         int n = mirrorWorkspace(ws, snap, false);
+        if (n >= 0)
+            if (FILE* f = fopen(complete.c_str(), "wb"))
+                fclose(f);
         clock_gettime(CLOCK_MONOTONIC, &t1);
-        printf("recovery: launch snapshot in Workspace.restore (%d files changed, %.1f s)\n", n,
+        printf("recovery: launch snapshot in .mpdj-restore (%d files changed, %.1f s)\n", n,
                (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9);
     }
     if (isDir(snap))
@@ -143,6 +170,6 @@ void atLaunch()
 
 void atCleanExit()
 {
-    remove((root() + "/Workspace.restore/.running").c_str());
+    remove((root() + "/.mpdj-restore/.running").c_str());
 }
 }

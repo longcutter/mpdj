@@ -114,20 +114,38 @@ void cDrumGrid::write()
         newFileManager.storePatternUndoRevision();
         undoStored = true;
     }
+    // review: parts may share a track (pads 1-3 on one track): per track, a row takes the
+    // first part (kick, snare, hat) that hits there, and is cleared only when none does
+    const strPadSlot* slots[3];
     for (int p = 0; p < 3; p++)
     {
-        const strPadSlot* slot = padSlot(bank * kPadsPerBank + p);
-        if (!slot || slot->program == kPadNoProgram || programType(slot->program) == kProgramEmpty)
-            continue; // no sound on that pad: its track is left alone
-        int t = slot->track;
+        slots[p] = padSlot(bank * kPadsPerBank + p);
+        if (slots[p] && (slots[p]->program == kPadNoProgram || programType(slots[p]->program) == kProgramEmpty))
+            slots[p] = nullptr; // no sound on that pad: its track is left alone
+    }
+    for (int p = 0; p < 3; p++)
+    {
+        if (!slots[p])
+            continue;
+        int t = slots[p]->track;
+        bool first = true; // the first part on this track writes it
+        for (int q = 0; q < p; q++)
+            if (slots[q] && slots[q]->track == t)
+                first = false;
+        if (!first)
+            continue;
         for (int r = 0; r < rows; r++)
         {
             auto& s = pt->track[t].step[r];
-            if (preview[p][r] >= 0)
+            int who = -1;
+            for (int q = p; q < 3 && who < 0; q++)
+                if (slots[q] && slots[q]->track == t && preview[q][r] >= 0)
+                    who = q;
+            if (who >= 0)
             {
                 s.note = Sequencer::STEP_NOTE_DEFAULT;
-                s.instrument = slot->program;
-                s.volume = preview[p][r];
+                s.instrument = slots[who]->program;
+                s.volume = preview[who][r];
             }
             else
             {

@@ -1,5 +1,5 @@
 // MPDJ (2026-11-16): workspace recovery. At launch MPDJ copies the card's Workspace
-// (project, patterns, programs) to Workspace.restore, unless the last session didn't
+// (project, patterns, programs, samples) to the hidden folder .mpdj-restore, unless the last session didn't
 // end cleanly: then the copy from before that session is kept. File > Restore marks it
 // to be copied back at the next launch (before the workspace opens), so a session that
 // went wrong can be undone. MIT, see NOTICE.md (MPDJ additions).

@@ -54,13 +54,13 @@ static void functExport();
 static void functSaveKit(); // MPDJ Kits (mpdjKits.h)
 #ifdef PLATFORM_MPC
 // MPDJ recovery (2026-11-16): Restore, pressed twice within 3 s, marks the launch snapshot
-// (Workspace.restore) to be copied back at the next start (platforms/mpc Recovery)
+// (.mpdj-restore) to be copied back at the next start (platforms/mpc Recovery)
 static void functRestore()
 {
     static uint32_t armedMs = 0;
     uint32_t now = TrackerImpl::getInstance()->getPlatform()->getTimer()->millis();
     FileSystem* fs = newFileManager.getFileSystem();
-    if (!fs->exists("/Workspace.restore/project.mt"))
+    if (!fs->exists("/.mpdj-restore/.complete"))
     {
         mtPopups.show(0, "No snapshot yet (taken when MPDJ starts)");
         return;
@@ -72,7 +72,7 @@ static void functRestore()
         return;
     }
     armedMs = 0;
-    auto [ok, fh] = fs->openFile("/Workspace.restore/RESTORE", FileSystem::kWriteOpen);
+    auto [ok, fh] = fs->openFile("/.mpdj-restore/RESTORE", FileSystem::kWriteOpen);
     if (ok)
     {
         fs->writeFile("1", 1, fh);

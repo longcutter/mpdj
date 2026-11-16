@@ -994,6 +994,8 @@ void MpcInput::onButton(uint8_t note, bool down)
 
     if (note == 116 && mpcShift)
     {
+        closeProgramPicker(); // a SHIFT combo (review: SHIFT held may have opened the list)
+        releaseCoreShift();
         showVisuals(Visuals::kMeters); // SHIFT+TRACK MIX: the level meters (2026-11-16)
         return;
     }
@@ -1001,6 +1003,7 @@ void MpcInput::onButton(uint8_t note, bool down)
     if (note == kNoteSampler && mpcShift)
     {
         // SHIFT+SAMPLER (2026-11-16): skip-back, the last minute of the input as a sample
+        closeProgramPicker();
         releaseCoreShift();
         mtPopups.show(0, mpdjOn(MpdjFeature::SkipBack) ? mpdjSkipBackSave() : "Skip-back is off (MPDJ_OFF)");
         return;
@@ -1008,6 +1011,8 @@ void MpcInput::onButton(uint8_t note, bool down)
 
     if (note == kNoteMenu && mpcShift)
     {
+        closeProgramPicker();
+        releaseCoreShift();
         showVisuals(); // visuals on demand (2026-11-16)
         return;
     }
