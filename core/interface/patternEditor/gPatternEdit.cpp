@@ -1319,6 +1319,7 @@ void cPatternEditor::showKeyboardExport()
 
     display.setControlText(label[0], "Enter");
     display.setControlText(label[1], "Auto Name");
+    display.setControlText(label[4], "Bounce"); // MPDJ: render & load, onto an empty track, sources muted
     display.setControlText(label[5], "Cancel");
     display.setControlText(label[6], "Render");
     display.setControlText2(label[6], "& Load");

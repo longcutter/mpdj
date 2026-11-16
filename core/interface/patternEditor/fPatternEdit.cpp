@@ -1,4 +1,5 @@
 #include "mpdjQuick.h"
+#include "trackMute/trackMute.h" // MPDJ: Bounce mutes the sources
 #include "mtStructs.h"
 #include "mpdjTracks.h"
 #include "patternEditor/patternEditor.h"
@@ -85,6 +86,7 @@ static void functAutoNameKeyboard();
 static void functCancelKeyboard();
 static void functConfirmExport();
 static void functConfirmExportLoad();
+static void functConfirmBounce();
 static void functEnterKeyExport();
 static void functLeftKeyboard();
 static void functRightKeyboard();
@@ -182,6 +184,12 @@ void cPatternEditor::update()
         endExportSelection();
 
         interfaceGlobals.refreshFileExplorer = true;
+    }
+    else if (managerStatus == fmImportSamplesEnd && mpdjBounce)
+    {
+        ip->unblockAllInputs();
+        newFileManager.clearStatus();
+        mpdjBounceFinish();
     }
     else if (managerStatus == fmImportSamplesEnd)
     {
@@ -1159,6 +1167,7 @@ void cPatternEditor::setKeyboardExportFunctions()
 
     ip->setButtonObj(interfaceButton0, buttonPress, functEnterKeyExport);
     ip->setButtonObj(interfaceButton1, buttonPress, functAutoNameKeyboard);
+    ip->setButtonObj(interfaceButton4, buttonPress, functConfirmBounce); // MPDJ
     ip->setButtonObj(interfaceButton5, buttonPress, functCancelKeyboard);
     ip->setButtonObj(interfaceButton6, buttonPress, functConfirmExportLoad);
     ip->setButtonObj(interfaceButton7, buttonPress, functConfirmExport);
@@ -2016,6 +2025,7 @@ void cPatternEditor::endExportSelection()
     }
 
     // if not import or error just end here
+    mpdjBounce = false; // MPDJ: a bounce that didn't load
     ip->unblockAllInputs();
     start(0);
 }
@@ -3829,6 +3839,58 @@ static void functConfirmExportLoad()
 {
     functConfirmExport();
     PTE->isLoadAfterSave = true;
+}
+
+// MPDJ (2026-11-16): Bounce, see patternEditor.h
+static void functConfirmBounce()
+{
+    sendSelection();
+    auto& sel = sequencer.selection;
+    PTE->mpdjBounceFirstTrack = std::min(sel.firstTrack, sel.lastTrack);
+    PTE->mpdjBounceLastTrack = std::max(sel.firstTrack, sel.lastTrack);
+    PTE->mpdjBounceRow = std::min(sel.firstStep, sel.lastStep);
+    PTE->mpdjBounce = true;
+    functConfirmExport();
+    PTE->isLoadAfterSave = true;
+}
+
+void cPatternEditor::mpdjBounceFinish()
+{
+    mpdjBounce = false;
+    int slot = firstFreeInstrumentSlotFound;
+    // the first track with no notes in this pattern, outside the bounced ones
+    Sequencer::strPattern* pt = sequencer.getPatternToUI();
+    int target = -1;
+    for (int t = 0; t < kAllTracks && target < 0; t++)
+    {
+        if (t >= mpdjBounceFirstTrack && t <= mpdjBounceLastTrack)
+            continue;
+        bool empty = true;
+        for (int r = 0; r <= pt->track[0].length && empty; r++)
+            empty = pt->track[t].step[r].note == Sequencer::STEP_NOTE_EMPTY;
+        if (empty)
+            target = t;
+    }
+    if (slot < 0 || slot >= kSampleInstrumentsCount)
+        snprintf(mpdjBounceMsg, sizeof mpdjBounceMsg, "Bounce: not loaded");
+    else if (target < 0)
+        snprintf(mpdjBounceMsg, sizeof mpdjBounceMsg, "Bounced to program %d (no empty track)", slot + 1);
+    else
+    {
+        newFileManager.storePatternUndoRevision();
+        auto& s = pt->track[target].step[mpdjBounceRow];
+        s.note = Sequencer::STEP_NOTE_DEFAULT;
+        s.instrument = (uint8_t)slot;
+        s.volume = -1;
+        s.micromove = -1;
+        newFileManager.setActualPatternStructChanged();
+        for (int t = mpdjBounceFirstTrack; t <= mpdjBounceLastTrack; t++)
+            mpdjSetTrackMute(t, true);
+        snprintf(mpdjBounceMsg, sizeof mpdjBounceMsg, "Bounced tracks %d-%d -> program %d on track %d",
+                 mpdjBounceFirstTrack + 1, mpdjBounceLastTrack + 1, slot + 1, target + 1);
+    }
+    start(0);
+    mtPopups.show(0, mpdjBounceMsg);
 }
 
 // Zatwierdzenie znaku w klawiaturze
