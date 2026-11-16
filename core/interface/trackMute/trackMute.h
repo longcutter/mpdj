@@ -27,6 +27,10 @@ class cTrackMute : public ModuleBase
     // the Pattern screen, save flag); apply queued ones at once when stopped
     void syncQueued();
     void unmuteAll();
+    // 2026-11-16: per-track swing: screen button 2 flips the pads / touches between
+    // muting and setting which tracks the project swing moves
+    void toggleSwingEdit();
+    bool swingEdit = false;
     int trackAt(float x, float y) const; // touch -> track 0-15, -1 off the grid
     void refresh();
 
@@ -38,10 +42,11 @@ class cTrackMute : public ModuleBase
     hControl bgLabel = -1;
     strPadGridData gridData;
     char title[32];
-    char rightLabel[24];
+    char rightLabel[32];
     bool held[16] = {};
     char modeText[12];
     char timingText[12];
+    char swingText[12];
     uint32_t lastBlinkMs = 0;
     void flip(int track, bool queueable); // queue (Latch + timing + playing) or now
 };

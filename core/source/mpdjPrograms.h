@@ -98,7 +98,7 @@ static constexpr size_t kMpdjProjectDataV3Size = kMpdjProjectDataV2Size + 4 * kP
 static constexpr size_t kMpdjProjectDataV4Size = kMpdjProjectDataV3Size + kPads; // versions 4-7 ended here
 static constexpr size_t kMpdjProjectDataV8Size = kMpdjProjectDataV4Size + 2 * kPads; // version 8 ended here
 static_assert(sizeof(strMpdjProjectData) == kMpdjProjectDataV8Size + kPads);
-static constexpr uint8_t kMpdjProjectDataVersion = 9; // 9: pad slices (+64 bytes); // 5 (5f-1): flags in the header; 6 (5g-6): loopSync in the slots; 7: swing (same size); 8: pad dynamics + curve (+128 bytes)
+static constexpr uint8_t kMpdjProjectDataVersion = 10; // 10: per-track swing in reservedTracks[0..1] (same size); 9: pad slices (+64 bytes); // 5 (5f-1): flags in the header; 6 (5g-6): loopSync in the slots; 7: swing (same size); 8: pad dynamics + curve (+128 bytes)
 static constexpr uint8_t kSwingMin = 50, kSwingMax = 75; // project swing, % (50 = straight)
 
 // Slot types for the current project (mtProject.programs)
