@@ -131,6 +131,7 @@ void programsWriteToFile(strMpdjProjectData& out)
     out.swing = mtProject.mpdjSwing;
     padsWrite(out.pads);
     padColorsWrite(out.padColor);
+    padDynamicsWrite(out.padDynLoss, out.padCurve);
 }
 
 // FULL LEVEL for a project that doesn't say (5f-1): Config's default
@@ -161,6 +162,7 @@ bool programsReadFromFile(const strMpdjProjectData& in)
         tracksReadFromFile(nullptr);
         padsRead(nullptr);
         padColorsRead(nullptr);
+        padDynamicsRead(nullptr, nullptr);
         mtProject.mpdjFullLevel = fullLevelDefault();
         mtProject.mpdjSwing = kSwingMin;
         s_importNotice = true;
@@ -173,6 +175,7 @@ bool programsReadFromFile(const strMpdjProjectData& in)
     tracksReadFromFile(in.version >= 2 ? &in : nullptr);
     padsRead(in.version >= 3 ? in.pads : nullptr);
     padColorsRead(in.version >= 4 ? in.padColor : nullptr);
+    padDynamicsRead(in.version >= 8 ? in.padDynLoss : nullptr, in.version >= 8 ? in.padCurve : nullptr);
     for (int i = 0; i < kProgramSlots; i++)
     {
         strProgramSlot s = in.programs[i];

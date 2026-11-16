@@ -430,7 +430,7 @@ const char* padPress(int pad, const strPadSlot* p, uint8_t velocity)
         mpdjPadRelease(pad); // a second press before the release (shouldn't happen)
 
     uint8_t note = p->note < 0 ? (uint8_t)Sequencer::STEP_NOTE_DEFAULT : (uint8_t)p->note;
-    uint8_t velo = padVelocity(p->program, velocity ? velocity : 1);
+    uint8_t velo = padVelocityFor(dynamicsPad(pad), p->program, velocity ? velocity : 1);
     Held& h = s_held[pad];
     h.track = (int8_t)p->track;
     h.gate = slotIsGate(p);
@@ -749,7 +749,7 @@ int mpdjPadStepWrite(int pad, int row, uint8_t velocity)
     if ( p->program == kPadNoProgram || programType(p->program) == kProgramEmpty)
         return -1;
     uint8_t note = p->note < 0 ? (uint8_t)Sequencer::STEP_NOTE_DEFAULT : (uint8_t)p->note;
-    uint8_t velo = padVelocity(p->program, velocity ? velocity : 1);
+    uint8_t velo = padVelocityFor(dynamicsPad(pad), p->program, velocity ? velocity : 1);
     bool writeVol = padVelocityToVolume();
     int slice = s_resolvedSlice;
     int8_t vol = sequencer.mpdjPadStepWrite(p->track, (uint8_t)row, p->program, note, velo, writeVol);
@@ -785,6 +785,94 @@ uint8_t padVelocityScale(uint8_t velocity, uint8_t programVelo, uint8_t curve, i
     if (velocity > 0 && v < 1)
         v = 1;
     return (uint8_t)(v > 127 ? 127 : v);
+}
+
+uint8_t padVelocityScaleDyn(uint8_t velocity, uint8_t programVelo, uint8_t curve, int topPercent, int dynamics)
+{
+    float x = velocity > 127 ? 1.0f : velocity / 127.0f;
+    if (curve == 0)
+        x = sqrtf(x);
+    else if (curve == 2)
+        x = x * x;
+    float d = (dynamics < 0 ? 0 : dynamics > 100 ? 100 : dynamics) / 100.0f;
+    x = (1.0f - d) + d * x; // less dynamics: the hit stays nearer the top
+    float top = programVelo * (topPercent / 100.0f);
+    int v = (int)(x * top + 0.5f);
+    if (velocity > 0 && v < 1)
+        v = 1;
+    return (uint8_t)(v > 127 ? 127 : v);
+}
+
+uint8_t padDynamics(int pad)
+{
+    if (pad < 0 || pad >= kPads)
+        return 100;
+    int loss = mtProject.pads.dynLoss[pad];
+    return (uint8_t)(loss > 100 ? 0 : 100 - loss);
+}
+
+void setPadDynamics(int pad, int percent)
+{
+    if (pad >= 0 && pad < kPads)
+        mtProject.pads.dynLoss[pad] = (uint8_t)(100 - (percent < 0 ? 0 : percent > 100 ? 100 : percent));
+}
+
+uint8_t padCurveSetting(int pad)
+{
+    return (pad >= 0 && pad < kPads && mtProject.pads.curve[pad] < kPadCurveSettings) ? mtProject.pads.curve[pad] : 0;
+}
+
+void setPadCurveSetting(int pad, int setting)
+{
+    if (pad >= 0 && pad < kPads && setting >= 0 && setting < kPadCurveSettings)
+        mtProject.pads.curve[pad] = (uint8_t)setting;
+}
+
+const char* padCurveName(uint8_t setting)
+{
+    static const char* const kNames[kPadCurveSettings] = { "Global", "Soft", "Normal", "Hard" };
+    return kNames[setting < kPadCurveSettings ? setting : 0];
+}
+
+void padDynamicsWrite(uint8_t* dynLoss, uint8_t* curve)
+{
+    memcpy(dynLoss, mtProject.pads.dynLoss, kPads);
+    memcpy(curve, mtProject.pads.curve, kPads);
+}
+
+void padDynamicsRead(const uint8_t* dynLoss, const uint8_t* curve)
+{
+    for (int i = 0; i < kPads; i++)
+    {
+        mtProject.pads.dynLoss[i] = (dynLoss && dynLoss[i] <= 100) ? dynLoss[i] : 0;
+        mtProject.pads.curve[i] = (curve && curve[i] < kPadCurveSettings) ? curve[i] : 0;
+    }
+}
+
+// whose dynamics a press uses: the slice layer's source pad, Notes mode's (the last pad-map
+// pad played, as its program is), else the pad itself
+int dynamicsPad(int pad)
+{
+    if (s_sliceMode && s_slicePad >= 0)
+        return s_slicePad;
+    if (s_notesMode)
+        return s_lastPad;
+    return pad;
+}
+
+uint8_t padVelocityFor(int pad, uint8_t program, uint8_t velocity)
+{
+    // 16 Levels sets the velocities itself: the pad's own dynamics stay out of it
+    if (pad < 0 || pad >= kPads || s_levelsMode)
+        return padVelocity(program, velocity);
+#ifdef PLATFORM_MPC
+    uint8_t curve = padCurveSetting(pad) ? padCurveSetting(pad) - 1 : mtConfig.general.padCurve;
+    int top = 10 + 5 * mtConfig.general.padTop;
+#else
+    uint8_t curve = padCurveSetting(pad) ? padCurveSetting(pad) - 1 : 1;
+    int top = 100;
+#endif
+    return padVelocityScaleDyn(velocity, sequencer.getInstrumentVelo(program), curve, top, padDynamics(pad));
 }
 
 uint8_t padVelocity(uint8_t program, uint8_t velocity)
@@ -1128,6 +1216,28 @@ int padsSelfTest()
             padColorStep(16, 1, false) == 16 && padColorStep(16, 1, true) == 0 && padColorStep(0, -1, true) == 16,
           "color order Auto, Red, Red-orange .. White", 7);
     setPadColor(7, 0);
+    // per-pad dynamics + curve (2026-11-16)
+    check(padDynamics(9) == 100 && padCurveSetting(9) == 0, "dynamics default 100 %, Global", 9);
+    check(padVelocityScaleDyn(64, 50, 1, 100, 100) == padVelocityScale(64, 50, 1, 100), "100 % = as before", 9);
+    check(padVelocityScaleDyn(1, 50, 1, 100, 0) == 50 && padVelocityScaleDyn(127, 50, 1, 100, 0) == 50,
+          "0 %: every hit at the top", 9);
+    check(padVelocityScaleDyn(0, 50, 1, 100, 50) == 25 && padVelocityScaleDyn(127, 50, 1, 100, 50) == 50,
+          "50 %: the softest hit at half", 9);
+    setPadDynamics(9, 40);
+    setPadCurveSetting(9, 3);
+    setPadDynamics(10, 130); // clamps to 100
+    check(padDynamics(9) == 40 && padCurveSetting(9) == 3 && padDynamics(10) == 100, "set dynamics / curve", 9);
+    programsWriteToFile(file);
+    padDynamicsRead(nullptr, nullptr);
+    check(padDynamics(9) == 100 && padCurveSetting(9) == 0, "older file: defaults", 9);
+    programsReadFromFile(file);
+    check(padDynamics(9) == 40 && padCurveSetting(9) == 3, "dynamics round trip", 9);
+    file.version = 7;
+    programsReadFromFile(file);
+    check(padDynamics(9) == 100 && padCurveSetting(9) == 0, "version 7 block: defaults", 9);
+    file.version = kMpdjProjectDataVersion;
+    setPadDynamics(9, 100);
+    setPadCurveSetting(9, 0);
     programsWriteToFile(file);
     mtProject.pads.color[5] = mtProject.pads.color[63] = 0;
     programsReadFromFile(file);
@@ -1352,6 +1462,6 @@ int mpdjStepSeqToggle(int row, uint8_t velocity)
     uint8_t note = p->note < 0 ? (uint8_t)Sequencer::STEP_NOTE_DEFAULT : (uint8_t)p->note;
     if (mtProject.mpdjFullLevel)
         velocity = 127;
-    uint8_t velo = padVelocity(p->program, velocity ? velocity : 1);
+    uint8_t velo = padVelocityFor(mpdjStepSeqPad(), p->program, velocity ? velocity : 1);
     return sequencer.mpdjPadStepWrite(p->track, (uint8_t)row, p->program, note, velo, padVelocityToVolume()) < 0 ? -1 : 1;
 }

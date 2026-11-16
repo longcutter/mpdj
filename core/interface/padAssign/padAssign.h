@@ -22,6 +22,8 @@ class cPadAssign : public ModuleBase
         ParamChoke,
         ParamCut,
         ParamColor,
+        ParamDynamics, // 2026-11-16: per-pad dynamics and velocity curve
+        ParamCurve,
         ParamCount
     };
 
@@ -34,6 +36,7 @@ class cPadAssign : public ModuleBase
     // From the platform: a pad hit on this screen selects it (0-63); a bank
     // button shows that bank (the same pad number there)
     void selectPad(int pad);
+    uint8_t selectedParam() const { return param; }
     int padAt(float x, float y) const; // touch -> pad, -1 off the grid
 
     // 5d-4: COPY + pad = the selected pad onto `dst` with its own copy of the
