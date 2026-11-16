@@ -77,7 +77,7 @@ class MpcInput
     // else (pads still play); its release is swallowed too
     bool wake();
   public:
-    void showVisuals();
+    void showVisuals(int kind = -1); // -1: Config's "Screensaver shows"
   private:
     bool tapListRow(float x, float y);
     void toggleMetronome();

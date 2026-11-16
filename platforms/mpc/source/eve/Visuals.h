@@ -19,6 +19,7 @@ class Visuals
     {
         kLogo,  // the MPDJ logo drifting and bouncing, its colour cycling
         kStars, // a starfield flying faster with the music
+        kMeters, // 2026-11-16: 16 track meters, master L / R and a scope
         kCount
     };
     static const char* name(int kind);
@@ -32,6 +33,16 @@ class Visuals
   private:
     void drawLogo(const eve::Target& t, float level);
     void drawStars(const eve::Target& t, float level);
+    void drawMeters(const eve::Target& t);
+
+  public:
+    // the meters' levels (RMS 0..1), written by the main thread (MpcInput)
+    std::atomic<float> trackLevel[16];
+    std::atomic<float> masterLevel[2];
+
+  private:
+    float shown[18] = {}, hold[18] = {};
+    int holdAge[18] = {};
 
     std::atomic<bool> on{ false };
     std::atomic<int> kind{ kLogo };

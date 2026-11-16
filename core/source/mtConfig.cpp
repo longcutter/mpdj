@@ -437,7 +437,7 @@ void checkConfig()
         mtConfig.general.screensaver = 1;
     if (mtConfig.general.screensaverTime > 5)
         mtConfig.general.screensaverTime = 2;
-    if (mtConfig.general.screensaverKind > 1)
+    if (mtConfig.general.screensaverKind > 2) // Logo, Starfield, Meters
         mtConfig.general.screensaverKind = 0;
     if (mtConfig.general.screensaverDim > 1)
         mtConfig.general.screensaverDim = 1;
