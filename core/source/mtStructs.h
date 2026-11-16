@@ -1054,6 +1054,14 @@ struct strMtProject
     // MPDJ (2026-11-16): tracks the project swing leaves straight (bit t = track t + 1),
     // MPDJ block version 10 (reservedTracks[0..1])
     uint16_t mpdjSwingOff = 0;
+    // MPDJ (2026-11-16): the Turing Machine's settings, saved with the project (MPDJ block
+    // version 11, reservedTracks[2..19]); valid = 0 until the screen was used
+    struct strMpdjTuring
+    {
+        uint8_t valid, track, program, length, change, density, low, range, mode, velocity;
+        uint16_t reg;
+        uint32_t seed;
+    } mpdjTuring = {};
 
     // MPDJ (step 5b-1): pad -> program -> track, saved in the MPDJ block; mpdjPads.h
     strPadMap pads;
