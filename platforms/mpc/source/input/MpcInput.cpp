@@ -12,6 +12,7 @@
 #include "paramValueList.h"
 #include "songPlayerControl.h"
 #include "turing/turing.h"
+#include "mpdjSkipBack.h"
 #include "mtConfig.h"
 #include "mtAudioEngine.h"
 #include "core/interfacePopups.h"
@@ -140,6 +141,7 @@ constexpr uint8_t kNoteCopy = 122;
 constexpr uint8_t kNoteMain = 52;
 constexpr uint8_t kNoteErase = 9;
 constexpr uint8_t kNoteMenu = 123;
+constexpr uint8_t kNoteSampler = 125;
 MpcInput* s_input = nullptr; // for Config's Show visuals now
 
 // MPC pad note (bank A layout) -> pad number 1..16 (1 = bottom left).
@@ -232,6 +234,12 @@ void MpcInput::poll()
     pollLevels();
     pollPadLights();
     pollSaver();
+    if (const char* msg = mpdjSkipBackPoll())
+    {
+        mtPopups.show(0, msg);
+        if (trace)
+            printf("input: %s\n", msg);
+    }
     if (sideloadComboMs && mpcShift &&
         platform.getTimer()->millis() - sideloadComboMs >= Sideload::kComboHoldMs)
     {
@@ -960,6 +968,14 @@ void MpcInput::onButton(uint8_t note, bool down)
             buttons->release(buttonHeld[note]);
             buttonHeld[note] = -1;
         }
+        return;
+    }
+
+    if (note == kNoteSampler && mpcShift)
+    {
+        // SHIFT+SAMPLER (2026-11-16): skip-back, the last minute of the input as a sample
+        releaseCoreShift();
+        mtPopups.show(0, mpdjSkipBackSave());
         return;
     }
 
