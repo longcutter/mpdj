@@ -43,4 +43,7 @@ void resetConfigShowPopup();
 void usbStorageEnter();
 void usbAudioChange();
 
+// MPDJ (visuals on demand, 2026-11-16): set by the platform, run by Config > Display > Show visuals now
+extern void (*mpdjShowVisualsHook)();
+
 #endif /* INTERFACE_CONFIGEDITOR_CONFIGMENUACTIONS_H_ */

@@ -49,7 +49,7 @@ cMenuGroup menuBase(menuBase, 0, baseMenuGroupCount);
 cMenuGroup menuProject(menuBase, "Project Settings", projectMenuGroupCount);
 cMenuGroup menuGeneral(menuBase, "General", generalMenuGroupCount);
 #ifdef PLATFORM_MPC
-cMenuGroup menuDisplay(menuBase, "Display", 4); // MPDJ: the screensaver (2026-11-16)
+cMenuGroup menuDisplay(menuBase, "Display", 5); // MPDJ: the screensaver (2026-11-16)
 #endif
 #if defined(PLATFORM_MPC) && MPDJ_QLINK_MODE4
 cMenuGroup menuQLinks(menuBase, "Q-Links", mpdjQuick::kKnobs);
@@ -207,6 +207,15 @@ const strItemTypeListText setupSaverKind{ &mtConfig.general.screensaverKind, 2, 
 cMenuItem melSaverKind(menuDisplay, "Screensaver shows", screensaverKindDesc, menuTypeItemListText, &setupSaverKind);
 const strItemTypeListText setupSaverDim{ &mtConfig.general.screensaverDim, 2, mpdjOffOnTexts };
 cMenuItem melSaverDim(menuDisplay, "Dim the backlight", screensaverDimDesc, menuTypeItemListText, &setupSaverDim);
+// MPDJ (visuals on demand, 2026-11-16): the platform sets the hook (MpcInput)
+void (*mpdjShowVisualsHook)() = nullptr;
+static void mpdjShowVisualsNow()
+{
+    if (mpdjShowVisualsHook)
+        mpdjShowVisualsHook();
+}
+const strItemTypeActionButton setupVisualsNow{ mpdjShowVisualsNow, nullptr };
+cMenuItem melVisualsNow(menuDisplay, "Show visuals now", visualsNowDesc, menuTypeItemActionButton, &setupVisualsNow);
 #endif
 #if defined(PLATFORM_MPC) && MPDJ_QLINK_MODE4
 // MPDJ (Q-Link mode 4): the effect on each Q-Link
