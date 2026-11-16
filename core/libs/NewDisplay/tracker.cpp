@@ -1009,8 +1009,11 @@ const char* cTracker::mpdjTrackLabel(int trackIdx)
     static char numbers[16][4];
     if (trackIdx < 0 || trackIdx >= tracks->kTrackCount)
         return "";
-    if (paramCount > 2)
-        return tracks->tracksNames[trackIdx];
+    const char* name = tracks->tracksNames[trackIdx];
+    // six columns: a default name ("Track 3") gives way to the number, custom names stay
+    bool defaultName = name && strncmp(name, "Track ", 6) == 0 && atoi(name + 6) == trackIdx + 1;
+    if (paramCount > 2 && !(paramCount == 6 && defaultName))
+        return name;
     snprintf(numbers[trackIdx & 15], sizeof numbers[0], "%d", trackIdx + 1);
     return numbers[trackIdx & 15];
 }
@@ -1048,7 +1051,9 @@ void cTracker::tracksNumbers()
         int letersCount = strlen(text);
         w = getTextWidth((strFont*)font, text, letersCount);
 
-        while (w > tracksWidth - 2)
+        // MPDJ: in the six-column view the name stops before the column headings
+        int maxW = paramCount == 6 ? sixParamsOffset[2] - 8 : tracksWidth - 2;
+        while (w > maxW)
         {
             if (letersCount > 1)
             {
@@ -1087,6 +1092,29 @@ void cTracker::tracksNumbers()
         int trackIdx = tracks->firstVisibleTrack + i;
         const char* trackName = mpdjTrackLabel(trackIdx);
         string2Bitmaps(x, y, trackName, textLetersCount[i], false); //, tracksWidth-fonts[3].width
+    }
+
+    // MPDJ column headings (2026-11-16): six-column view Vol / Mic / FX1 / FX2 (the 8-track
+    // view keeps just the numbers: no room)
+    const char* heads[4] = { nullptr, nullptr, nullptr, nullptr };
+    int headX[4] = { 0, 0, 0, 0 }, heads_n = 0;
+    if (paramCount == 6)
+    {
+        static const char* const kSix[4] = { "Vol", "Mic", "FX1", "FX2" };
+        for (int k = 0; k < 4; k++)
+        {
+            heads[k] = kSix[k];
+            headX[k] = sixParamsOffset[2 + k];
+        }
+        heads_n = 4;
+    }
+    if (heads_n)
+    {
+        actualColor = lastFontColor = colors[16];
+        API_COLOR(actualColor);
+        for (uint8_t i = 0; i < columnsCount; i++)
+            for (int k = 0; k < heads_n; k++)
+                string2Bitmaps(rightOffset + i * tracksWidth + headX[k], y, (char*)heads[k], strlen(heads[k]), false);
     }
 
     API_END();
