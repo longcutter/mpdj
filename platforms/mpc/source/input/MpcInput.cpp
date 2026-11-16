@@ -1605,6 +1605,19 @@ int MpcInput::divideQLink(int knob, int steps, int divIdx)
 void MpcInput::stepEditParam(int steps)
 {
     cPatternEditor& pe = patternEditor;
+    if (pe.patternViewMode > 0)
+    {
+        // 8-track view: two columns, Program and the chosen one, in the order drawn
+        int shown[2], n = 0;
+        for (int p = 0; p < 4 && n < 2; p++)
+            if (pe.patternViewMode & (1 << p))
+                shown[n++] = p;
+        int pos = (n == 2 && pe.editParam == shown[1]) ? 1 : 0;
+        int p = pos + (steps > 0 ? 1 : -1);
+        if (n == 2 && p >= 0 && p < 2 && p != pos)
+            setEditColumn(shown[p], pe.isMicVolView);
+        return;
+    }
     if (pe.mpdjSixView)
     {
         // six-column view: walk the columns as drawn, Note, Program, Volume,
@@ -1659,26 +1672,20 @@ void MpcInput::flipMicVolView()
 {
     cPatternEditor& pe = patternEditor;
     releaseCoreShift(); // not a Tracker Shift combo (Shift alone shows the mute buttons)
-    if (pe.patternViewMode == 0 && !pe.mpdjSixView && pe.isMicVolView)
+    uint8_t view = (uint8_t)((pe.mpdjView() + 1) % cPatternEditor::kViewCount);
+    pe.mpdjSetView(view);
+    static const char* const kColumn[5] = { "Note", "Volume", "Micromove", "FX1", "FX2" };
+    static char text[48];
+    switch (view)
     {
-        pe.mpdjSixView = true;
-        pe.focusOnActual();
-        pe.refreshPattern();
-        display.refreshControl(pe.patternControl);
-        mtPopups.show(0, "View: all six columns");
-        return;
+    case cPatternEditor::kViewFx: snprintf(text, sizeof text, "View: FX"); break;
+    case cPatternEditor::kViewMicVol: snprintf(text, sizeof text, "View: Micromove / Volume"); break;
+    case cPatternEditor::kViewSix: snprintf(text, sizeof text, "View: all six columns"); break;
+    default:
+        snprintf(text, sizeof text, "View: 8 tracks, Program + %s",
+                 kColumn[mtConfig.general.eightViewColumn > 4 ? 0 : mtConfig.general.eightViewColumn]);
     }
-    if (pe.mpdjSixView)
-    {
-        pe.mpdjSixView = false;
-        pe.focusOnActual();
-        setEditColumn(pe.editParam, false);
-        pe.refreshPattern();
-        mtPopups.show(0, "View: FX");
-        return;
-    }
-    setEditColumn(pe.editParam, !pe.isMicVolView);
-    mtPopups.show(0, pe.isMicVolView ? "View: Micromove / Volume" : "View: FX");
+    mtPopups.show(0, text);
 }
 
 void sendSelection(); // fPatternEdit.cpp: hands the cursor/selection to the sequencer
