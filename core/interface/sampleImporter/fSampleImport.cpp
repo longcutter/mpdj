@@ -2794,3 +2794,46 @@ static void functSelectPreviewVolume(uint8_t state)
         }
     }
 }
+
+// MPDJ (touch, 2026-11-16): tap a row of the file list (0) or the slot list (1): that
+// list becomes the active one (as QL1 does) and the row is selected (as the encoder
+// moves, so multi-select with SHIFT still works)
+void cSampleImporter::mpdjTapList(int which, int row)
+{
+    if (keyboardManager.getState() || row < 0)
+        return;
+    if (which == 0)
+    {
+        if (selectedPlace != 0)
+        {
+            selectedPlace = 0;
+            handleMemoryBar();
+            resetInstrSel();
+            memset(&selectionTab[listInstruments][0], 0, maxListLength);
+            selectionLength[listInstruments] = 0;
+            refreshActionButtons();
+            activateLabelsBorder();
+        }
+        for (int d = row - selectedFile; d;)
+        {
+            int st = clamp<int>(d, -5, 5);
+            changeFileSelection(st);
+            d -= st;
+        }
+    }
+    else
+    {
+        if (selectedPlace != 1)
+        {
+            selectedPlace = 1;
+            refreshActionButtons();
+            activateLabelsBorder();
+        }
+        for (int d = row - selectedSlot; d;)
+        {
+            int st = clamp<int>(d, -5, 5);
+            changeInstrumentSelection(st);
+            d -= st;
+        }
+    }
+}

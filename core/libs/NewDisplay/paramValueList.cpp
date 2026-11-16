@@ -503,3 +503,19 @@ void cParamValueList::update()
         // API_BLEND_FUNC(SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
     }
 }
+
+// MPDJ (touch, 2026-11-16): same geometry as cList (27-high rows, 4 top margin)
+int cParamValueList::mpdjRowAt(int x, int y) const
+{
+    if (list == nullptr || !(style & controlStyleShow))
+        return -1;
+    int top = (style & controlStyleCenterY) ? posY - height / 2 : posY;
+    int left = (style & controlStyleCenterX) ? posX - width / 2 : posX;
+    if (x < left || x >= left + width || y < top + 4 || y >= top + height)
+        return -1;
+    int row = (y - top - 4) / 27;
+    int lines = list->length < list->linesCount ? list->length : list->linesCount;
+    if (row >= lines)
+        return -1;
+    return textListPos + row;
+}

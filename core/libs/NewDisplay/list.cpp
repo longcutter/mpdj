@@ -691,3 +691,19 @@ void cList::update()
         // API_BLEND_FUNC(SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
     }
 }
+
+// MPDJ (touch, 2026-11-16): rows are 27 high from the top, the first shown is textListPos
+int cList::mpdjRowAt(int x, int y) const
+{
+    if (list == nullptr || !(style & controlStyleShow))
+        return -1;
+    int top = (style & controlStyleCenterY) ? posY - height / 2 : posY;
+    int left = (style & controlStyleCenterX) ? posX - width / 2 : posX;
+    if (x < left || x >= left + width || y < top + 4 || y >= top + height)
+        return -1;
+    int row = (y - top - 4) / 27; // 4 = the list's top margin
+    int lines = list->length < list->linesCount ? list->length : list->linesCount;
+    if (row >= lines)
+        return -1;
+    return textListPos + row;
+}

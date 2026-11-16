@@ -1894,3 +1894,38 @@ static void functMenu(uint8_t state)
         mtMenuPopup.hideModulePopup(PE);
     }
 }
+
+// MPDJ (touch, 2026-11-16): tap a row of the file browser (0) or the recent list (1)
+void cProjectEditor::mpdjTapList(int which, int row)
+{
+    if (keyboardManager.getState() || currentBrowserMode == kNone || row < 0)
+        return;
+    if (which == 1)
+    {
+        if (currentBrowserMode != kOpenProject)
+            return;
+        if (selectedPlace != 1)
+        {
+            selectedPlace = 1;
+            activateLabelsBorder();
+            refreshProjectBrowserLabels();
+        }
+        changeRecentListPos(row - recentProjectListPos);
+        return;
+    }
+    if (currentBrowserMode == kOpenProject && selectedPlace != 0)
+    {
+        selectedPlace = 0;
+        activateLabelsBorder();
+        refreshProjectBrowserLabels();
+    }
+    for (int d = row - fileBrowserData.browserListPosition; d;)
+    {
+        int st = clamp<int>(d, -5, 5);
+        int before = fileBrowserData.browserListPosition;
+        makeMoveOnActiveList(st);
+        if (fileBrowserData.browserListPosition == before)
+            break;
+        d = row - fileBrowserData.browserListPosition;
+    }
+}

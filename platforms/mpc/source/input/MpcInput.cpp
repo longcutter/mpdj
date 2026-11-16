@@ -9,6 +9,7 @@
 #include "core/interface.h"
 #include "display.h"
 #include "list.h"
+#include "paramValueList.h"
 #include "mtConfig.h"
 #include "mtAudioEngine.h"
 #include "core/interfacePopups.h"
@@ -23,6 +24,10 @@
 #include "trackMute/trackMute.h"
 #include "mpdjTracks.h"
 #include "projectEditor/projectEditor.h"
+#include "sampleImporter/sampleImporter.h"
+#include "configEditor/configEditor.h"
+#include "list.h"
+#include "paramValueList.h"
 #include "sampleEditor/sampleEditor.h"
 #include "samplePlayback/samplePlayback.h"
 #include "songEditor/songEditor.h"
@@ -2526,6 +2531,43 @@ static int keyboardKeyAt(float x, float y)
     }
 }
 
+// Touch, 2026-11-16 (Mike): a tap on a list row selects it, on the Program Loader
+// (file / slot lists), the File screen (browser / recent) and Config (groups,
+// items, an item's values). The screens' own selection functions do the moving.
+bool MpcInput::tapListRow(float x, float y)
+{
+    auto rowIn = [&](hControl h) {
+        cList* l = (cList*)display.mpdjControl(h);
+        return l ? l->mpdjRowAt((int)x, (int)y) : -1;
+    };
+    int r;
+    if (mtInterface.isSampleLoaderScreenActive())
+    {
+        if ((r = rowIn(sampleImporter.explorerListControl)) >= 0)
+            return sampleImporter.mpdjTapList(0, r), true;
+        if ((r = rowIn(sampleImporter.instrumentListControl)) >= 0)
+            return sampleImporter.mpdjTapList(1, r), true;
+    }
+    else if (mtInterface.isFileScreenActive())
+    {
+        if ((r = rowIn(projectEditor.fileListControl)) >= 0)
+            return projectEditor.mpdjTapList(0, r), true;
+        if ((r = rowIn(projectEditor.recentListControl)) >= 0)
+            return projectEditor.mpdjTapList(1, r), true;
+    }
+    else if (mtInterface.isConfigScreenActive())
+    {
+        if ((r = rowIn(configEditor.configListControl)) >= 0)
+            return configEditor.mpdjTapList(2, r), true;
+        cParamValueList* sub = (cParamValueList*)display.mpdjControl(configEditor.configSubmenuListControl);
+        if (sub && (r = sub->mpdjRowAt((int)x, (int)y)) >= 0)
+            return configEditor.mpdjTapList(1, r), true;
+        if ((r = rowIn(configEditor.configBasemenuListControl)) >= 0)
+            return configEditor.mpdjTapList(0, r), true;
+    }
+    return false;
+}
+
 void MpcInput::onScreenTap(float x, float y)
 {
     if (cPatternEditor::keyboardManager.getState())
@@ -2541,6 +2583,8 @@ void MpcInput::onScreenTap(float x, float y)
         }
         return; // the keyboard is up: taps elsewhere above the labels do nothing
     }
+    if (tapListRow(x, y))
+        return; // a row of a list (Program Loader, File, Config)
     if (fxListOpen())
     {
         cList* list = (cList*)display.mpdjControl(mtPopups.mpdjStepPopupList());
