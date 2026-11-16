@@ -145,10 +145,11 @@ void cProjectEditor::showDefaultScreen()
     display.setControlText(label[5], "Export");
 #ifdef PLATFORM_MPC
     display.setControlText(label[6], "Save Kit"); // MPDJ Kits
+    display.setControlText(label[7], "Restore"); // MPDJ recovery (2026-11-16)
 #else
     display.setControlText(label[6], "");
-#endif
     display.setControlText(label[7], "");
+#endif
 
     display.setControlText2(label[0], "Project");
     display.setControlText2(label[1], "");

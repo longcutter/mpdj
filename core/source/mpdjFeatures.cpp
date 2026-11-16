@@ -12,7 +12,7 @@ namespace
 const char* const kNames[(int)MpdjFeature::Count] = { "screensaver", "visuals", "backlight", "taplists",
                                                       "capture",     "grooves", "swing",     "generators",
                                                       "skipback",    "bounce",  "dynamics",  "padslices",
-                                                      "fill" };
+                                                      "fill",        "recovery" };
 bool s_parsed = false;
 bool s_off[(int)MpdjFeature::Count] = {};
 

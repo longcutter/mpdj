@@ -1,4 +1,5 @@
 #include "mpdjKits.h"
+#include "TrackerImpl.h"
 #include "mtSliceDetector.h"
 #include <mtAudioExport.h>
 #include <mtRandomNameGenerator.h>
@@ -51,6 +52,35 @@ static void functSaveAsProject();
 static void functExport();
 #ifdef PLATFORM_MPC
 static void functSaveKit(); // MPDJ Kits (mpdjKits.h)
+#ifdef PLATFORM_MPC
+// MPDJ recovery (2026-11-16): Restore, pressed twice within 3 s, marks the launch snapshot
+// (Workspace.restore) to be copied back at the next start (platforms/mpc Recovery)
+static void functRestore()
+{
+    static uint32_t armedMs = 0;
+    uint32_t now = TrackerImpl::getInstance()->getPlatform()->getTimer()->millis();
+    FileSystem* fs = newFileManager.getFileSystem();
+    if (!fs->exists("/Workspace.restore/project.mt"))
+    {
+        mtPopups.show(0, "No snapshot yet (taken when MPDJ starts)");
+        return;
+    }
+    if (!armedMs || now - armedMs > 3000)
+    {
+        armedMs = now ? now : 1;
+        mtPopups.show(0, "Restore: press again to go back to the workspace from the start of the session");
+        return;
+    }
+    armedMs = 0;
+    auto [ok, fh] = fs->openFile("/Workspace.restore/RESTORE", FileSystem::kWriteOpen);
+    if (ok)
+    {
+        fs->writeFile("1", 1, fh);
+        fs->closeFile(fh);
+    }
+    mtPopups.show(0, ok ? "Restore at the next start: quit MPDJ (Ctrl+C) and start it again" : "Restore failed");
+}
+#endif
 #endif
 //****************************************************
 // New project
@@ -274,6 +304,7 @@ void cProjectEditor::setDefaultScreenFunct()
     ip->setButtonObj(interfaceButton5, buttonPress, functExport);
 #ifdef PLATFORM_MPC
     ip->setButtonObj(interfaceButton6, buttonPress, functSaveKit);
+    ip->setButtonObj(interfaceButton7, buttonPress, functRestore);
 #endif
 
     ip->setButtonObj(interfaceButtonPlay, buttonPress, functPlayAction);

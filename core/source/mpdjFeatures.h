@@ -18,6 +18,7 @@ enum class MpdjFeature : unsigned char
     Dynamics,    // per-pad dynamics / curve (Config's curve for every pad)
     PadSlices,   // pads written from the slice layer play their slice
     Fill,        // PLAY held = Fill
+    Recovery,    // the launch snapshot / File > Restore (MPDJ_OFF=recovery skips the copy)
     Count
 };
 
