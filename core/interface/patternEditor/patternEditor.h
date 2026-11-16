@@ -229,6 +229,12 @@ class cPatternEditor : public ModuleBase
     uint8_t currentExportState;
     uint8_t lastExportState;
     bool isLoadAfterSave;
+    // MPDJ (2026-11-16): Bounce = Render Selection & Load, then the new program goes on
+    // the first empty track at the selection's first row and the source tracks are muted
+    bool mpdjBounce = false;
+    uint8_t mpdjBounceFirstTrack = 0, mpdjBounceLastTrack = 0, mpdjBounceRow = 0;
+    void mpdjBounceFinish();
+    char mpdjBounceMsg[64];
     int8_t firstFreeInstrumentSlotFound;
 
     uint16_t lastPatternNumber =
