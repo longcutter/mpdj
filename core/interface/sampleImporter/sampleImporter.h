@@ -170,6 +170,8 @@ class cSampleImporter : public ModuleBase
     bool kitImporting = false;  // waiting for the import to end
     uint8_t kitBaseSlot = 0;
     uint8_t kitCount = 0;
+    bool kitAddArmed = false;  // the Add waits for the folder's list to finish drawing
+    elapsedMillis kitAddTimer; // (the replace popup was painted over when shown at once)
     char kitPath[256] = { 0 };
     uint8_t midiAddFirstSlot = 0;
     uint8_t midiAddFirstChannel = 1;

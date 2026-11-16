@@ -265,6 +265,12 @@ void cSampleImporter::update()
         refreshActionButtons();
         display.synchronizeRefresh();
     }
+    if (kitAddArmed && kitAddTimer > 400 && !delayRefreshGUI) // MPDJ Kits (kitFolderListed)
+    {
+        kitAddArmed = false;
+        ip->unblockAllInputs();
+        instrumentAdd(false);
+    }
 }
 
 void cSampleImporter::start(uint32_t options)
@@ -1819,7 +1825,11 @@ void cSampleImporter::kitFolderListed()
     selectedSlot = kitBaseSlot;
     kitCount = (uint8_t)(last - first + 1);
     kitImporting = true;
-    instrumentAdd(false);
+    // Add a moment later (update()): shown now, the replace popup was painted over by
+    // the folder's list and its delayed refresh (Mike 2026-11-16: too quick to read)
+    kitAddArmed = true;
+    kitAddTimer = 0;
+    ip->blockAllInputs();
 }
 
 //==============================================================================================
