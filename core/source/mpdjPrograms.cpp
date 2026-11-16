@@ -131,6 +131,8 @@ void programsWriteToFile(strMpdjProjectData& out)
     out.swing = mtProject.mpdjSwing;
     out.reservedTracks[0] = (uint8_t)(mtProject.mpdjSwingOff & 0xFF); // version 10
     out.reservedTracks[1] = (uint8_t)(mtProject.mpdjSwingOff >> 8);
+    static_assert(sizeof(mtProject.mpdjTuring) <= sizeof(out.reservedTracks) - 2, "Turing settings fit");
+    memcpy(&out.reservedTracks[2], &mtProject.mpdjTuring, sizeof(mtProject.mpdjTuring)); // version 11
     padsWrite(out.pads);
     padColorsWrite(out.padColor);
     padDynamicsWrite(out.padDynLoss, out.padCurve);
@@ -170,6 +172,7 @@ bool programsReadFromFile(const strMpdjProjectData& in)
         mtProject.mpdjFullLevel = fullLevelDefault();
         mtProject.mpdjSwing = kSwingMin;
         mtProject.mpdjSwingOff = 0;
+        mtProject.mpdjTuring = {};
         s_importNotice = true;
         return false;
     }
@@ -178,6 +181,10 @@ bool programsReadFromFile(const strMpdjProjectData& in)
     // project swing: saved since version 7; older files are straight
     mtProject.mpdjSwing = (in.version >= 7 && in.swing >= kSwingMin && in.swing <= kSwingMax) ? in.swing : kSwingMin;
     mtProject.mpdjSwingOff = in.version >= 10 ? (uint16_t)(in.reservedTracks[0] | in.reservedTracks[1] << 8) : 0;
+    if (in.version >= 11)
+        memcpy(&mtProject.mpdjTuring, &in.reservedTracks[2], sizeof(mtProject.mpdjTuring));
+    else
+        mtProject.mpdjTuring = {};
     tracksReadFromFile(in.version >= 2 ? &in : nullptr);
     padsRead(in.version >= 3 ? in.pads : nullptr);
     padColorsRead(in.version >= 4 ? in.padColor : nullptr);

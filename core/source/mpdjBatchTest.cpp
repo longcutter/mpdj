@@ -140,6 +140,26 @@ void turingGen()
         if (a[r] >= 0 && !kMajor[a[r] % 12])
             inScale = false;
     check(inScale, "C major: only scale notes");
+    int8_t vel[64];
+    cTuring::generate(0xFFFF, 16, 50, 100, 48, 2, 3, 64, a, vel);
+    bool velOk = true;
+    for (int r = 0; r < 64; r++)
+        velOk = velOk && vel[r] >= 20 && vel[r] <= 80;
+    check(velOk, "velocity 20-80");
+    // the settings travel with the project (MPDJ block version 11)
+    auto keep = mtProject.mpdjTuring;
+    mtProject.mpdjTuring = { 1, 3, 9, 12, 40, 70, 36, 3, 2, 1, 0xBEEF, 0x12345678 };
+    static strMpdjProjectData file;
+    programsWriteToFile(file);
+    mtProject.mpdjTuring = {};
+    programsReadFromFile(file);
+    check(mtProject.mpdjTuring.valid == 1 && mtProject.mpdjTuring.reg == 0xBEEF &&
+            mtProject.mpdjTuring.seed == 0x12345678 && mtProject.mpdjTuring.mode == 2,
+          "settings round trip");
+    file.version = 10;
+    programsReadFromFile(file);
+    check(!mtProject.mpdjTuring.valid, "a version 10 block: none");
+    mtProject.mpdjTuring = keep;
     mtProject.values.padBoardScale = keepScale;
     mtProject.values.padBoardRootNote = keepRoot;
 }

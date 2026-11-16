@@ -18,10 +18,15 @@ static cTuring* TU = &turing;
 
 namespace
 {
-const char* const kLabelNames[cTuring::ParamCount] = { "Track", "Program", "Length", "Change",
-                                                       "Density", "Low note", "Range", "Seed" };
-const char* const kListNames[cTuring::ParamCount] = { "Track",   "Program",  "Length", "Change",
-                                                      "Density", "Low note", "Range",  "Seed (new)" };
+const char* const kLabelNames[cTuring::ParamCount] = { "Track", "Program", "Length", "Change", "Density",
+                                                       "Low note", "Range", "Seed", "Mode", "Velocity" };
+const char* const kListNames[cTuring::ParamCount] = { "Track",   "Program",  "Length", "Change",     "Density",
+                                                      "Low note", "Range",   "Seed (new)", "Writes", "Velocity" };
+const char* const kModeNames[cTuring::ModeCount] = { "Notes + hits", "Hits only (C5)", "Notes only" };
+const char* const kModeShort[cTuring::ModeCount] = { "Both", "Hits", "Notes" };
+
+// 8 labels for 10 settings: 1-8, or 3-10 while Mode / Velocity is selected
+int labelBase(int param) { return param >= 8 ? cTuring::ParamCount - 8 : 0; }
 
 // small, seeded PRNG: the same seed and settings always write the same rows
 uint32_t nextRand(uint32_t& s)
@@ -46,7 +51,7 @@ void functActionButton(uint8_t button, uint8_t state)
         return;
     int b = button - interfaceButton0;
     if (b >= 0 && b < 8)
-        TU->selectParam(b);
+        TU->selectParam(labelBase(TU->selectedParam()) + b);
 }
 void functPlayAction()
 {
@@ -63,7 +68,7 @@ uint32_t rgb(const uint8_t* c)
 } // namespace
 
 void cTuring::generate(uint16_t reg, int length, int change, int density, int low, int range,
-                       uint32_t seed, int rows, int16_t* out)
+                       uint32_t seed, int rows, int16_t* out, int8_t* vel)
 {
     // the notes to choose from: the project scale from Low note over Range octaves
     uint8_t notes[64];
@@ -82,6 +87,8 @@ void cTuring::generate(uint16_t reg, int length, int change, int density, int lo
         uint8_t g = (uint8_t)((v * 167u + 13u) & 0xFF);
         bool hit = g < (density * 256 + 50) / 100;
         out[r] = (hit && n) ? notes[v * n / 256] : -1;
+        if (vel)
+            vel[r] = (int8_t)(20 + ((reg >> 8) & 0xFF) * 60 / 255);
         // one step: the loop's oldest bit comes back in, flipped with the Change chance
         int bit = (reg >> (length - 1)) & 1;
         if ((int)(nextRand(rnd) % 100) < change)
@@ -102,7 +109,11 @@ void cTuring::write()
     Sequencer::strPattern* pt = sequencer.getPatternToUI();
     int rows = pt->track[0].length + 1;
     int16_t notes[Sequencer::MAXSTEP + 1];
-    generate(reg, length, change, density, low, range, seed, rows, notes);
+    int8_t vels[Sequencer::MAXSTEP + 1];
+    generate(reg, length, change, density, low, range, seed, rows, notes, vels);
+    int16_t pitches[Sequencer::MAXSTEP + 1]; // Notes only: every row's pitch, gated or not
+    if (mode == ModeNotes)
+        generate(reg, length, change, 100, low, range, seed, rows, pitches);
     if (!undoStored)
     {
         newFileManager.storePatternUndoRevision();
@@ -111,20 +122,73 @@ void cTuring::write()
     for (int r = 0; r < rows; r++)
     {
         auto& s = pt->track[track].step[r];
+        if (mode == ModeNotes)
+        {
+            // re-pitch the hits already there (any program), leave the rest alone; a row
+            // the register gates off keeps its note: the register still picks the pitch
+            if (s.note >= 0)
+            {
+                if (pitches[r] >= 0)
+                    s.note = (int8_t)pitches[r];
+                if (velocity)
+                    s.volume = vels[r];
+            }
+            continue;
+        }
         if (notes[r] >= 0)
         {
-            s.note = (int8_t)notes[r];
+            s.note = (int8_t)(mode == ModeHits ? Sequencer::STEP_NOTE_DEFAULT : notes[r]);
             s.instrument = (uint8_t)program;
+            s.volume = velocity ? vels[r] : -1;
         }
-        else if (s.note != Sequencer::STEP_NOTE_EMPTY)
+        else
         {
-            s.note = Sequencer::STEP_NOTE_EMPTY; // the generator owns the track's notes
-            s.instrument = 0;
+            if (s.note != Sequencer::STEP_NOTE_EMPTY)
+            {
+                s.note = Sequencer::STEP_NOTE_EMPTY; // the generator owns the track's notes
+                s.instrument = 0;
+            }
+            s.volume = -1;
         }
-        s.volume = -1;
         s.micromove = -1;
     }
     newFileManager.setActualPatternStructChanged();
+}
+
+void cTuring::load()
+{
+    const auto& t = mtProject.mpdjTuring;
+    if (!t.valid)
+        return;
+    track = clampInt(t.track, 0, kAllTracks - 1);
+    program = clampInt(t.program, 0, kProgramSlots - 1);
+    length = clampInt(t.length, 2, 16);
+    change = clampInt(t.change, 0, 100);
+    density = clampInt(t.density, 0, 100);
+    low = clampInt(t.low, 0, 115);
+    range = clampInt(t.range, 1, 4);
+    mode = clampInt(t.mode, 0, ModeCount - 1);
+    velocity = t.velocity ? 1 : 0;
+    reg = t.reg;
+    seed = t.seed ? t.seed : 1;
+}
+
+void cTuring::save()
+{
+    auto& t = mtProject.mpdjTuring;
+    t.valid = 1;
+    t.track = (uint8_t)track;
+    t.program = (uint8_t)program;
+    t.length = (uint8_t)length;
+    t.change = (uint8_t)change;
+    t.density = (uint8_t)density;
+    t.low = (uint8_t)low;
+    t.range = (uint8_t)range;
+    t.mode = (uint8_t)mode;
+    t.velocity = (uint8_t)velocity;
+    t.reg = reg;
+    t.seed = seed;
+    newFileManager.setProjectStructChanged();
 }
 
 void cTuring::initDisplayControls()
@@ -202,14 +266,17 @@ void cTuring::start(uint32_t options)
     (void)options;
     moduleRefresh = 1;
     undoStored = false;
-    // the cursor's track and the title bar's program, each time it opens
-    track = clampInt(patternEditor.trackerPattern.actualTrack, 0, kAllTracks - 1);
-    program = clampInt(mtProject.values.lastUsedInstrument, 0, kProgramSlots - 1);
-    if (!initialised)
+    if (mtProject.mpdjTuring.valid)
+        load(); // the project's settings (saved with it); the track it wrote to
+    else
     {
-        initialised = true;
-        newSeed(0x9E3779B9u ^ (uint32_t)sequencer.getSeqState() ^ (uint32_t)mtProject.values.globalTempo);
+        // a project that never used it: the cursor's track and the title bar's program
+        track = clampInt(patternEditor.trackerPattern.actualTrack, 0, kAllTracks - 1);
+        program = clampInt(mtProject.values.lastUsedInstrument, 0, kProgramSlots - 1);
+        if (!initialised)
+            newSeed(0x9E3779B9u ^ (uint32_t)mtProject.values.globalTempo);
     }
+    initialised = true;
 
     for (uint8_t b : { interfaceButtonPerformance, interfaceButtonParams, interfaceButtonFile,
                        interfaceButtonConfig, interfaceButtonMaster, interfaceButtonSamplePlay,
@@ -268,9 +335,12 @@ void cTuring::changeValue(int steps)
         newSeed(s);
         break;
     }
+    case ParamMode: mode = clampInt(mode + dir, 0, ModeCount - 1); break;
+    case ParamVelocity: velocity = dir > 0 ? 1 : 0; break;
     default: return;
     }
     write();
+    save();
     refresh();
 }
 
@@ -280,6 +350,7 @@ void cTuring::toggleBit(int bit)
         return;
     reg ^= (uint16_t)(1u << bit);
     write();
+    save();
     refresh();
 }
 
@@ -321,6 +392,10 @@ void cTuring::refresh()
     snprintf(paramValues[ParamLow], sizeof paramValues[0], "%s", mtNotes[low]);
     snprintf(paramValues[ParamRange], sizeof paramValues[0], range == 1 ? "%d octave" : "%d octaves", range);
     snprintf(paramValues[ParamSeed], sizeof paramValues[0], "%04X", (unsigned)(seed & 0xFFFF));
+    snprintf(paramValues[ParamMode], sizeof paramValues[0], "%s", kModeNames[mode]);
+    snprintf(paramValues[ParamVelocity], sizeof paramValues[0], "%s", velocity ? "On (20-80)" : "Off");
+    snprintf(labelValues[ParamMode], sizeof labelValues[0], "%s", kModeShort[mode]);
+    snprintf(labelValues[ParamVelocity], sizeof labelValues[0], "%s", velocity ? "On" : "Off");
 
     snprintf(labelValues[ParamTrack], sizeof labelValues[0], "%d", track + 1);
     snprintf(labelValues[ParamProgram], sizeof labelValues[0], "%d", program + 1);
@@ -334,14 +409,16 @@ void cTuring::refresh()
     display.setControlData(grid, &gridData);
     display.refreshControl(grid);
     listData.start = param;
+    display.setControlData(list, &listData); // recomputes the frame's row
     display.setControlValue(list, param);
     display.refreshControl(list);
+    int base = labelBase(param);
     for (int i = 0; i < 8; i++)
     {
-        display.setControlText(label[i], (char*)kLabelNames[i]);
-        display.setControlText2(label[i], labelValues[i]);
-        display.setControlColors(label[i], i == param ? display.getTheme().highlightedButtonLabelsColors
-                                                      : display.getTheme().activeLabelsColors);
+        display.setControlText(label[i], (char*)kLabelNames[base + i]);
+        display.setControlText2(label[i], labelValues[base + i]);
+        display.setControlColors(label[i], base + i == param ? display.getTheme().highlightedButtonLabelsColors
+                                                             : display.getTheme().activeLabelsColors);
         display.refreshControl(label[i]);
     }
     uint8_t sc = mtProject.values.padBoardScale;

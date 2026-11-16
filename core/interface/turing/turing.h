@@ -24,6 +24,8 @@ class cTuring : public ModuleBase
         ParamLow,
         ParamRange,
         ParamSeed,
+        ParamMode,     // Notes + hits / Hits only (C5) / Notes only (re-pitch the track's hits)
+        ParamVelocity, // Off / On: the register's high byte -> the volume column
         ParamCount
     };
 
@@ -34,6 +36,7 @@ class cTuring : public ModuleBase
     virtual void destroyDisplayControls();
 
     void selectParam(int p);
+    uint8_t selectedParam() const { return param; }
     void moveParam(int steps);
     void changeValue(int steps);
     void toggleBit(int bit); // a pad (1 = bit 0) or a touch on the grid: flip that bit and write
@@ -44,15 +47,19 @@ class cTuring : public ModuleBase
 
     // the generator itself (also used by the self-test): the note for each row of
     // `rows`, -1 = no hit
+    // vel (optional): a volume 20-80 per row from the register's high byte
     static void generate(uint16_t reg, int length, int change, int density, int low, int range,
-                         uint32_t seed, int rows, int16_t* out);
+                         uint32_t seed, int rows, int16_t* out, int8_t* vel = nullptr);
+    enum Mode : uint8_t { ModeBoth, ModeHits, ModeNotes, ModeCount };
 
   private:
     void write(); // the pattern's rows of the track, one UNDO per visit
     void newSeed(uint32_t s);
+    void load(); // from / to the project (mtProject.mpdjTuring)
+    void save();
 
     uint8_t param = ParamDensity;
-    int track = 0, program = 0, length = 8, change = 0, density = 50, low = 48, range = 2;
+    int track = 0, program = 0, length = 8, change = 0, density = 50, low = 48, range = 2, mode = 0, velocity = 0;
     uint32_t seed = 1;
     uint16_t reg = 0;
     bool undoStored = false, initialised = false;
