@@ -228,8 +228,9 @@ struct MpdjTrackHit
     uint8_t program;  // what played
     uint8_t velocity; // 0-127
     uint8_t note;     // 5c-3: Notes mode lights the pad of that note
+    int8_t slice;     // 5g fix: the Slice FX it played (-1 = none): the slice layer lights that pad
 };
-void mpdjLightsNoteOn(uint8_t track, uint8_t program, uint8_t velocity, uint8_t note);
+void mpdjLightsNoteOn(uint8_t track, uint8_t program, uint8_t velocity, uint8_t note, int slice = -1);
 MpdjTrackHit mpdjLightsTrackHit(uint8_t track);
 // Pads held right now (pad index -> track, -1 = not held) and what they play
 bool mpdjPadHeldSlot(int pad, strPadSlot* out, uint8_t* velocity);

@@ -493,23 +493,25 @@ const char* padPress(int pad, const strPadSlot* p, uint8_t velocity)
 namespace
 {
 std::atomic<uint32_t> s_hitCount[kAllTracks];
-std::atomic<uint32_t> s_hitWhat[kAllTracks]; // note << 16 | program << 8 | velocity
+std::atomic<uint32_t> s_hitWhat[kAllTracks]; // (slice + 1) << 24 | note << 16 | program << 8 | velocity
 }
 
-void mpdjLightsNoteOn(uint8_t track, uint8_t program, uint8_t velocity, uint8_t note)
+void mpdjLightsNoteOn(uint8_t track, uint8_t program, uint8_t velocity, uint8_t note, int slice)
 {
     if (track >= kAllTracks)
         return;
-    s_hitWhat[track].store((uint32_t)(note & 0x7F) << 16 | (uint32_t)program << 8 | (velocity & 0x7F));
+    uint32_t s = (slice >= 0 && slice < 64) ? (uint32_t)(slice + 1) : 0;
+    s_hitWhat[track].store(s << 24 | (uint32_t)(note & 0x7F) << 16 | (uint32_t)program << 8 | (velocity & 0x7F));
     s_hitCount[track].fetch_add(1);
 }
 
 MpdjTrackHit mpdjLightsTrackHit(uint8_t track)
 {
     if (track >= kAllTracks)
-        return { 0, 0, 0 };
+        return { 0, 0, 0, 0, -1 };
     uint32_t w = s_hitWhat[track].load();
-    return { s_hitCount[track].load(), (uint8_t)(w >> 8), (uint8_t)(w & 0x7F), (uint8_t)(w >> 16) };
+    return { s_hitCount[track].load(), (uint8_t)(w >> 8), (uint8_t)(w & 0x7F), (uint8_t)((w >> 16) & 0x7F),
+             (int8_t)((int)(w >> 24) - 1) };
 }
 
 bool mpdjPadHeldSlot(int pad, strPadSlot* out, uint8_t* velocity)

@@ -489,6 +489,7 @@ void MpcInput::pollPadLights()
             trackHitProgram[t] = hit.program;
             trackHitLevel[t] = hit.velocity;
             trackHitNote[t] = hit.note;
+            trackHitSlice[t] = hit.slice;
         }
     }
     uint8_t setting = mtConfig.general.padLights; // 0 Off, 1 Dim, 2 Bright
@@ -573,6 +574,7 @@ void MpcInput::pollPadLights()
     bool show = setting != 0 && (mtInterface.isPatternScreenActive() || onAssign);
     float base = setting == 1 ? 0.05f : 0.10f, top = setting == 1 ? 0.40f : 1.0f;
     bool notes = mpdjNotesOn() && !onAssign, levels = mpdjLevelsOn() && !onAssign;
+    bool slices = mpdjSliceLayerOn() && !onAssign;
     int rootPc = mtProject.values.padBoardRootNote % 12;
     static const uint8_t kRootRed[3] = { 127, 0, 0 };
     static const uint8_t kNoteWhite[3] = { 110, 110, 110 };
@@ -598,6 +600,10 @@ void MpcInput::pollPadLights()
         // (program, track); in Notes mode also the same note (5c-3)
         bool flash = trackHitCount[t] && now - trackHitMs[t] < kPadFlashMs && trackHitProgram[t] == slot.program &&
                      !levels && (!notes || trackHitNote[t] == (uint8_t)slot.note);
+        // the slice layer (5g fix, Mike 2026-11-15): only the slice that played: by its
+        // Slice FX (Slice mode), else by its note (Beat Slice: note 24 + slice)
+        if (flash && slices)
+            flash = trackHitSlice[t] >= 0 ? trackHitSlice[t] == pad : trackHitNote[t] == (uint8_t)slot.note;
         if (mpdjPadHeldSlot(pad, &held, &heldVel))
             level = heldVel / 50.0f;
         else if (flash)

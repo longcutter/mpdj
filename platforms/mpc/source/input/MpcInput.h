@@ -141,6 +141,7 @@ class MpcInput
     uint8_t trackHitProgram[16] = {};
     uint8_t trackHitLevel[16] = {};
     uint8_t trackHitNote[16] = {};
+    int8_t trackHitSlice[16] = {}; // 5g fix: the Slice FX of the last hit (-1 = none)
     void openPadLeds();
     void pollPadLights();
     void setPadLed(int pad, uint8_t r, uint8_t g, uint8_t b);
