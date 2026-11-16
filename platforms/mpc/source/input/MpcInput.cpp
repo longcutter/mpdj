@@ -1316,10 +1316,9 @@ bool MpcInput::padEngineHere() const
     return !padGrid && mtInterface.isPatternScreenActive() &&
            mtPopups.getStepPopupState() == stepPopupNone && !mtPopups.isNoteKeyboardPopupActive() &&
            !patternEditor.fillState &&
-           // edit mode (5b-4c): the pad map writes on the Note / Instrument
-           // columns; the FX, volume and micromove columns keep picking values
-           // from the 4x12 grid
-           (!patternEditor.editMode || patternEditor.editParam <= cPatternEditor::EditInstr) &&
+           // edit mode: the pad map on every column (Mike 2026-11-15: a pad writes
+           // its program on its own track wherever the cursor is; until then the
+           // FX, volume and micromove columns picked values from the 4x12 grid)
            !cPatternEditor::keyboardManager.getState();
 }
 
