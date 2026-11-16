@@ -89,13 +89,16 @@ struct strMpdjProjectData
     // (0 Global, 1 Soft, 2 Normal, 3 Hard)
     uint8_t padDynLoss[kPads];
     uint8_t padCurve[kPads];
+    // version 9 (2026-11-16): the slice each pad plays + 1 (0 = none; slice layer to bank)
+    uint8_t padSlice[kPads];
 };
 static constexpr size_t kMpdjProjectDataV1Size = 8 + 4 * kProgramSlots; // version 1 ended here
 static constexpr size_t kMpdjProjectDataV2Size = kMpdjProjectDataV1Size + 32; // version 2 ended here
 static constexpr size_t kMpdjProjectDataV3Size = kMpdjProjectDataV2Size + 4 * kPads; // version 3 ended here
 static constexpr size_t kMpdjProjectDataV4Size = kMpdjProjectDataV3Size + kPads; // versions 4-7 ended here
-static_assert(sizeof(strMpdjProjectData) == kMpdjProjectDataV4Size + 2 * kPads);
-static constexpr uint8_t kMpdjProjectDataVersion = 8; // 5 (5f-1): flags in the header; 6 (5g-6): loopSync in the slots; 7: swing (same size); 8: pad dynamics + curve (+128 bytes)
+static constexpr size_t kMpdjProjectDataV8Size = kMpdjProjectDataV4Size + 2 * kPads; // version 8 ended here
+static_assert(sizeof(strMpdjProjectData) == kMpdjProjectDataV8Size + kPads);
+static constexpr uint8_t kMpdjProjectDataVersion = 9; // 9: pad slices (+64 bytes); // 5 (5f-1): flags in the header; 6 (5g-6): loopSync in the slots; 7: swing (same size); 8: pad dynamics + curve (+128 bytes)
 static constexpr uint8_t kSwingMin = 50, kSwingMax = 75; // project swing, % (50 = straight)
 
 // Slot types for the current project (mtProject.programs)

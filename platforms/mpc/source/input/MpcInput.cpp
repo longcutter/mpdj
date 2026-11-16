@@ -886,6 +886,21 @@ void MpcInput::onButton(uint8_t note, bool down)
         samplePlayback.mpdjAskClear(); // 5g-3: SHIFT+ERASE = clear the slices (confirm popup)
         return;
     }
+    if (down && note >= kNoteBankA && note <= kNoteBankD && noteDown[kNoteCopy] && mpdjSliceLayerOn() &&
+        mtInterface.isPatternScreenActive())
+    {
+        // COPY + BANK in the slice layer (2026-11-16): the shown 16 slices onto that bank
+        // as pads with the source pad's settings; the layer ends on that bank
+        if (const char* msg = mpdjSliceLayerToBank(padBank, note - kNoteBankA))
+        {
+            mtPopups.show(0, msg);
+            endSliceLayer();
+            padBank = note - kNoteBankA;
+            if (trace)
+                printf("input: %s\n", msg);
+        }
+        return;
+    }
     if (down && note >= kNoteBankA && note <= kNoteBankD)
     {
         padBank = note - kNoteBankA;
