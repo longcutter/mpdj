@@ -457,8 +457,7 @@ bool MpcInput::turnHeldPadColor(int steps)
         patternEditor.editMode || sequencer.isRec() || lastEngineNote < 0 || enginePadHeld[lastEngineNote] < 0)
         return false;
     int pad = enginePadHeld[lastEngineNote];
-    int c = padColor(pad) + (steps > 0 ? 1 : -1);
-    c = c < 0 ? kPadColors : (c > kPadColors ? 0 : c); // wraps
+    int c = padColorStep(padColor(pad), steps, true); // wraps
     setPadColor(pad, (uint8_t)c);
     newFileManager.setProjectStructChanged();
     static char msg[40]; // the popup keeps the pointer
