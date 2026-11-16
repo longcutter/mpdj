@@ -196,7 +196,9 @@ void DisplayDriverImpl::setBrightness(int value)
     // The Tracker drives REG_PWM_DUTY (0-128). Map it onto the MPC backlight, never fully dark.
     if (getenv("MPDJ_NO_BACKLIGHT"))
         return;
-    const char* dir = "/sys/class/backlight/mipi-backlight";
+    const char* dir = getenv("MPDJ_BACKLIGHT_DIR"); // a plain folder for tests (QEMU)
+    if (!dir)
+        dir = "/sys/class/backlight/mipi-backlight";
     char path[128];
     snprintf(path, sizeof path, "%s/max_brightness", dir);
     FILE* f = fopen(path, "r");

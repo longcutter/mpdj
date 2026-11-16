@@ -25,7 +25,7 @@ constexpr uint8_t generalMenuGroupCount = 9;
 #elif defined(PLATFORM_MPC) // no USB group (USB storage / USB audio are Tracker+ hardware)
 constexpr uint8_t baseMenuGroupCount = MPDJ_QLINK_MODE4 ? 8 : 7; // + Display (2026-11-16), + Q-Links while mode 4 is on
 constexpr uint8_t projectMenuGroupCount = 10;
-constexpr uint8_t generalMenuGroupCount = 22; // MPC list: 22 items (no Radio region / Pads brightness since the Config clean-up; + Pattern view, 8-track column 2026-11-16); must equal the items below, extra items are silently dropped
+constexpr uint8_t generalMenuGroupCount = 21; // MPC list: 21 items (Display brightness moved to Display 2026-11-16) (no Radio region / Pads brightness since the Config clean-up; + Pattern view, 8-track column 2026-11-16); must equal the items below, extra items are silently dropped
 #elif defined(PLATFORM_IMX)
 constexpr uint8_t baseMenuGroupCount = 7;
 constexpr uint8_t projectMenuGroupCount = 10;
@@ -49,7 +49,7 @@ cMenuGroup menuBase(menuBase, 0, baseMenuGroupCount);
 cMenuGroup menuProject(menuBase, "Project Settings", projectMenuGroupCount);
 cMenuGroup menuGeneral(menuBase, "General", generalMenuGroupCount);
 #ifdef PLATFORM_MPC
-cMenuGroup menuDisplay(menuBase, "Display", 5); // MPDJ: the screensaver (2026-11-16)
+cMenuGroup menuDisplay(menuBase, "Display", 6); // MPDJ: the screensaver (2026-11-16)
 #endif
 #if defined(PLATFORM_MPC) && MPDJ_QLINK_MODE4
 cMenuGroup menuQLinks(menuBase, "Q-Links", mpdjQuick::kKnobs);
@@ -128,11 +128,13 @@ cMenuItem melRadioReg(menuGeneral,
                       menuTypeItemListTextWithAction,
                       &setupRadioRegion);
 #endif
+#ifndef PLATFORM_MPC // MPDJ: Config > Display > Brightness, in 10 % steps
 cMenuItem melDispBright(menuGeneral,
                         "Display brightness",
                         displBrightDesc,
                         menuTypeItemListTextWithAction,
                         &setupDispBrightness);
+#endif
 cMenuItem melDispTheme(menuGeneral,
                        "Display theme",
                        displThemeDesc,
@@ -199,6 +201,8 @@ const strItemTypeListText setupPatternView{ &mtConfig.general.patternDefaultView
 cMenuItem melPatternView(menuGeneral, "Pattern view", patternViewDesc, menuTypeItemListText, &setupPatternView);
 const strItemTypeListText setupEightColumn{ &mtConfig.general.eightViewColumn, 5, eightColumnTexts };
 cMenuItem melEightColumn(menuGeneral, "8-track column", eightColumnDesc, menuTypeItemListText, &setupEightColumn);
+const strItemTypeListTextWithAction setupMpdjBrightness{ &mtConfig.general.brightness, 10, mpdjBrightnessTexts, setDisplayBrightness };
+cMenuItem melMpdjBrightness(menuDisplay, "Brightness", mpdjBrightnessDesc, menuTypeItemListTextWithAction, &setupMpdjBrightness);
 const strItemTypeListText setupSaverOn{ &mtConfig.general.screensaver, 2, mpdjOffOnTexts };
 cMenuItem melSaverOn(menuDisplay, "Screensaver", screensaverDesc, menuTypeItemListText, &setupSaverOn);
 const strItemTypeListText setupSaverTime{ &mtConfig.general.screensaverTime, 6, screensaverTimeTexts };
