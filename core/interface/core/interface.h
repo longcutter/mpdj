@@ -60,6 +60,8 @@ class Interface
     void mpdjTogglePadAssign();
     bool isTrackMuteScreenActive(); // MPDJ 5e
     void mpdjToggleTrackMute();
+    bool isTuringScreenActive(); // MPDJ 2026-11-16
+    void mpdjToggleTuring();
     bool isPerformanceModeScreenActive();
     bool isMasterScreenActive();
     bool isInstrumentParamsScreenActive();
