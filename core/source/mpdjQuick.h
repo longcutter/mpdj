@@ -6,6 +6,10 @@
 #pragma once
 #include <cstdint>
 
+// Mike 2026-11-16: mode 4 off until it gets more testing and a decision (Q-LINK
+// cycles 1-3, no Config > Q-Links group). 1 brings both back.
+#define MPDJ_QLINK_MODE4 0
+
 namespace mpdjQuick
 {
 constexpr int kCount = 16;

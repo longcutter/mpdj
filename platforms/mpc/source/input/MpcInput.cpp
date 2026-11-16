@@ -39,6 +39,8 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
+#include "mpdjQuick.h"
+
 static_assert(sizeof(input_event) == 16, "armhf input_event should be 16 bytes");
 
 namespace
@@ -1886,7 +1888,7 @@ namespace
 {
 constexpr uint32_t kQLinkReleaseMs = 600; // untouched knob: let go of its button after this
 constexpr uint32_t kValuePopupMs = 1500;
-constexpr int kQLinkModes = 4;
+constexpr int kQLinkModes = MPDJ_QLINK_MODE4 ? 4 : 3; // mode 4 off for now (mpdjQuick.h)
 } // namespace
 
 void MpcInput::cycleQLinkMode()

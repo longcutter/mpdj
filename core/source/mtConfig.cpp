@@ -429,6 +429,8 @@ void checkConfig()
     for (int i = 0; i < mpdjQuick::kKnobs; i++)
         if (mtConfig.general.quickControl[i] >= mpdjQuick::kCount)
             mtConfig.general.quickControl[i] = mpdjQuick::kDefault[i];
+    if (mtConfig.general.patternDefaultView > 2)
+        mtConfig.general.patternDefaultView = 0;
 #endif
     if (mtConfig.general.performanceSource > 1)
         mtConfig.general.performanceSource = 0;
@@ -603,6 +605,7 @@ void resetConfig()
     mtConfig.general.popupTime = 0;        // 0.5 s (Mike 2026-11-14)
     for (int i = 0; i < mpdjQuick::kKnobs; i++)
         mtConfig.general.quickControl[i] = mpdjQuick::kDefault[i];
+    mtConfig.general.patternDefaultView = 0;
 #endif
 
     // interface ----------------------------------------
