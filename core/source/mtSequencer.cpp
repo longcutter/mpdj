@@ -3479,6 +3479,21 @@ int8_t Sequencer::mpdjPadStepWrite(uint8_t track, uint8_t row, uint8_t instrumen
     return step->volume < 0 ? 0 : step->volume;
 }
 
+bool Sequencer::mpdjAddHit(uint8_t track, uint8_t row, uint8_t instrument, uint8_t note, int8_t volume)
+{
+    strPattern* pattern = getPatternToUI();
+    if (track >= kAllTracks || row > pattern->track[0].length)
+        return false;
+    strPattern::strTrack::strStep* step = &pattern->track[track].step[row];
+    if (!step->isNoteEmpty())
+        return false;
+    step->note = note;
+    step->instrument = instrument;
+    step->volume = volume;
+    step->micromove = -1;
+    return true;
+}
+
 int Sequencer::mpdjPadRecOff(uint8_t track, bool* hadNote, bool cut)
 {
     if (hadNote)

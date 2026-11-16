@@ -425,6 +425,33 @@ namespace
 {
 // A press of physical pad `pad` playing slot `p` (the pad map's own slot, or
 // what Notes mode makes of it)
+// ---- Capture (2026-11-16) ----
+struct CaptureHit
+{
+    int64_t at; // pass * rows * 48 + row * 48 + microstep, on the hit's track
+    uint8_t track, program, note, velo;
+    int8_t slice;
+};
+constexpr int kCaptureMax = 1024;
+CaptureHit s_capture[kCaptureMax];
+int s_captureCount = 0, s_captureHead = 0; // ring: the oldest at head - count
+int64_t s_captureLast = -1;
+
+void captureKeep(uint8_t track, uint8_t program, uint8_t note, uint8_t velo, int8_t slice)
+{
+    uint32_t pass;
+    int row, u, last;
+    sequencer.mpdjPlayhead(track, &pass, &row, &u, &last);
+    int64_t at = ((int64_t)pass * (last + 1) + row) * 48 + u;
+    if (at < s_captureLast - 48) // playback started again: an older run doesn't line up
+        s_captureCount = 0;
+    s_captureLast = at;
+    s_capture[s_captureHead] = { at, track, program, note, velo, slice };
+    s_captureHead = (s_captureHead + 1) % kCaptureMax;
+    if (s_captureCount < kCaptureMax)
+        s_captureCount++;
+}
+
 const char* padPress(int pad, const strPadSlot* p, uint8_t velocity)
 {
     if (!p)
@@ -492,6 +519,8 @@ const char* padPress(int pad, const strPadSlot* p, uint8_t velocity)
                                                       : "the row has a note; Over Dub off adds only");
     }
 #endif
+    if (!s_held[pad].recorded && sequencer.isPlay())
+        captureKeep(p->track, p->program, note, velo, s_held[pad].slice);
     if (s_repeatOn.load())
         startRepeat(pad); // Note Repeat (5b-7a): the press was the first hit
     return nullptr;
@@ -863,6 +892,52 @@ void padSlicesRead(const uint8_t* slices)
 {
     for (int i = 0; i < kPads; i++)
         mtProject.pads.slice[i] = (slices && slices[i] <= MAX_SLICE_NUMBER) ? slices[i] : 0;
+}
+
+static char s_captureMsg[40];
+
+const char* mpdjCapture()
+{
+    if (!s_captureCount)
+        return "Nothing to capture";
+    uint32_t pass;
+    int row, u, last;
+    sequencer.mpdjPlayhead(0, &pass, &row, &u, &last);
+    int rows = last + 1;
+    // the last pattern-length of playing, ending at the newest hit
+    int64_t from = s_captureLast - (int64_t)rows * 48 + 24;
+    newFileManager.storePatternUndoRevision();
+    int written = 0, skipped = 0;
+    for (int k = 0; k < s_captureCount; k++)
+    {
+        const CaptureHit& h = s_capture[(s_captureHead - s_captureCount + k + kCaptureMax) % kCaptureMax];
+        if (h.at < from)
+            continue;
+        int r = (int)(((h.at + 24) / 48) % rows); // the nearest row
+        int8_t vol = padVelocityToVolume() ? sequencer.mpdjVelocityToVolume(h.velo) : -1;
+        bool ok = sequencer.mpdjAddHit(h.track, (uint8_t)r, h.program, h.note, vol);
+#ifdef PLATFORM_MPC
+        if (recTrace())
+            printf("capture: track %d row %d (%lld/48 after its start) %s\n", h.track + 1, r + 1,
+                   (long long)(h.at % ((int64_t)rows * 48)), ok ? "written" : "row taken");
+#endif
+        if (ok)
+        {
+            if (h.slice >= 0)
+                sequencer.mpdjSetSlice(h.track, (uint8_t)r, (uint8_t)h.slice, true);
+            written++;
+        }
+        else
+            skipped++;
+    }
+    s_captureCount = 0;
+    if (written)
+        newFileManager.setActualPatternStructChanged();
+    if (skipped)
+        snprintf(s_captureMsg, sizeof s_captureMsg, "Captured %d hits (%d rows taken)", written, skipped);
+    else
+        snprintf(s_captureMsg, sizeof s_captureMsg, written == 1 ? "Captured 1 hit" : "Captured %d hits", written);
+    return s_captureMsg;
 }
 
 static char s_toBankMsg[40];
