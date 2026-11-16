@@ -84,6 +84,7 @@ class cSongEditor : public ModuleBase
     void setDefaultScreenFunct();
 
     void changeSongPositionSelection(int16_t value);
+    void mpdjTapListRow(int row); // MPDJ (touch, 2026-11-16)
     void changeSelectedPlayListPattern(int value);
 
     void readSong();

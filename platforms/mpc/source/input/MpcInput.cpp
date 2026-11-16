@@ -10,6 +10,7 @@
 #include "display.h"
 #include "list.h"
 #include "paramValueList.h"
+#include "songPlayerControl.h"
 #include "mtConfig.h"
 #include "mtAudioEngine.h"
 #include "core/interfacePopups.h"
@@ -26,8 +27,6 @@
 #include "projectEditor/projectEditor.h"
 #include "sampleImporter/sampleImporter.h"
 #include "configEditor/configEditor.h"
-#include "list.h"
-#include "paramValueList.h"
 #include "sampleEditor/sampleEditor.h"
 #include "samplePlayback/samplePlayback.h"
 #include "songEditor/songEditor.h"
@@ -2611,6 +2610,12 @@ bool MpcInput::tapListRow(float x, float y)
             return projectEditor.mpdjTapList(0, r), true;
         if ((r = rowIn(projectEditor.recentListControl)) >= 0)
             return projectEditor.mpdjTapList(1, r), true;
+    }
+    else if (mtInterface.isSongScreenActive())
+    {
+        cSongPlayer* sp = (cSongPlayer*)display.mpdjControl(songEditor.songPlayerControl);
+        if (sp && (r = sp->mpdjRowAt((int)x, (int)y)) >= 0)
+            return songEditor.mpdjTapListRow(r), true;
     }
     else if (mtInterface.isConfigScreenActive())
     {
