@@ -49,6 +49,11 @@ void setRadioRegion()
 
 void setDisplayBrightness()
 {
+#ifdef PLATFORM_MPC
+    // MPDJ (2026-11-16): Config > Display > Brightness, 10-100 % (the Tracker's 3 steps unused)
+    display.setBacklightBrightness((uint8_t)((mtConfig.general.brightness + 1) * 128 / 10));
+    return;
+#endif
     if (mtConfig.general.dispBrightness > 2)
         mtConfig.general.dispBrightness = 2;
 

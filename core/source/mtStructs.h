@@ -1215,6 +1215,8 @@ struct strMtConfig
         uint8_t screensaverTime = 2; // 5 minutes
         uint8_t screensaverKind = 0;
         uint8_t screensaverDim = 1;
+        // MPDJ (2026-11-16): Config > Display > Brightness, 0-9 = 10-100 % of the backlight
+        uint8_t brightness = 9;
 #endif
     } general;
 
