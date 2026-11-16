@@ -379,7 +379,7 @@ bool cPadAssign::applyValue(int steps)
     }
     case ParamChoke: setPadGroup(selPad, (uint8_t)clampInt(padGroupOf(p.mode) + steps, 0, kPadGroups)); break;
     case ParamCut: setPadCutOnRelease(selPad, dir > 0); break;
-    case ParamColor: setPadColor(selPad, (uint8_t)clampInt(padColor(selPad) + dir, 0, kPadColors)); break;
+    case ParamColor: setPadColor(selPad, padColorStep(padColor(selPad), dir, false)); break;
     default: return false;
     }
     newFileManager.setProjectStructChanged();

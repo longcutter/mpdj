@@ -95,7 +95,7 @@ int applyPadSettings(const char* folderPath, int baseSlot, int count)
                 mode = m;
         if (group < 0 || group > kPadGroups)
             group = 0;
-        if (color < 0 || color > 16)
+        if (color < 0 || color > kPadColorChoices)
             color = 0;
         uint8_t slot = (uint8_t)(baseSlot + pos - 1);
         for (int p = 0; p < kPads; p++)
@@ -154,7 +154,7 @@ int saveBank(int bank, const char* name, char* msg, int msgSize)
     static char info[4096];
     int len = snprintf(info, sizeof info,
                        "MPDJ kit 1\n# NN mode group cut color (mode auto / oneshot / gate, "
-                       "choke group 0-31, cut on release 0 / 1, color 0 = Auto, 1-16)\n");
+                       "choke group 0-31, cut on release 0 / 1, color 0 = Auto, 1-16, 17 = Red)\n");
     int saved = 0;
     for (int i = 0; i < kPadsPerBank; i++)
     {

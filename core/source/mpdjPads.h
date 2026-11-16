@@ -59,16 +59,20 @@ constexpr uint8_t padModeByte(PadMode mode, uint8_t group, bool cut = false)
 // The MPDJ Kit's hats (tools/kitgen): Closed Hat, Open Hat, Pedal Hat
 
 // Pad colors (5c-2): 0 = Auto (the pad's track color), 1-16 = kPadPalette
-static constexpr int kPadColors = 16;
-static constexpr uint8_t kPadPalette[kPadColors][3] = { // 0-127 per channel; also the track colors
+static constexpr int kPadColors = 16;      // the track colors (palette entries 1-16)
+static constexpr int kPadColorChoices = 17; // stored pad colors 1-17: + Red (Mike 2026-11-16), kept
+                                            // last so saved projects and kits keep their colors
+static constexpr uint8_t kPadPalette[kPadColorChoices][3] = { // 0-127 per channel
     { 127, 24, 0 },  { 127, 64, 0 },  { 127, 112, 0 }, { 64, 127, 0 },  { 0, 127, 24 },   { 0, 127, 90 },
     { 0, 110, 127 }, { 0, 52, 127 },  { 24, 0, 127 },  { 72, 0, 127 },  { 127, 0, 127 },  { 127, 0, 64 },
-    { 127, 64, 64 }, { 64, 127, 96 }, { 96, 96, 127 }, { 110, 110, 110 },
+    { 127, 64, 64 }, { 64, 127, 96 }, { 96, 96, 127 }, { 110, 110, 110 }, { 127, 0, 0 },
 };
-static constexpr const char* kPadColorNames[kPadColors + 1] = {
+static constexpr const char* kPadColorNames[kPadColorChoices + 1] = {
     "Auto", "Red-orange", "Orange", "Yellow", "Lime", "Green", "Teal", "Cyan", "Sky",
-    "Blue", "Violet", "Magenta", "Pink", "Salmon", "Mint", "Lavender", "White",
+    "Blue", "Violet", "Magenta", "Pink", "Salmon", "Mint", "Lavender", "White", "Red",
 };
+// the order the color setting steps through: Auto, Red, Red-orange .. White
+uint8_t padColorStep(uint8_t color, int dir, bool wrap);
 
 struct strPadMap
 {

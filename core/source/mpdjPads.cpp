@@ -945,7 +945,7 @@ void padColorsWrite(uint8_t* out)
 void padColorsRead(const uint8_t* in)
 {
     for (int i = 0; i < kPads; i++)
-        mtProject.pads.color[i] = (in && in[i] <= kPadColors) ? in[i] : 0;
+        mtProject.pads.color[i] = (in && in[i] <= kPadColorChoices) ? in[i] : 0;
 }
 
 uint8_t padColor(int pad)
@@ -955,8 +955,24 @@ uint8_t padColor(int pad)
 
 void setPadColor(int pad, uint8_t color)
 {
-    if (pad >= 0 && pad < kPads && color <= kPadColors)
+    if (pad >= 0 && pad < kPads && color <= kPadColorChoices)
         mtProject.pads.color[pad] = color;
+}
+
+uint8_t padColorStep(uint8_t color, int dir, bool wrap)
+{
+    static const uint8_t kOrder[kPadColorChoices + 1] = { 0, 17, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
+    constexpr int n = kPadColorChoices + 1;
+    int pos = 0;
+    for (int i = 0; i < n; i++)
+        if (kOrder[i] == color)
+            pos = i;
+    pos += dir > 0 ? 1 : -1;
+    if (wrap)
+        pos = (pos + n) % n;
+    else
+        pos = pos < 0 ? 0 : pos >= n ? n - 1 : pos;
+    return kOrder[pos];
 }
 
 const uint8_t* padColorRgb(int pad, uint8_t track)
@@ -1102,8 +1118,16 @@ int padsSelfTest()
     check(padColor(5) == 0 && padColorRgb(5, 3) == kPadPalette[3], "Auto = the track's color", 5);
     setPadColor(5, 7);
     setPadColor(63, 16);
-    setPadColor(6, 17); // out of range: ignored
+    setPadColor(6, 18); // out of range: ignored
     check(padColor(5) == 7 && padColorRgb(5, 3) == kPadPalette[6] && padColor(6) == 0, "set color", 5);
+    setPadColor(7, 17); // Red (2026-11-16)
+    check(padColor(7) == 17 && padColorRgb(7, 0)[0] == 127 && padColorRgb(7, 0)[1] == 0 &&
+            padColorRgb(7, 0)[2] == 0,
+          "Red", 7);
+    check(padColorStep(0, 1, false) == 17 && padColorStep(17, 1, false) == 1 && padColorStep(1, -1, false) == 17 &&
+            padColorStep(16, 1, false) == 16 && padColorStep(16, 1, true) == 0 && padColorStep(0, -1, true) == 16,
+          "color order Auto, Red, Red-orange .. White", 7);
+    setPadColor(7, 0);
     programsWriteToFile(file);
     mtProject.pads.color[5] = mtProject.pads.color[63] = 0;
     programsReadFromFile(file);
