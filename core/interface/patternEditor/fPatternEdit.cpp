@@ -1,4 +1,5 @@
 #include "mpdjQuick.h"
+#include "mpdjFeatures.h"
 #include "trackMute/trackMute.h" // MPDJ: Bounce mutes the sources
 #include "mtStructs.h"
 #include "mpdjTracks.h"
@@ -3844,6 +3845,11 @@ static void functConfirmExportLoad()
 // MPDJ (2026-11-16): Bounce, see patternEditor.h
 static void functConfirmBounce()
 {
+    if (!mpdjOn(MpdjFeature::Bounce))
+    {
+        mtPopups.show(0, "Bounce is off (MPDJ_OFF)");
+        return;
+    }
     sendSelection();
     auto& sel = sequencer.selection;
     PTE->mpdjBounceFirstTrack = std::min(sel.firstTrack, sel.lastTrack);

@@ -6,6 +6,7 @@
 #include "mtMidi.h"
 #include "mtStructs.h"
 #include "scales.h"
+#include "mpdjFeatures.h"
 #include "util_math.h"
 #include <stdint.h>
 
@@ -879,7 +880,8 @@ class Sequencer
     // humanize; otherwise swung tracks are delayed note by note
     static bool mpdjClockSwing()
     {
-        return mtProject.mpdjSwingOff == 0 && mtProject.mpdjSwingGrid == 0 && mtProject.mpdjHumanize == 0;
+        return mpdjOn(MpdjFeature::Grooves) == false ||
+               (mtProject.mpdjSwingOff == 0 && mtProject.mpdjSwingGrid == 0 && mtProject.mpdjHumanize == 0);
     }
     // the delay (microsteps) the groove gives a note at `pos` on a swung track, without
     // humanize: 16ths delay odd rows, 8ths every third and fourth row's start (pos % 4 == 2)

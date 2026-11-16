@@ -4,6 +4,7 @@
 #include "mpdjPrograms.h"
 #include "mpdjSlices.h"
 #include "mpdjBatchTest.h"
+#include "mpdjFeatures.h"
 #include "audio/AudioProbe.h"
 #include "audio/MpcAudio.h"
 #include "input/LedProbe.h"
@@ -104,6 +105,7 @@ int main()
         return AudioProbe::listControls();
     if (envOn("MPDJ_LATENCY_TEST"))
         return AudioProbe::latencyTest();
+    mpdjFeaturesReport(); // MPDJ_OFF
     if (int rc = batchSelfTest(); rc >= 0)
         return rc; // MPDJ_BATCH_TEST: all of the ones below and more
     if (int rc = programsSelfTest(); rc >= 0)

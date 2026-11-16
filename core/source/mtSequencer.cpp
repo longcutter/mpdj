@@ -826,6 +826,7 @@ AUDIO_CORE_RAM void Sequencer::play_microStep(int row)
         // stays straight and the swung tracks' second 16ths are delayed instead, by
         // (2 x swing % - 100) % of a row (the same place the clock swing puts them)
         if (!playerRow.cancelStep && stepToSend.note >= 0 && !player.swing.isActive && !mpdjClockSwing() &&
+            mpdjOn(MpdjFeature::Swing) &&
             !(mtProject.mpdjSwingOff & (1u << row)))
         {
             int d = mpdjGrooveDelay(playerRow.actual_pos, mtProject.mpdjSwing, mtProject.mpdjSwingGrid);
@@ -2365,7 +2366,7 @@ AUDIO_CORE_RAM float Sequencer::getTimerPeriod_us(void)
     }
     // MPDJ: project swing when no Swing effect has taken over (the effect wins
     // until STOP, as on the Tracker); same timing: rows alternate long / short
-    else if (mtProject.mpdjSwing > 50 && mtProject.mpdjSwing <= 75 && mpdjClockSwing())
+    else if (mtProject.mpdjSwing > 50 && mtProject.mpdjSwing <= 75 && mpdjClockSwing() && mpdjOn(MpdjFeature::Swing))
     {
         // MPC percent: the first 16th of each pair lasts swing % of the pair
         // (66 ~ triplet feel); the Tracker's own Swing effect scales differently

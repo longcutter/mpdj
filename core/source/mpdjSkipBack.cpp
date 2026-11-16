@@ -1,5 +1,6 @@
 // MPDJ (2026-11-16): skip-back sampling, see mpdjSkipBack.h
 #include "mpdjSkipBack.h"
+#include "mpdjFeatures.h"
 
 #include "fileManager.h"
 #include "mpdjPrograms.h"
@@ -31,6 +32,9 @@ constexpr uint32_t kPost = kRate / 5;      // 200 ms after the last
 
 void mpdjSkipBackPush(const int16_t* in, unsigned frames)
 {
+    static const bool on = mpdjOn(MpdjFeature::SkipBack);
+    if (!on)
+        return;
     uint32_t w = s_write.load(std::memory_order_relaxed);
     for (unsigned i = 0; i < frames; i++)
     {

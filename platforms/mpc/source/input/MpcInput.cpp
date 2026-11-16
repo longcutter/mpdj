@@ -13,6 +13,7 @@
 #include "songPlayerControl.h"
 #include "turing/turing.h"
 #include "mpdjSkipBack.h"
+#include "mpdjFeatures.h"
 #include "mtConfig.h"
 #include "mtAudioEngine.h"
 #include "core/interfacePopups.h"
@@ -274,7 +275,7 @@ bool MpcInput::wake()
 // under it, any button, knob or touch ends it.
 void MpcInput::showVisuals()
 {
-    if (!disp || saverOn)
+    if (!disp || saverOn || !mpdjOn(MpdjFeature::Visuals))
         return;
     saverOn = true;
     visualsOnDemand = true;
@@ -285,6 +286,8 @@ void MpcInput::showVisuals()
 
 void MpcInput::pollSaver()
 {
+    if (!mpdjOn(MpdjFeature::Screensaver))
+        return;
     uint32_t now = platform.getTimer()->millis();
     if (!lastInputMs)
         lastInputMs = now;
@@ -975,7 +978,7 @@ void MpcInput::onButton(uint8_t note, bool down)
     {
         // SHIFT+SAMPLER (2026-11-16): skip-back, the last minute of the input as a sample
         releaseCoreShift();
-        mtPopups.show(0, mpdjSkipBackSave());
+        mtPopups.show(0, mpdjOn(MpdjFeature::SkipBack) ? mpdjSkipBackSave() : "Skip-back is off (MPDJ_OFF)");
         return;
     }
 
@@ -1080,6 +1083,8 @@ void MpcInput::onButton(uint8_t note, bool down)
             {
                 // held while playing = Fill (2026-11-16): steps with the FIL chance
                 // condition play, !FL ones don't, until it's let go
+                if (!mpdjOn(MpdjFeature::Fill))
+                    break;
                 sequencer.mpdjFill = true;
                 mtPopups.show(0, "Fill");
                 break;
@@ -1198,6 +1203,12 @@ void MpcInput::onButton(uint8_t note, bool down)
             levelsTurned = false;
             break;
         case Act::StepSeq:
+            if (mpcShift && (onPattern || mtInterface.isGeneratorScreenActive()) &&
+                !mpdjOn(MpdjFeature::Generators))
+            {
+                mtPopups.show(0, "Generators are off (MPDJ_OFF)");
+                break;
+            }
             if (mpcShift && (onPattern || mtInterface.isGeneratorScreenActive()))
             {
                 // SHIFT+STEP SEQ (2026-11-16): the last generator (Turing Machine / Drum
@@ -1245,7 +1256,7 @@ void MpcInput::onButton(uint8_t note, bool down)
                 // unrecorded pad playing into the pattern
                 releaseCoreShift();
                 mpdjSetCursorTrack(patternEditor.trackerPattern.actualTrack); // Config "Capture to"
-                const char* msg = mpdjCapture();
+                const char* msg = mpdjOn(MpdjFeature::Capture) ? mpdjCapture() : "Capture is off (MPDJ_OFF)";
                 mtPopups.show(0, msg);
                 if (trace)
                     printf("input: %s\n", msg);
@@ -2646,6 +2657,8 @@ static int keyboardKeyAt(float x, float y)
 // items, an item's values). The screens' own selection functions do the moving.
 bool MpcInput::tapListRow(float x, float y)
 {
+    if (!mpdjOn(MpdjFeature::TapLists))
+        return false;
     auto rowIn = [&](hControl h) {
         cList* l = (cList*)display.mpdjControl(h);
         return l ? l->mpdjRowAt((int)x, (int)y) : -1;

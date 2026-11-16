@@ -1,5 +1,6 @@
 // MPDJ additions (MIT, see NOTICE.md): the pad map. See mpdjPads.h.
 #include "mpdjPads.h"
+#include "mpdjFeatures.h"
 
 #include "mpdjPrograms.h"
 #include "mtSequencer.h"
@@ -519,7 +520,7 @@ const char* padPress(int pad, const strPadSlot* p, uint8_t velocity)
                                                       : "the row has a note; Over Dub off adds only");
     }
 #endif
-    if (!s_held[pad].recorded && sequencer.isPlay())
+    if (!s_held[pad].recorded && sequencer.isPlay() && mpdjOn(MpdjFeature::Capture))
         captureKeep(p->track, p->program, note, velo, s_held[pad].slice);
     if (s_repeatOn.load())
         startRepeat(pad); // Note Repeat (5b-7a): the press was the first hit
@@ -874,6 +875,8 @@ const char* padCurveName(uint8_t setting)
 
 int padSlice(int pad)
 {
+    if (!mpdjOn(MpdjFeature::PadSlices))
+        return -1;
     return (pad >= 0 && pad < kPads && mtProject.pads.slice[pad]) ? mtProject.pads.slice[pad] - 1 : -1;
 }
 
@@ -1013,6 +1016,8 @@ int dynamicsPad(int pad)
 
 uint8_t padVelocityFor(int pad, uint8_t program, uint8_t velocity)
 {
+    if (!mpdjOn(MpdjFeature::Dynamics))
+        pad = -1; // Config's curve, the whole range
     // 16 Levels sets the velocities itself: the pad's own dynamics stay out of it
     if (pad < 0 || pad >= kPads || s_levelsMode)
         return padVelocity(program, velocity);

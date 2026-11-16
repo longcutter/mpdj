@@ -1,4 +1,5 @@
 #include "DisplayDriverImpl.h"
+#include "mpdjFeatures.h"
 
 #include <unistd.h>
 
@@ -194,7 +195,7 @@ void DisplayDriverImpl::setBrightness(int value)
     if (!dimmed)
         brightness = value > 128 ? 128 : value;
     // The Tracker drives REG_PWM_DUTY (0-128). Map it onto the MPC backlight, never fully dark.
-    if (getenv("MPDJ_NO_BACKLIGHT"))
+    if (getenv("MPDJ_NO_BACKLIGHT") || !mpdjOn(MpdjFeature::Backlight))
         return;
     const char* dir = getenv("MPDJ_BACKLIGHT_DIR"); // a plain folder for tests (QEMU)
     if (!dir)
