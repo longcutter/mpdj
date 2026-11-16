@@ -1204,6 +1204,8 @@ struct strMtConfig
         // MPDJ (Q-Link mode 4, 2026-11-15): the effect on each Q-Link, an index
         // into mpdjQuick::kName (Volume, Micromove, Panning, Reverse by default)
         uint8_t quickControl[4] = { 0, 1, 2, 3 };
+        // MPDJ (2026-11-16): the Pattern screen's starting view: 0 FX, 1 Mic / Vol, 2 all six columns
+        uint8_t patternDefaultView = 0;
 #endif
     } general;
 

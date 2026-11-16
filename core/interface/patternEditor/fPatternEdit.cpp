@@ -309,6 +309,17 @@ void cPatternEditor::update()
 void cPatternEditor::start(uint32_t options)
 {
     (void)options;
+#ifdef PLATFORM_MPC
+    // MPDJ: Config > General > Pattern view sets the view at start-up and whenever the
+    // setting changes; SHIFT + touch Q-Link 3 changes it for the session in between
+    static uint8_t appliedView = 0xFF;
+    if (mtConfig.general.patternDefaultView != appliedView)
+    {
+        appliedView = mtConfig.general.patternDefaultView;
+        isMicVolView = appliedView == 1;
+        mpdjSixView = appliedView == 2;
+    }
+#endif
 
     moduleRefresh = 1;
     patternButtonReleaseActive = 0;
