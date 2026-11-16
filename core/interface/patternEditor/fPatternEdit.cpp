@@ -687,6 +687,21 @@ void cPatternEditor::refreshPattern()
                 row.note[2] = mtNotes[seqStep.note][2];
                 row.note[3] = mtNotes[seqStep.note][3];
                 row.note[4] = mtNotes[seqStep.note][4];
+#ifdef PLATFORM_MPC
+                // MPDJ (Mike 2026-11-15): a Beat Slice program's note picks the slice
+                // (24 = slice 1), so show the slice: "S01" .. "S48". Only the text; the
+                // step keeps its note (and shows it again if the play mode changes)
+                if (seqStep.instrument >= 0 && isSampleInstrument(seqStep.instrument) &&
+                    mtProject.instrument[seqStep.instrument].playMode == playModeBeatSlice &&
+                    seqStep.note >= FIRST_BEAT_SLICE_NOTE && seqStep.note < FIRST_BEAT_SLICE_NOTE + MAX_SLICE_NUMBER)
+                {
+                    int slice = seqStep.note - FIRST_BEAT_SLICE_NOTE + 1;
+                    row.note[0] = 'S';
+                    row.note[1] = (char)('0' + slice / 10);
+                    row.note[2] = (char)('0' + slice % 10);
+                    row.note[3] = 0;
+                }
+#endif
                 showInstrument = true;
             }
             else if (seqStep.note == Sequencer::STEP_NOTE_OFF_DEFAULT)
