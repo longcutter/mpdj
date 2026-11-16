@@ -11,6 +11,7 @@
 #include "mtSequencer.h"
 #include "mtStructs.h"
 #include "turing/turing.h"
+#include "turing/drumGrid.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -169,6 +170,34 @@ void turingGen()
     mtProject.values.padBoardScale = keepScale;
     mtProject.values.padBoardRootNote = keepRoot;
 }
+void drumGridGen()
+{
+    s_section = "drum grid";
+    static int8_t a[3][128], b[3][128];
+    const int half[3] = { 50, 50, 50 };
+    cDrumGrid::generate(0, 0, half, 0, 1, 16, a);
+    auto steps = [](const int8_t* part) {
+        uint32_t m = 0;
+        for (int s = 0; s < 16; s++)
+            if (part[s] >= 0)
+                m |= 1u << s;
+        return m;
+    };
+    check(steps(a[0]) == 0x1111, "four on the floor: kick on 1, 5, 9, 13");
+    check(steps(a[1]) == 0x1010, "snare on 5 and 13");
+    check(steps(a[2]) == 0x4444, "hat on the off-beat 8ths");
+    const int none[3] = { 0, 0, 0 };
+    cDrumGrid::generate(128, 200, none, 50, 9, 64, a);
+    bool silent = true;
+    for (int p = 0; p < 3; p++)
+        for (int r = 0; r < 64; r++)
+            silent = silent && a[p][r] < 0;
+    check(silent, "density 0: nothing");
+    const int full[3] = { 100, 70, 90 };
+    cDrumGrid::generate(200, 90, full, 60, 77, 64, a);
+    cDrumGrid::generate(200, 90, full, 60, 77, 64, b);
+    check(memcmp(a, b, sizeof a) == 0, "same settings and seed = same rows");
+}
 } // namespace
 
 int batchSelfTest()
@@ -186,6 +215,7 @@ int batchSelfTest()
     swing();
     capture();
     turingGen();
+    drumGridGen();
     printf("batch test: programs / pads / slices %s; %d checks passed, %d failed\n",
            older ? "FAILED (see above)" : "passed", s_pass, s_fail);
     printf("batch test: %s\n", (older || s_fail) ? "FAILED" : "passed");

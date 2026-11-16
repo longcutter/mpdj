@@ -1182,13 +1182,19 @@ void MpcInput::onButton(uint8_t note, bool down)
             levelsTurned = false;
             break;
         case Act::StepSeq:
-            if (mpcShift && (onPattern || mtInterface.isTuringScreenActive()))
+            if (mpcShift && (onPattern || mtInterface.isGeneratorScreenActive()))
             {
-                // SHIFT+STEP SEQ (2026-11-16): the Turing Machine generator; again = back
+                // SHIFT+STEP SEQ (2026-11-16): the last generator (Turing Machine / Drum
+                // Grid); again = back to the Pattern screen
                 releaseCoreShift();
                 stepSeq = false;
                 endSliceLayer();
-                mtInterface.mpdjToggleTuring();
+                mtInterface.mpdjToggleGenerator();
+                break;
+            }
+            if (mtInterface.isGeneratorScreenActive())
+            {
+                mtInterface.mpdjSwitchGenerator(); // STEP SEQ: the other generator
                 break;
             }
             if (!onPattern)

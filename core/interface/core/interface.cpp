@@ -16,6 +16,7 @@
 #include "padAssign/padAssign.h" // MPDJ
 #include "trackMute/trackMute.h" // MPDJ
 #include "turing/turing.h"       // MPDJ
+#include "turing/drumGrid.h"     // MPDJ
 #include "performanceMode/performanceMode.h"
 #include "projectEditor/projectEditor.h"
 #include "sampleEditor/sampleEditor.h"
@@ -647,6 +648,41 @@ void Interface::mpdjToggleTuring()
     if (onScreenModule != nullptr)
         deactivateModule(onScreenModule);
     activateModule(&turing, 0);
+}
+
+bool Interface::isDrumGridScreenActive()
+{
+    return isOnScreenModule(&drumGrid);
+}
+
+bool Interface::isGeneratorScreenActive()
+{
+    return isOnScreenModule(&turing) || isOnScreenModule(&drumGrid);
+}
+
+static ModuleBase* s_lastGenerator = &turing;
+
+void Interface::mpdjToggleGenerator()
+{
+    if (isGeneratorScreenActive())
+    {
+        deactivateModule(onScreenModule);
+        activateModule(&patternEditor, 0);
+        return;
+    }
+    if (onScreenModule != nullptr)
+        deactivateModule(onScreenModule);
+    activateModule(s_lastGenerator, 0);
+}
+
+void Interface::mpdjSwitchGenerator()
+{
+    if (!isGeneratorScreenActive())
+        return;
+    ModuleBase* next = isOnScreenModule(&turing) ? (ModuleBase*)&drumGrid : (ModuleBase*)&turing;
+    deactivateModule(onScreenModule);
+    activateModule(next, 0);
+    s_lastGenerator = next;
 }
 
 bool Interface::isPerformanceModeScreenActive()
