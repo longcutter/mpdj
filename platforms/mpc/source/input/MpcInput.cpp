@@ -11,6 +11,7 @@
 #include "list.h"
 #include "paramValueList.h"
 #include "songPlayerControl.h"
+#include "turing/turing.h"
 #include "mtConfig.h"
 #include "mtAudioEngine.h"
 #include "core/interfacePopups.h"
@@ -1181,6 +1182,15 @@ void MpcInput::onButton(uint8_t note, bool down)
             levelsTurned = false;
             break;
         case Act::StepSeq:
+            if (mpcShift && (onPattern || mtInterface.isTuringScreenActive()))
+            {
+                // SHIFT+STEP SEQ (2026-11-16): the Turing Machine generator; again = back
+                releaseCoreShift();
+                stepSeq = false;
+                endSliceLayer();
+                mtInterface.mpdjToggleTuring();
+                break;
+            }
             if (!onPattern)
                 break;
             stepSeq = !stepSeq;
@@ -1593,6 +1603,13 @@ void MpcInput::onPad(uint8_t note, bool down, uint8_t velocity)
     {
         mpdjPadRelease(enginePadHeld[note]);
         enginePadHeld[note] = -1;
+        return;
+    }
+    if (down && mtInterface.isTuringScreenActive())
+    {
+        // Turing Machine (2026-11-16): pad N flips bit N of the register
+        if (int n = padNumber(note))
+            turing.toggleBit(n - 1);
         return;
     }
     if (down && mtInterface.isTrackMuteScreenActive())
@@ -2712,6 +2729,8 @@ void MpcInput::onScreenTap(float x, float y)
         padAssign.selectPad(padAssign.padAt(x, y)); // select only, no sound (Mike 2026-11-14)
     else if (mtInterface.isTrackMuteScreenActive())
         trackMute.toggle(trackMute.trackAt(x, y)); // 5e-1
+    else if (mtInterface.isTuringScreenActive())
+        turing.toggleBit(turing.bitAt(x, y));
     else if (mtInterface.isSamplePlayerScreenActive() && samplePlayback.mpdjSliceUi() && x < 600 && y >= 31 &&
              y < 400)
         samplePlayback.mpdjSliceTapWave((int)x); // 5g-1: select the slice under the finger

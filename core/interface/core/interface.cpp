@@ -15,6 +15,7 @@
 #include "patternEditor/patternEditor.h"
 #include "padAssign/padAssign.h" // MPDJ
 #include "trackMute/trackMute.h" // MPDJ
+#include "turing/turing.h"       // MPDJ
 #include "performanceMode/performanceMode.h"
 #include "projectEditor/projectEditor.h"
 #include "sampleEditor/sampleEditor.h"
@@ -627,6 +628,25 @@ void Interface::mpdjToggleTrackMute()
     if (onScreenModule != nullptr)
         deactivateModule(onScreenModule);
     activateModule(&trackMute, 0);
+}
+
+bool Interface::isTuringScreenActive()
+{
+    return isOnScreenModule(&turing);
+}
+
+// MPDJ (2026-11-16): SHIFT+STEP SEQ opens the Turing Machine; again = back
+void Interface::mpdjToggleTuring()
+{
+    if (onScreenModule == &turing)
+    {
+        if (previousModule != nullptr && previousModule != &turing)
+            switchModuleToPrevious(&turing, 0);
+        return;
+    }
+    if (onScreenModule != nullptr)
+        deactivateModule(onScreenModule);
+    activateModule(&turing, 0);
 }
 
 bool Interface::isPerformanceModeScreenActive()
