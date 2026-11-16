@@ -3798,6 +3798,8 @@ static void functAutoNameKeyboard()
 // Cancel Export - wraca do podstawowego okna
 static void functCancelKeyboard()
 {
+    PTE->isLoadAfterSave = false; // MPDJ (review): nothing pending after a cancel
+    PTE->mpdjBounce = false;
     PTE->setDefaultScreenFunct();
     PTE->setSwitchModuleFunct();
     PTE->hideKeyboardExport();
@@ -3809,6 +3811,10 @@ static void functCancelKeyboard()
 static void functConfirmExport()
 {
     char localPatch[255];
+    // MPDJ (review 2026-11-16): a plain Render starts clean; Render & Load / Bounce set
+    // their flags after this (a cancelled one used to leave them set for the next render)
+    PTE->isLoadAfterSave = false;
+    PTE->mpdjBounce = false;
 
     sprintf(localPatch, "Export/%s/Selection", newFileManager.getCurrentProjectName());
 
@@ -3855,8 +3861,8 @@ static void functConfirmBounce()
     PTE->mpdjBounceFirstTrack = std::min(sel.firstTrack, sel.lastTrack);
     PTE->mpdjBounceLastTrack = std::max(sel.firstTrack, sel.lastTrack);
     PTE->mpdjBounceRow = std::min(sel.firstStep, sel.lastStep);
-    PTE->mpdjBounce = true;
     functConfirmExport();
+    PTE->mpdjBounce = true;
     PTE->isLoadAfterSave = true;
 }
 

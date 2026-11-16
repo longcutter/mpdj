@@ -267,6 +267,11 @@ void cFileManager::getDefaultProject(struct strMtProject* source)
     source->mpdjFullLevel = mtConfig.general.fullLevelDefault; // MPDJ 5f-1: Config default
 #endif
     source->mpdjSwing = 50; // MPDJ: a new project plays straight
+    // MPDJ (review 2026-11-16): and with every track swung, 16ths, no humanize, no Turing settings
+    source->mpdjSwingOff = 0;
+    source->mpdjSwingGrid = 0;
+    source->mpdjHumanize = 0;
+    source->mpdjTuring = {};
     getDefaultSong(&source->song);
     getDefaultValues(&source->values);
 

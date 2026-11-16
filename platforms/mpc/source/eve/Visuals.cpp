@@ -57,6 +57,13 @@ const char* Visuals::name(int k)
 
 void Visuals::start(int k)
 {
+    // review: the meters' atomics start uninitialised; begin from silence
+    for (auto& v : trackLevel)
+        v.store(0.0f);
+    for (auto& v : masterLevel)
+        v.store(0.0f);
+    memset(shown, 0, sizeof shown);
+    memset(hold, 0, sizeof hold);
     kind.store(k >= 0 && k < kCount ? k : 0);
     fresh.store(true);
     on.store(true);
