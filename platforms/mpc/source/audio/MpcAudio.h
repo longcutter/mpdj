@@ -41,4 +41,9 @@ void setHeadphoneMuted(bool muted);
 // The output's peak in the last block, 0..1 after the volume (the screensaver's
 // visuals follow it; written by the audio thread)
 extern std::atomic<float> outputLevel;
+// The level meters (2026-11-16): the last kScopeFrames output frames (mono, before the
+// volume) and where the audio thread writes next
+constexpr unsigned kScopeFrames = 16384;
+extern int16_t scope[kScopeFrames];
+extern std::atomic<unsigned> scopeWrite;
 } // namespace MpcAudio

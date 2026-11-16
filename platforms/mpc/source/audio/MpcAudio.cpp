@@ -258,6 +258,10 @@ void renderBlock(bool haveInput, const float* auxL = nullptr, const float* auxR 
     }
     currentGain = target;
     MpcAudio::outputLevel.store(blockPeak * target / 32768.0f, std::memory_order_relaxed);
+    unsigned w = MpcAudio::scopeWrite.load(std::memory_order_relaxed);
+    for (unsigned i = 0; i < kBlock; i++)
+        MpcAudio::scope[(w + i) % MpcAudio::kScopeFrames] = (int16_t)((blockL[i] + blockR[i]) / 2);
+    MpcAudio::scopeWrite.store(w + kBlock, std::memory_order_release);
 }
 
 std::vector<int16_t> testIn; // MPDJ_AUDIO_IN_WAV
@@ -675,3 +679,5 @@ void MpcAudio::stop()
 }
 
 std::atomic<float> MpcAudio::outputLevel{ 0.0f };
+int16_t MpcAudio::scope[MpcAudio::kScopeFrames];
+std::atomic<unsigned> MpcAudio::scopeWrite{ 0 };

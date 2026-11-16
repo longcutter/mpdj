@@ -235,6 +235,22 @@ void MpcInput::poll()
     pollLevels();
     pollPadLights();
     pollSaver();
+    if (disp && disp->visuals().active())
+    {
+        // the meters' levels (the Master screen reads the same analyzers; it isn't on show)
+        for (int t = 0; t < 16; t++)
+        {
+            float v = instrumentPlayer[t].getRMSValue();
+            if (v >= 0.0f)
+                disp->visuals().trackLevel[t].store(v);
+        }
+        for (int c = 0; c < 2; c++)
+        {
+            float v = engine.getDryMixRMS((uint8_t)c);
+            if (v >= 0.0f)
+                disp->visuals().masterLevel[c].store(v);
+        }
+    }
     if (const char* msg = mpdjSkipBackPoll())
     {
         mtPopups.show(0, msg);
@@ -273,15 +289,17 @@ bool MpcInput::wake()
 // Visuals on demand (2026-11-16, Mike): SHIFT+MENU or Config > Display > Show
 // visuals now. The screensaver's kind at full brightness; the pads keep playing
 // under it, any button, knob or touch ends it.
-void MpcInput::showVisuals()
+void MpcInput::showVisuals(int kind)
 {
     if (!disp || saverOn || !mpdjOn(MpdjFeature::Visuals))
         return;
     saverOn = true;
     visualsOnDemand = true;
-    disp->visuals().start(mtConfig.general.screensaverKind);
+    if (kind < 0)
+        kind = mtConfig.general.screensaverKind;
+    disp->visuals().start(kind);
     if (trace)
-        printf("input: visuals on demand (%s)\n", Visuals::name(mtConfig.general.screensaverKind));
+        printf("input: visuals on demand (%s)\n", Visuals::name(kind));
 }
 
 void MpcInput::pollSaver()
@@ -971,6 +989,12 @@ void MpcInput::onButton(uint8_t note, bool down)
             buttons->release(buttonHeld[note]);
             buttonHeld[note] = -1;
         }
+        return;
+    }
+
+    if (note == 116 && mpcShift)
+    {
+        showVisuals(Visuals::kMeters); // SHIFT+TRACK MIX: the level meters (2026-11-16)
         return;
     }
 

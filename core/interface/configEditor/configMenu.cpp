@@ -209,7 +209,7 @@ const strItemTypeListText setupSaverOn{ &mtConfig.general.screensaver, 2, mpdjOf
 cMenuItem melSaverOn(menuDisplay, "Screensaver", screensaverDesc, menuTypeItemListText, &setupSaverOn);
 const strItemTypeListText setupSaverTime{ &mtConfig.general.screensaverTime, 6, screensaverTimeTexts };
 cMenuItem melSaverTime(menuDisplay, "Screensaver after", screensaverTimeDesc, menuTypeItemListText, &setupSaverTime);
-const strItemTypeListText setupSaverKind{ &mtConfig.general.screensaverKind, 2, screensaverKindTexts };
+const strItemTypeListText setupSaverKind{ &mtConfig.general.screensaverKind, 3, screensaverKindTexts };
 cMenuItem melSaverKind(menuDisplay, "Screensaver shows", screensaverKindDesc, menuTypeItemListText, &setupSaverKind);
 const strItemTypeListText setupSaverDim{ &mtConfig.general.screensaverDim, 2, mpdjOffOnTexts };
 cMenuItem melSaverDim(menuDisplay, "Dim the backlight", screensaverDimDesc, menuTypeItemListText, &setupSaverDim);
