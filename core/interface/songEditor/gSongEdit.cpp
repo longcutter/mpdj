@@ -19,6 +19,11 @@ void cSongEditor::initDisplayControls()
     frameData.places[0] = &framesPlaces[0][0];
     frameData.places[1] = &framesPlaces[1][0];
     frameData.places[2] = &framesPlaces[2][0];
+#ifdef PLATFORM_MPC
+    static const uint16_t swingPlace[4] = { (800 / 8) * 2 + 1, 424, 800 / 8 - 3, 55 }; // label 3 = Swing
+    frameData.places[3] = swingPlace;
+    frameData.placesCount = 4;
+#endif
 
     prop.style = 0;
     prop.value = 0;
@@ -152,7 +157,11 @@ void cSongEditor::showDefaultScreen()
 
     display.setControlStyle2(label[7],
                              controlStyleCenterX | controlStyleCenterY | controlStyleFont2);
+#ifdef PLATFORM_MPC
+    display.setControlData(label[2], nullptr); // Swing: a value, not an action
+#else
     display.setControlData(label[2], &labelDataRed);
+#endif
     display.setControlData(label[3], &labelDataRed);
     display.setControlData(label[4], &labelDataRed);
     display.setControlData(label[5], &doubleArrowRed);
@@ -166,7 +175,12 @@ void cSongEditor::showDefaultScreen()
     display.setControlText(label[1], "Play");
     display.setControlText2(label[1], "Song");
 
+#ifdef PLATFORM_MPC
+    display.setControlText(label[2], "Swing");
+    mpdjShowSwing();
+#else
     display.setControlText(label[2], "Undo");
+#endif
 
     if (buttons->isButtonPressed(interfaceButtonShift))
     {
@@ -208,7 +222,9 @@ void cSongEditor::showDefaultScreen()
         display.refreshControl(label[i]);
     }
 
+#ifndef PLATFORM_MPC
     display.setControlValue(label[2], 0);
+#endif
     display.setControlValue(label[5], 0);
 
     display.setControlShow(bgLabel);
@@ -351,7 +367,7 @@ void cSongEditor::activateLabelsBorder()
     if (selectedPlace > frameData.placesCount - 1)
         return;
 
-    if (selectedPlace == 2) // tempo
+    if (selectedPlace == 2 || selectedPlace == 3) // tempo, swing (MPDJ)
     {
         display.setControlValue(frameControl, selectedPlace);
         display.setControlShow(frameControl);

@@ -128,6 +128,7 @@ void programsWriteToFile(strMpdjProjectData& out)
     }
     memcpy(out.trackVolumeHi, mtProject.trackVolumeHi, sizeof(out.trackVolumeHi));
     out.flags = mtProject.mpdjFullLevel ? 1 : 0;
+    out.swing = mtProject.mpdjSwing;
     padsWrite(out.pads);
     padColorsWrite(out.padColor);
 }
@@ -161,11 +162,14 @@ bool programsReadFromFile(const strMpdjProjectData& in)
         padsRead(nullptr);
         padColorsRead(nullptr);
         mtProject.mpdjFullLevel = fullLevelDefault();
+        mtProject.mpdjSwing = kSwingMin;
         s_importNotice = true;
         return false;
     }
     // FULL LEVEL: saved since version 5; older files take the Config default
     mtProject.mpdjFullLevel = in.version >= 5 ? (in.flags & 1) : fullLevelDefault();
+    // project swing: saved since version 7; older files are straight
+    mtProject.mpdjSwing = (in.version >= 7 && in.swing >= kSwingMin && in.swing <= kSwingMax) ? in.swing : kSwingMin;
     tracksReadFromFile(in.version >= 2 ? &in : nullptr);
     padsRead(in.version >= 3 ? in.pads : nullptr);
     padColorsRead(in.version >= 4 ? in.padColor : nullptr);

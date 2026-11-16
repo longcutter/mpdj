@@ -1,6 +1,7 @@
 #include "core/interfaceMenuPopup.h"
 #include "fileManager.h"
 #include "songEditor/songEditor.h"
+#include "mpdjPrograms.h"
 
 #include "core/interfacePopups.h"
 #include "padToBeatNoteConverter.h"
@@ -58,6 +59,9 @@ static void functCopy();
 static void functPaste();
 
 static void functUndo();
+#ifdef PLATFORM_MPC
+static void functSwing();
+#endif
 
 static void functDelete();
 static void refreshDeleting();
@@ -203,7 +207,11 @@ void cSongEditor::setDefaultScreenFunct()
 
     ip->setButtonObj(interfaceButton0, buttonPress, functPlayPattern);
     ip->setButtonObj(interfaceButton1, buttonPress, functPlaySong);
+#ifdef PLATFORM_MPC
+    ip->setButtonObj(interfaceButton2, buttonPress, functSwing); // MPDJ: the UNDO button undoes
+#else
     ip->setButtonObj(interfaceButton2, buttonPress, functUndo);
+#endif
     ip->setButtonObj(interfaceButton3, buttonPress, functAddSlot);
     ip->setButtonObj(interfaceButton4, buttonPress, functDeleteSlot);
     ip->setButtonObj(interfaceButton5, functDecPattern);
@@ -685,6 +693,9 @@ static void functEncoder(int16_t value)
             }
             break;
         }
+#ifdef PLATFORM_MPC
+        case 3: SE->mpdjChangeSwing(value); SE->mpdjShowSwing(); break; // project swing
+#endif
         default: break;
     }
 }
@@ -763,9 +774,9 @@ static void functLeft()
     }
     if (!SE->editMode)
     {
-        if (SE->selectedPlace == 2)
+        if (SE->selectedPlace == 2 || SE->selectedPlace == 3)
         {
-            SE->selectedPlace = 1;
+            SE->selectedPlace--; // MPDJ: swing (3) -> tempo (2) -> list (1)
             SE->activateLabelsBorder();
         }
         return;
@@ -789,6 +800,10 @@ static void functLeft()
     {
         SE->selectedPlace = 1;
     }
+    else if (SE->selectedPlace == 3)
+    {
+        SE->selectedPlace = 2; // MPDJ: swing -> tempo
+    }
 
     SE->activateLabelsBorder();
 }
@@ -805,9 +820,9 @@ static void functRight()
     }
     if (!SE->editMode)
     {
-        if (SE->selectedPlace == 1)
+        if (SE->selectedPlace == 1 || (SE->selectedPlace == 2 && SE->frameData.placesCount > 3))
         {
-            SE->selectedPlace = 2;
+            SE->selectedPlace++; // list -> tempo -> swing (MPDJ)
             SE->activateLabelsBorder();
         }
         return;
@@ -827,6 +842,10 @@ static void functRight()
     else if (SE->selectedPlace == 1)
     {
         SE->selectedPlace = 2;
+    }
+    else if (SE->selectedPlace == 2 && SE->frameData.placesCount > 3)
+    {
+        SE->selectedPlace = 3; // MPDJ: tempo -> swing
     }
 
     SE->activateLabelsBorder();
@@ -951,6 +970,10 @@ void cSongEditor::refreshEditMode()
         display.setControlColors(label[i],
                                  editMode ? display.getTheme().activeButtonLabelsColors
                                           : display.getTheme().inactiveButtonLabelsColors);
+#ifdef PLATFORM_MPC
+        if (i == 2) // Swing works in and out of edit mode
+            display.setControlColors(label[i], display.getTheme().activeLabelsColors);
+#endif
         display.refreshControl(label[i]);
     }
 
@@ -1725,3 +1748,42 @@ static void functMenu(uint8_t state)
         mtMenuPopup.hideModulePopup(SE);
     }
 }
+
+#ifdef PLATFORM_MPC
+//==============================================================================================================
+// MPDJ: project swing (mtProject.mpdjSwing, 50-75 %, MPC meaning: the first 16th
+// of each pair lasts that share of the pair; MPDJ block version 7)
+static void functSwing() // bound to the press only
+{
+    if (SE->isBusy)
+        return;
+    SE->selectedPlace = 3;
+    SE->activateLabelsBorder();
+}
+
+void cSongEditor::mpdjShowSwing()
+{
+    if (mtProject.mpdjSwing <= kSwingMin)
+        snprintf(mpdjSwingText, sizeof mpdjSwingText, "Off");
+    else
+        snprintf(mpdjSwingText, sizeof mpdjSwingText, "%u%%", mtProject.mpdjSwing);
+    display.setControlText2(label[2], mpdjSwingText);
+    display.refreshControl(label[2]);
+}
+
+void cSongEditor::mpdjChangeSwing(int delta)
+{
+    // the callers refresh the label when the Song screen shows (mpdjShowSwing)
+    int v = (int)mtProject.mpdjSwing + delta;
+    v = v < kSwingMin ? kSwingMin : (v > kSwingMax ? kSwingMax : v);
+    if (v == mtProject.mpdjSwing)
+        return;
+    mtProject.mpdjSwing = (uint8_t)v;
+    newFileManager.setProjectStructChanged();
+}
+
+void cSongEditor::mpdjUndo()
+{
+    functUndo();
+}
+#endif

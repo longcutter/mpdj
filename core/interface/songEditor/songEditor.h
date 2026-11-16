@@ -62,6 +62,14 @@ class cSongEditor : public ModuleBase
     strFrameData frameData;
     strLabelData doubleArrowRed;
     strLabelData labelDataRed;
+#ifdef PLATFORM_MPC
+    // MPDJ: project swing on label 3 (was Undo; the UNDO button undoes song edits),
+    // selectedPlace 3; also TAP TEMPO held + main encoder (MpcInput)
+    char mpdjSwingText[8] = {};
+    void mpdjShowSwing();
+    void mpdjChangeSwing(int delta);
+    void mpdjUndo();
+#endif
 
     hControl label[8] = { -1 };
     hControl barControl = -1;

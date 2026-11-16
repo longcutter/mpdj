@@ -2336,6 +2336,16 @@ AUDIO_CORE_RAM float Sequencer::getTimerPeriod_us(void)
     {
         return ((3125.0 * player.swing.getTempoCorrection()) / getCurrentTempo()) / 12.0;
     }
+    // MPDJ: project swing when no Swing effect has taken over (the effect wins
+    // until STOP, as on the Tracker); same timing: rows alternate long / short
+    else if (mtProject.mpdjSwing > 50 && mtProject.mpdjSwing <= 75)
+    {
+        // MPC percent: the first 16th of each pair lasts swing % of the pair
+        // (66 ~ triplet feel); the Tracker's own Swing effect scales differently
+        float v = mtProject.mpdjSwing;
+        float correction = player.swing.stepToogle ? 200.0f - 2.0f * v : 2.0f * v;
+        return ((3125.0 * correction) / getCurrentTempo()) / 12.0;
+    }
     else
     {
         return (312500.0 / getCurrentTempo()) / 12.0;

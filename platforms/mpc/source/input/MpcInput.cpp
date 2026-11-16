@@ -963,6 +963,11 @@ void MpcInput::onButton(uint8_t note, bool down)
                     mtPopups.show(0, msg);
                 break;
             }
+            if (mtInterface.isSongScreenActive())
+            {
+                songEditor.mpdjUndo(); // the Song screen's undo (its label is Swing now)
+                break;
+            }
             if (!onPattern)
                 break;
             if (mpcShift)
@@ -1721,6 +1726,23 @@ void MpcInput::onRelative(uint8_t cc, uint8_t value)
         if (repeatHeld)
         {
             turnRepeatDivision(steps); // NOTE REPEAT held: the division (5b-7b)
+            return;
+        }
+        if (noteDown[53] && !mpcShift)
+        {
+            // TAP TEMPO held + main encoder: project swing, any screen. The turn
+            // cancels the press's tempo lock and starts the taps over
+            tapHoldMs = 0;
+            tapCount = 0;
+            songEditor.mpdjChangeSwing(steps);
+            if (mtInterface.isSongScreenActive())
+                songEditor.mpdjShowSwing();
+            static char msg[24];
+            if (mtProject.mpdjSwing <= kSwingMin)
+                snprintf(msg, sizeof msg, "Swing off");
+            else
+                snprintf(msg, sizeof msg, "Swing %u%%", mtProject.mpdjSwing);
+            mtPopups.show(0, msg);
             return;
         }
         if (turnHeldPadColor(steps))

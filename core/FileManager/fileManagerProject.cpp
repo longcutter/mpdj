@@ -251,6 +251,7 @@ void cFileManager::getDefaultProject(struct strMtProject* source)
 #ifdef PLATFORM_MPC
     source->mpdjFullLevel = mtConfig.general.fullLevelDefault; // MPDJ 5f-1: Config default
 #endif
+    source->mpdjSwing = 50; // MPDJ: a new project plays straight
     getDefaultSong(&source->song);
     getDefaultValues(&source->values);
 

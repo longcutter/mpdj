@@ -74,7 +74,8 @@ struct strMpdjProjectData
     char magic[4]; // "MPDJ"
     uint8_t version;
     uint8_t flags; // version 5 (5f-1): bit 0 = FULL LEVEL (was reserved, 0)
-    uint8_t reserved[2];
+    uint8_t swing; // version 7: project swing 50-75 % (was reserved, 0 = none)
+    uint8_t reserved[1];
     strProgramSlot programs[kProgramSlots]; // type = programType() when saved
     // version 2 (step 5a-4): per-track data the Tracker+ part only has for
     // tracks 1-8 (mute and names of 9-16 are its midiTrackMute / midiTrackNames)
@@ -89,7 +90,8 @@ static constexpr size_t kMpdjProjectDataV1Size = 8 + 4 * kProgramSlots; // versi
 static constexpr size_t kMpdjProjectDataV2Size = kMpdjProjectDataV1Size + 32; // version 2 ended here
 static constexpr size_t kMpdjProjectDataV3Size = kMpdjProjectDataV2Size + 4 * kPads; // version 3 ended here
 static_assert(sizeof(strMpdjProjectData) == kMpdjProjectDataV3Size + kPads);
-static constexpr uint8_t kMpdjProjectDataVersion = 6; // 5 (5f-1): flags in the header; 6 (5g-6): loopSync in the slots; same size
+static constexpr uint8_t kMpdjProjectDataVersion = 7; // 5 (5f-1): flags in the header; 6 (5g-6): loopSync in the slots; 7: swing; same size
+static constexpr uint8_t kSwingMin = 50, kSwingMax = 75; // project swing, % (50 = straight)
 
 // Slot types for the current project (mtProject.programs)
 ProgramType programType(int idx);
