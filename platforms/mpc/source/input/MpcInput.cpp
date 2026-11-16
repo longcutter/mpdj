@@ -269,6 +269,16 @@ void MpcInput::pollSaver()
         printf("input: screensaver on (%s)\n", Visuals::name(mtConfig.general.screensaverKind));
 }
 
+void MpcInput::toggleMetronome()
+{
+    mtConfig.metronome.state = mtConfig.metronome.state ? 0 : 1;
+    engine.setMetronomeGain(); // the first click at the set level, not full
+    saveConfig();
+    mtPopups.show(0, mtConfig.metronome.state ? "Metronome on" : "Metronome off");
+    if (trace)
+        printf("input: metronome %s\n", mtConfig.metronome.state ? "on" : "off");
+}
+
 void MpcInput::suspend()
 {
     releaseQLinkButton();
@@ -860,6 +870,14 @@ void MpcInput::onButton(uint8_t note, bool down)
     {
         if (note == kNoteErase)
             mpdjEraseEnd(); // ERASE + pad (5f-3): the hold ends
+        if (note == 53 && metroPress) // SHIFT+TAP TEMPO let go
+        {
+            metroPress = false;
+            if (metroTurned)
+                saveConfig(); // the volume, once
+            else
+                toggleMetronome();
+        }
         if (note == kNoteMain || note == kNoteShift)
             sideloadComboMs = 0;
         if (note == kNoteShift)
@@ -1047,11 +1065,10 @@ void MpcInput::onButton(uint8_t note, bool down)
         case Act::TapTempo:
             if (mpcShift)
             {
-                // SHIFT+TAP TEMPO: metronome on / off (Config > Metronome > State)
-                mtConfig.metronome.state = mtConfig.metronome.state ? 0 : 1;
-                engine.setMetronomeGain(); // the first click at the set level, not full
-                saveConfig();
-                mtPopups.show(0, mtConfig.metronome.state ? "Metronome on" : "Metronome off");
+                // SHIFT+TAP TEMPO: metronome on / off on the release (Config > Metronome
+                // > State); held + main encoder = its volume instead (2026-11-16)
+                metroPress = true;
+                metroTurned = false;
             }
             else
             {
@@ -1837,6 +1854,21 @@ void MpcInput::onRelative(uint8_t cc, uint8_t value)
         if (repeatHeld)
         {
             turnRepeatDivision(steps); // NOTE REPEAT held: the division (5b-7b)
+            return;
+        }
+        if (noteDown[53] && metroPress)
+        {
+            // SHIFT + TAP TEMPO held + main encoder: metronome volume (Config >
+            // Metronome > Volume, 0-100), any screen; the release then doesn't toggle it
+            metroTurned = true;
+            int v = mtConfig.metronome.volume + steps * 2;
+            mtConfig.metronome.volume = (uint8_t)(v < 0 ? 0 : v > 100 ? 100 : v);
+            engine.setMetronomeGain();
+            static char msg[32];
+            snprintf(msg, sizeof msg, "Metronome volume %u", mtConfig.metronome.volume);
+            mtPopups.show(0, msg);
+            if (trace)
+                printf("input: %s\n", msg);
             return;
         }
         if (noteDown[53] && !mpcShift)

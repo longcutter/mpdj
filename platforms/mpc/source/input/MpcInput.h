@@ -76,6 +76,8 @@ class MpcInput
     // the screensaver (Config > Display): any control ends it; that press does nothing
     // else (pads still play); its release is swallowed too
     bool wake();
+    void toggleMetronome();
+    bool metroPress = false, metroTurned = false; // SHIFT+TAP TEMPO held (2026-11-16)
     void pollSaver();
     uint32_t lastInputMs = 0;
     bool saverOn = false;
