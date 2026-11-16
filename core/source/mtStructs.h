@@ -1217,6 +1217,8 @@ struct strMtConfig
         uint8_t screensaverDim = 1;
         // MPDJ (2026-11-16): Config > Display > Brightness, 0-9 = 10-100 % of the backlight
         uint8_t brightness = 9;
+        // MPDJ (2026-11-16): Capture writes onto 0 = each pad's own track, 1 = the cursor's track
+        uint8_t captureTo = 0;
 #endif
     } general;
 

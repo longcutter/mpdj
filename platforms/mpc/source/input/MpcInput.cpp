@@ -1212,6 +1212,7 @@ void MpcInput::onButton(uint8_t note, bool down)
                 // SHIFT + OVER DUB = Capture (2026-11-16): the last pattern-length of
                 // unrecorded pad playing into the pattern
                 releaseCoreShift();
+                mpdjSetCursorTrack(patternEditor.trackerPattern.actualTrack); // Config "Capture to"
                 const char* msg = mpdjCapture();
                 mtPopups.show(0, msg);
                 if (trace)
