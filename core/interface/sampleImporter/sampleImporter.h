@@ -20,6 +20,8 @@ class cSampleImporter : public ModuleBase
 {
 
   public:
+    // MPDJ (touch, 2026-11-16): a tap on row `row` of list `which` selects it
+    void mpdjTapList(int which, int row);
     virtual void update();
     virtual void start(uint32_t options);
     virtual void stop();

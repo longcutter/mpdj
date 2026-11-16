@@ -33,6 +33,8 @@ class cParamValueList : public cDisplayControl
     virtual void setValue(int value);
     virtual void setColors(const uint32_t* colors);
     virtual void setData(void* data);
+    // MPDJ (touch, 2026-11-16): the row under (x, y), or -1
+    int mpdjRowAt(int x, int y) const;
 
     uint16_t textStyle;
     const strFont* font;

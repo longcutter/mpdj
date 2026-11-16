@@ -938,3 +938,34 @@ void cMenuGroup::reloadValues()
         }
     }
 }
+
+// MPDJ (touch, 2026-11-16): tap a row of the group list (0), the item list (1) or an
+// item's value list (2)
+void cConfigEditor::mpdjTapList(int which, int row)
+{
+    if (updatePopupShown || row < 0)
+        return;
+    if (which == 0)
+    {
+        selectedPlace = 0;
+        changeMenuListPosition(0, row - menuBase.selectedItem);
+        refreshListsColors();
+        activateLabelsBorder();
+    }
+    else if (which == 1 && submenuShown && activeSubmenu && menuBase.getSelChild()->type == menuTypeGroup)
+    {
+        selectedPlace = 1;
+        changeMenuListPosition(1, row - ((cMenuGroup*)activeSubmenu)->selectedItem);
+        refreshListsColors();
+        activateLabelsBorder();
+    }
+    else if (which == 2 && configListShown)
+    {
+        for (int d = row - selectedConfigListPosition; d;)
+        {
+            int st = clamp<int>(d, -3, 3);
+            changeConfigListPosition(st);
+            d -= st;
+        }
+    }
+}
