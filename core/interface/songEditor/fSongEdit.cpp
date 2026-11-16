@@ -1807,3 +1807,24 @@ void cSongEditor::mpdjTapListRow(int row)
             break;
     }
 }
+
+// MPDJ (touch, 2026-11-16): a tap on a grid cell selects that slot and track (the grid
+// becomes the active place), as QL1 / QL2 would move there
+void cSongEditor::mpdjTapGridCell(int slot, int track)
+{
+    if (isBusy || slot < 0 || slot >= songLength)
+        return;
+    if (selectedPlace != 0)
+    {
+        selectedPlace = 0;
+        activateLabelsBorder();
+    }
+    songPlayerData.selection.isActive = 1;
+    songPlayerData.selection.patternSelectionLength = 1;
+    songPlayerData.selection.trackSelectionLength = 1;
+    songPlayerData.selection.startSongPosition = (uint8_t)slot;
+    songPlayerData.selection.startTrack = (uint8_t)track;
+    selectedSongPosition = (uint8_t)slot;
+    refreshPatternsList();
+    refreshSongPlayerSelectedSlot();
+}
