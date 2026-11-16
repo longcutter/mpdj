@@ -12,6 +12,7 @@
 #include "mtStructs.h"
 #include "turing/turing.h"
 #include "turing/drumGrid.h"
+#include "mpdjSkipBack.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -198,6 +199,21 @@ void drumGridGen()
     cDrumGrid::generate(200, 90, full, 60, 77, 64, b);
     check(memcmp(a, b, sizeof a) == 0, "same settings and seed = same rows");
 }
+void skipBack()
+{
+    s_section = "skip-back";
+    static int16_t l[44100], r[44100];
+    memset(l, 0, sizeof l);
+    memset(r, 0, sizeof r);
+    uint32_t from, to;
+    check(!mpdjSkipBackTrim(l, r, 44100, &from, &to), "silence: nothing to save");
+    for (int i = 10000; i < 20000; i++)
+        r[i] = (int16_t)((i & 1) ? 3000 : -3000);
+    check(mpdjSkipBackTrim(l, r, 44100, &from, &to) && from == 10000 - 2205 && to == 20000 + 8820,
+          "trimmed to the sound, 50 ms before, 200 ms after");
+    l[44099] = 500;
+    check(mpdjSkipBackTrim(l, r, 44100, &from, &to) && to == 44100, "a sound at the end keeps the end");
+}
 } // namespace
 
 int batchSelfTest()
@@ -216,6 +232,7 @@ int batchSelfTest()
     capture();
     turingGen();
     drumGridGen();
+    skipBack();
     printf("batch test: programs / pads / slices %s; %d checks passed, %d failed\n",
            older ? "FAILED (see above)" : "passed", s_pass, s_fail);
     printf("batch test: %s\n", (older || s_fail) ? "FAILED" : "passed");

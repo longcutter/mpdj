@@ -1,4 +1,5 @@
 #include "mpdjSlices.h"
+#include "mpdjSkipBack.h"
 #include "MpcAudio.h"
 
 #include "AlsaPcm.h"
@@ -7,6 +8,7 @@
 #include "sideload/EngineHost.h"
 
 #include <atomic>
+#include <vector>
 #include <errno.h>
 #include <math.h>
 #include <pthread.h>
@@ -211,6 +213,8 @@ void wavHeader(FILE* f, uint32_t dataBytes)
 // auxL/auxR: JACK aux inputs (sideloads routed into MPDJ), mixed like the engine ring.
 void renderBlock(bool haveInput, const float* auxL = nullptr, const float* auxR = nullptr)
 {
+    if (haveInput)
+        mpdjSkipBackPush(inBuf, kBlock); // skip-back sampling keeps the last minute (2026-11-16)
     lockForBlock();
     tracker->updateInputAudioBuffers(haveInput ? inBuf : nullptr, nullptr, kBlock);
     tracker->updateAudioBuffers(blockL, blockR, kBlock);
@@ -256,6 +260,28 @@ void renderBlock(bool haveInput, const float* auxL = nullptr, const float* auxR 
     MpcAudio::outputLevel.store(blockPeak * target / 32768.0f, std::memory_order_relaxed);
 }
 
+std::vector<int16_t> testIn; // MPDJ_AUDIO_IN_WAV
+size_t testInPos = 0;
+
+void loadTestInput()
+{
+    const char* p = getenv("MPDJ_AUDIO_IN_WAV");
+    if (!p || !*p)
+        return;
+    FILE* f = fopen(p, "rb");
+    if (!f)
+        return;
+    fseek(f, 44, SEEK_SET); // a plain 44-byte header
+    int16_t buf[4096];
+    size_t n;
+    while ((n = fread(buf, 2, 4096, f)) > 0)
+        testIn.insert(testIn.end(), buf, buf + n);
+    fclose(f);
+    if (testIn.size() & 1)
+        testIn.pop_back();
+    printf("audio: test input %s, %zu frames\n", p, testIn.size() / 2);
+}
+
 void* audioThread(void*)
 {
     isAudioThread = true;
@@ -293,8 +319,19 @@ void* audioThread(void*)
             }
         }
 
+        // MPDJ_AUDIO_IN_WAV (tests): a 16-bit stereo 44.1 kHz WAV as the input, looped
+        bool haveIn = in.isOpen();
+        if (!haveIn && testIn.size() > 1)
+        {
+            for (unsigned i = 0; i < kBlock * 2; i++)
+            {
+                inBuf[i] = testIn[testInPos];
+                testInPos = (testInPos + 1) % testIn.size();
+            }
+            haveIn = true;
+        }
         uint64_t t0 = nowUs();
-        renderBlock(in.isOpen());
+        renderBlock(haveIn);
         uint64_t dt = nowUs() - t0;
         renderSum += dt;
         if (dt > renderMax)
@@ -545,6 +582,7 @@ void MpcAudio::start(Tracker* t)
         useDevice = true;
         openDevice(0);
     }
+    loadTestInput();
     startThread();
 }
 
