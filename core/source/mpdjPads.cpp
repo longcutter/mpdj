@@ -894,6 +894,13 @@ void padSlicesRead(const uint8_t* slices)
         mtProject.pads.slice[i] = (slices && slices[i] <= MAX_SLICE_NUMBER) ? slices[i] : 0;
 }
 
+// TC on: the nearest row; TC off: the row it fell in + its micromove (as live REC)
+void mpdjCaptureRow(int64_t at, int rows, bool tc, int* row, int8_t* micromove)
+{
+    *row = (int)((tc ? (at + 24) / 48 : at / 48) % rows);
+    *micromove = tc ? -1 : sequencer.mpdjMicromoveFor((int)(at % 48));
+}
+
 static char s_captureMsg[40];
 
 const char* mpdjCapture()
@@ -918,10 +925,9 @@ const char* mpdjCapture()
         const CaptureHit& h = s_capture[(s_captureHead - s_captureCount + k + kCaptureMax) % kCaptureMax];
         if (h.at < from)
             continue;
-        // TC on: the nearest row; TC off: the row it fell in + its micromove (as live REC)
-        bool tc = mpdjTcOn();
-        int r = (int)((tc ? (h.at + 24) / 48 : h.at / 48) % rows);
-        int8_t mm = tc ? -1 : sequencer.mpdjMicromoveFor((int)(h.at % 48));
+        int r;
+        int8_t mm;
+        mpdjCaptureRow(h.at, rows, mpdjTcOn(), &r, &mm);
         int8_t vol = padVelocityToVolume() ? sequencer.mpdjVelocityToVolume(h.velo) : -1;
         uint8_t track = toTrack >= 0 ? (uint8_t)toTrack : h.track;
         bool ok = sequencer.mpdjAddHit(track, (uint8_t)r, h.program, h.note, vol, mm);

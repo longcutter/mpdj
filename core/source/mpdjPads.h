@@ -301,6 +301,8 @@ void setPadDynamics(int pad, int percent);
 // pattern-length of them into the pattern (nearest row, adds only, one UNDO) and
 // returns the popup text
 const char* mpdjCapture();
+// where a kept hit lands: `at` in microsteps since the pass count started, the pattern's rows
+void mpdjCaptureRow(int64_t at, int rows, bool tc, int* row, int8_t* micromove);
 // Slice layer to bank (2026-11-16): the slice a pad plays (-1 = none), set / clear it
 int padSlice(int pad);
 void setPadSlice(int pad, int slice);

@@ -873,6 +873,18 @@ class Sequencer
     bool isEuclideanStep(uint8_t offset, int16_t density);
     // MPDJ (2026-11-16): Fill for the FIL / !FL chance conditions (PLAY held while playing)
     volatile bool mpdjFill = false;
+    // MPDJ (2026-11-16): per-track swing's delay of an off-beat row, in microsteps (48 a row)
+    static int mpdjSwingDelay(int swing) { return ((2 * swing - 100) * 48 + 50) / 100; }
+    // MPDJ_BATCH_TEST: a Chance condition at a pass, Fill on / off
+    bool mpdjTestChance(uint8_t track, uint8_t value, uint32_t pass, bool fill)
+    {
+        player.track[track].passCount = pass;
+        mpdjFill = fill;
+        bool r = evaluateChanceFx(track, value);
+        mpdjFill = false;
+        player.track[track].passCount = 0;
+        return r;
+    }
     // MPDJ (2026-11-16): Euclidean fill rotation, steps later (set by the Fill popup)
     int16_t mpdjEuclidRotate = 0;
 
