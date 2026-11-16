@@ -898,6 +898,11 @@ static char s_captureMsg[40];
 
 const char* mpdjCapture()
 {
+#ifdef PLATFORM_MPC
+    int toTrack = mtConfig.general.captureTo ? s_cursorTrack : -1;
+#else
+    int toTrack = -1;
+#endif
     if (!s_captureCount)
         return "Nothing to capture";
     uint32_t pass;
@@ -913,18 +918,22 @@ const char* mpdjCapture()
         const CaptureHit& h = s_capture[(s_captureHead - s_captureCount + k + kCaptureMax) % kCaptureMax];
         if (h.at < from)
             continue;
-        int r = (int)(((h.at + 24) / 48) % rows); // the nearest row
+        // TC on: the nearest row; TC off: the row it fell in + its micromove (as live REC)
+        bool tc = mpdjTcOn();
+        int r = (int)((tc ? (h.at + 24) / 48 : h.at / 48) % rows);
+        int8_t mm = tc ? -1 : sequencer.mpdjMicromoveFor((int)(h.at % 48));
         int8_t vol = padVelocityToVolume() ? sequencer.mpdjVelocityToVolume(h.velo) : -1;
-        bool ok = sequencer.mpdjAddHit(h.track, (uint8_t)r, h.program, h.note, vol);
+        uint8_t track = toTrack >= 0 ? (uint8_t)toTrack : h.track;
+        bool ok = sequencer.mpdjAddHit(track, (uint8_t)r, h.program, h.note, vol, mm);
 #ifdef PLATFORM_MPC
         if (recTrace())
-            printf("capture: track %d row %d (%lld/48 after its start) %s\n", h.track + 1, r + 1,
+            printf("capture: track %d row %d micro %d (%lld/48 after its start) %s\n", track + 1, r + 1, mm,
                    (long long)(h.at % ((int64_t)rows * 48)), ok ? "written" : "row taken");
 #endif
         if (ok)
         {
             if (h.slice >= 0)
-                sequencer.mpdjSetSlice(h.track, (uint8_t)r, (uint8_t)h.slice, true);
+                sequencer.mpdjSetSlice(track, (uint8_t)r, (uint8_t)h.slice, true);
             written++;
         }
         else

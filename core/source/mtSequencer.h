@@ -984,7 +984,14 @@ class Sequencer
     }
     // MPDJ (Capture): add a hit at a row without its own undo revision (the caller
     // stores one); false if the row has a note (adds only, as plain REC)
-    bool mpdjAddHit(uint8_t track, uint8_t row, uint8_t instrument, uint8_t note, int8_t volume);
+    bool mpdjAddHit(uint8_t track, uint8_t row, uint8_t instrument, uint8_t note, int8_t volume,
+                    int8_t micromove = -1);
+    // microstep (0-47) -> the micromove value live REC writes with TC off
+    int8_t mpdjMicromoveFor(int uStep)
+    {
+        return (int8_t)clamp<int>(mapClamped<int>(uStep, 1, 48, 0, 100), getFxMin(fx.FX_TYPE_MICROMOVE),
+                                  getFxMax(fx.FX_TYPE_MICROMOVE));
+    }
     void updateTrackLengths(strPattern* pattern);
 
     uint8_t noMoreRecOpen();

@@ -3479,7 +3479,8 @@ int8_t Sequencer::mpdjPadStepWrite(uint8_t track, uint8_t row, uint8_t instrumen
     return step->volume < 0 ? 0 : step->volume;
 }
 
-bool Sequencer::mpdjAddHit(uint8_t track, uint8_t row, uint8_t instrument, uint8_t note, int8_t volume)
+bool Sequencer::mpdjAddHit(uint8_t track, uint8_t row, uint8_t instrument, uint8_t note, int8_t volume,
+                           int8_t micromove)
 {
     strPattern* pattern = getPatternToUI();
     if (track >= kAllTracks || row > pattern->track[0].length)
@@ -3490,7 +3491,7 @@ bool Sequencer::mpdjAddHit(uint8_t track, uint8_t row, uint8_t instrument, uint8
     step->note = note;
     step->instrument = instrument;
     step->volume = volume;
-    step->micromove = -1;
+    step->micromove = micromove;
     return true;
 }
 
