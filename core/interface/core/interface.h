@@ -62,6 +62,12 @@ class Interface
     void mpdjToggleTrackMute();
     bool isTuringScreenActive(); // MPDJ 2026-11-16
     void mpdjToggleTuring();
+    // generators (Turing Machine, Drum Grid): SHIFT+STEP SEQ opens the last one / goes
+    // back to the Pattern screen; STEP SEQ on one switches to the other
+    bool isGeneratorScreenActive();
+    bool isDrumGridScreenActive();
+    void mpdjToggleGenerator();
+    void mpdjSwitchGenerator();
     bool isPerformanceModeScreenActive();
     bool isMasterScreenActive();
     bool isInstrumentParamsScreenActive();
