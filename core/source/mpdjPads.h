@@ -83,8 +83,11 @@ struct strPadMap
     // (0 Global = Config's, 1 Soft, 2 Normal, 3 Hard)
     uint8_t dynLoss[kPads];
     uint8_t curve[kPads];
+    // 2026-11-16 (slice layer to bank): the slice the pad plays, + 1 (0 = none, the whole
+    // program); Slice programs play it with the Slice FX, Beat Slice ones by note
+    uint8_t slice[kPads];
 
-    constexpr strPadMap() : pad{}, color{}, dynLoss{}, curve{} { setDefault(); }
+    constexpr strPadMap() : pad{}, color{}, dynLoss{}, curve{}, slice{} { setDefault(); }
 
     // Pad N -> program N -> track N, no choke group, no cut on release, Auto
     // colors. (5d-5, Mike 2026-11-14: the hats' built-in group 1 + cut is
@@ -97,6 +100,7 @@ struct strPadMap
             color[i] = 0;
             dynLoss[i] = 0;
             curve[i] = 0;
+            slice[i] = 0;
         }
     }
 };
@@ -292,6 +296,14 @@ void padColorsRead(const uint8_t* in); // nullptr = all Auto (older files)
 static constexpr int kPadCurveSettings = 4; // Global, Soft, Normal, Hard
 uint8_t padDynamics(int pad);             // 0-100 %, 100 = the whole velocity range
 void setPadDynamics(int pad, int percent);
+// Slice layer to bank (2026-11-16): the slice a pad plays (-1 = none), set / clear it
+int padSlice(int pad);
+void setPadSlice(int pad, int slice);
+void padSlicesWrite(uint8_t* slices);
+void padSlicesRead(const uint8_t* slices); // nullptr = none (older files)
+// The slice layer's slices layerBank*16 .. +15 onto bank `bank`'s pads, with the source
+// pad's settings; returns the popup text (nullptr when the layer isn't on)
+const char* mpdjSliceLayerToBank(int layerBank, int bank);
 uint8_t padCurveSetting(int pad);         // 0 Global .. 3 Hard
 void setPadCurveSetting(int pad, int setting);
 const char* padCurveName(uint8_t setting); // "Global", "Soft", ...

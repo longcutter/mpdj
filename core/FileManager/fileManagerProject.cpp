@@ -119,7 +119,12 @@ bool cFileManager::loadProjectFileFormFileStruct(strMtProject* project, strProje
     static constexpr size_t kMpdjV4ProjectFileSize =
       offsetof(strProjectFile, projectDataAndHeader.project.mpdj) + kMpdjProjectDataV4Size +
       sizeof(uint32_t);
+    // MPDJ: and with the version 8 block (pad dynamics, before pad slices)
+    static constexpr size_t kMpdjV8ProjectFileSize =
+      offsetof(strProjectFile, projectDataAndHeader.project.mpdj) + kMpdjProjectDataV8Size +
+      sizeof(uint32_t);
     if (pFile->projectDataAndHeader.projectHeader.size != sizeof(strProjectFile) &&
+        pFile->projectDataAndHeader.projectHeader.size != kMpdjV8ProjectFileSize &&
         pFile->projectDataAndHeader.projectHeader.size != kMpdjV4ProjectFileSize &&
         pFile->projectDataAndHeader.projectHeader.size != kMpdjV3ProjectFileSize &&
         pFile->projectDataAndHeader.projectHeader.size != kTrackerPlusProjectFileSize &&

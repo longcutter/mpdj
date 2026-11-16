@@ -352,6 +352,7 @@ bool cPadAssign::applyValue(int steps)
         int v = p.program == kPadNoProgram ? -1 : p.program;
         v = clampInt(v + steps, -1, kProgramSlots - 1);
         p.program = v < 0 ? kPadNoProgram : (uint8_t)v;
+        setPadSlice(selPad, -1); // another program: the whole of it
         break;
     }
     case ParamTrack: p.track = (uint8_t)clampInt(p.track + steps, 0, kAllTracks - 1); break;
@@ -417,6 +418,7 @@ void applyPadCopy(int srcPad, int dstPad, uint8_t program)
     d.track = track;
     d.program = program;
     setPadColor(dstPad, padColor(srcPad));
+    setPadSlice(dstPad, padSlice(srcPad));
     newFileManager.setProjectStructChanged();
 }
 

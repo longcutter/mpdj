@@ -301,6 +301,15 @@ static bool resolvePad(int pad, strPadSlot* out, uint8_t* velocity, const char**
         return true;
     }
     *out = *padSlot(pad);
+    // a pad written from the slice layer (2026-11-16) plays its slice
+    if (int slice = padSlice(pad); slice >= 0 && out->program < kProgramSlots)
+    {
+        const strInstrument& ins = mtProject.instrument[out->program];
+        if (ins.playMode == playModeBeatSlice)
+            out->note = (int8_t)(FIRST_BEAT_SLICE_NOTE + slice);
+        else if (ins.playMode == playModeSlice)
+            s_resolvedSlice = slice;
+    }
     if (mtProject.mpdjFullLevel)
         *velocity = 127; // FULL LEVEL (5f-1)
     return true;
@@ -834,6 +843,58 @@ const char* padCurveName(uint8_t setting)
     return kNames[setting < kPadCurveSettings ? setting : 0];
 }
 
+int padSlice(int pad)
+{
+    return (pad >= 0 && pad < kPads && mtProject.pads.slice[pad]) ? mtProject.pads.slice[pad] - 1 : -1;
+}
+
+void setPadSlice(int pad, int slice)
+{
+    if (pad >= 0 && pad < kPads)
+        mtProject.pads.slice[pad] = (slice >= 0 && slice < MAX_SLICE_NUMBER) ? (uint8_t)(slice + 1) : 0;
+}
+
+void padSlicesWrite(uint8_t* slices)
+{
+    memcpy(slices, mtProject.pads.slice, kPads);
+}
+
+void padSlicesRead(const uint8_t* slices)
+{
+    for (int i = 0; i < kPads; i++)
+        mtProject.pads.slice[i] = (slices && slices[i] <= MAX_SLICE_NUMBER) ? slices[i] : 0;
+}
+
+static char s_toBankMsg[40];
+
+const char* mpdjSliceLayerToBank(int layerBank, int bank)
+{
+    if (!s_sliceMode || s_slicePad < 0 || bank < 0 || bank >= kPads / kPadsPerBank)
+        return nullptr;
+    const strPadSlot src = *padSlot(s_slicePad);
+    if (src.program >= kProgramSlots)
+        return nullptr;
+    const strInstrument& ins = mtProject.instrument[src.program];
+    int first = layerBank * kPadsPerBank, n = 0;
+    for (int i = 0; i < kPadsPerBank && first + i < ins.sliceNumber; i++, n++)
+    {
+        int dst = bank * kPadsPerBank + i;
+        mtProject.pads.pad[dst] = src;
+        mtProject.pads.color[dst] = mtProject.pads.color[s_slicePad];
+        mtProject.pads.dynLoss[dst] = mtProject.pads.dynLoss[s_slicePad];
+        mtProject.pads.curve[dst] = mtProject.pads.curve[s_slicePad];
+        setPadSlice(dst, first + i);
+    }
+    if (!n)
+    {
+        snprintf(s_toBankMsg, sizeof s_toBankMsg, "No slices %d-%d", first + 1, first + kPadsPerBank);
+        return s_toBankMsg;
+    }
+    newFileManager.setProjectStructChanged();
+    snprintf(s_toBankMsg, sizeof s_toBankMsg, "Slices %d-%d -> bank %c", first + 1, first + n, 'A' + bank);
+    return s_toBankMsg;
+}
+
 void padDynamicsWrite(uint8_t* dynLoss, uint8_t* curve)
 {
     memcpy(dynLoss, mtProject.pads.dynLoss, kPads);
@@ -1235,6 +1296,18 @@ int padsSelfTest()
     file.version = 7;
     programsReadFromFile(file);
     check(padDynamics(9) == 100 && padCurveSetting(9) == 0, "version 7 block: defaults", 9);
+    // pad slices (version 9, slice layer to bank)
+    file.version = kMpdjProjectDataVersion;
+    setPadSlice(20, 5);
+    check(padSlice(20) == 5 && padSlice(21) == -1, "set pad slice", 20);
+    programsWriteToFile(file);
+    setPadSlice(20, -1);
+    programsReadFromFile(file);
+    check(padSlice(20) == 5, "pad slice round trip", 20);
+    file.version = 8;
+    programsReadFromFile(file);
+    check(padSlice(20) == -1, "version 8 block: no pad slices", 20);
+    setPadSlice(20, -1);
     file.version = kMpdjProjectDataVersion;
     setPadDynamics(9, 100);
     setPadCurveSetting(9, 0);
@@ -1376,8 +1449,8 @@ const char* mpdjErasePadDown(int pad)
         return nullptr;
     // slice layer (2026-11-16, Mike): only that slice's hits (Slice: its Slice FX;
     // Beat Slice: its note)
-    int slice = s_sliceMode ? s_resolvedSlice : -1;
-    bool withNote = s_notesMode || (s_sliceMode && slice < 0);
+    int slice = s_resolvedSlice; // the slice layer, or a pad written from it
+    bool withNote = s_notesMode || ((s_sliceMode || padSlice(pad) >= 0) && slice < 0);
     int note = withNote ? slot.note : -1;
     char name[12];
     if (s_sliceMode)
