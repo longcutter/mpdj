@@ -723,6 +723,8 @@ int MpcInput::confirmPopupButton(uint8_t note, int act)
         return -1;
 
     Act a = (Act)act;
+    if (a == Act::EncoderPush && cPatternEditor::keyboardManager.getState())
+        return -1; // naming: the push types the selected key (PLAY still saves)
     if (a == Act::EncoderPush || a == Act::Play || a == Act::PlayStart)
         return yes ? interfaceButton7 : -1;
     if (a == Act::Stop || note == kNoteErase)
@@ -996,7 +998,9 @@ void MpcInput::onButton(uint8_t note, bool down)
             break;
 
         case Act::EncoderPush:
-            if (onPattern)
+            if (cPatternEditor::keyboardManager.getState())
+                cPatternEditor::keyboardManager.confirmKey(); // the keyboard: type the selected key
+            else if (onPattern)
                 tapWithShift(interfaceButtonCopy); // paste
             else
                 hold = interfaceButtonMiniMiddle; // the Tracker Mini's Enter: open, load, select, confirm
@@ -1761,6 +1765,16 @@ void MpcInput::onRelative(uint8_t cc, uint8_t value)
     if (cc < kCcQLink1 || cc >= kCcQLink1 + 4)
         return;
     int knob = cc - kCcQLink1;
+    if (cPatternEditor::keyboardManager.getState() && knob <= 1 && qlinkMode == 1)
+    {
+        // the on-screen keyboard (naming): QL1 = left / right, QL2 = up / down, one
+        // key per step on every screen (Mike 2026-11-15); up from the top row goes
+        // into the name, where left / right move the text cursor
+        steps = divideQLink(knob, steps, knob == 0 ? 0 : 1);
+        for (int i = 0; i < abs(steps); i++)
+            cPatternEditor::keyboardManager.makeMove(knob == 0 ? (steps > 0 ? 'd' : 'a') : (steps > 0 ? 's' : 'w'));
+        return;
+    }
     if (fxListOpen())
     {
         // the effect list scrolls on Q-Link 2 and 4 (and the main encoder)
@@ -2326,8 +2340,40 @@ void MpcInput::closeFxList(bool apply)
         printf("input: effect list closed (%s)\n", apply ? "kept" : "unchanged");
 }
 
+// The on-screen keyboard (mtKeyboardManager / cKeyboard: 780 x 260 at 13, 143 of
+// the 800 x 480 UI, a 65 px grid): a touch on a key types it, as the Tracker+'s pad
+// under that key does. Rows: 1..0 + backspace (2 wide); q..p - +; a..l @ + caps
+// (2 wide); z..m + space (5 wide). Returns true when the tap was the keyboard's
+static int keyboardKeyAt(float x, float y)
+{
+    constexpr float kX = 13, kY = 143, kCell = 65;
+    if (x < kX || y < kY || x >= kX + 12 * kCell || y >= kY + 4 * kCell)
+        return -1;
+    int col = (int)((x - kX) / kCell), row = (int)((y - kY) / kCell);
+    switch (row)
+    {
+        case 0: return col <= 9 ? col : 10;            // 10 = backspace (2 wide)
+        case 1: return 11 + col;                       // 12 keys
+        case 2: return col <= 9 ? 23 + col : 33;       // 33 = caps (2 wide)
+        default: return col <= 6 ? 34 + col : 41;      // 41 = space (5 wide)
+    }
+}
+
 void MpcInput::onScreenTap(float x, float y)
 {
+    if (cPatternEditor::keyboardManager.getState())
+    {
+        int key = keyboardKeyAt(x, y);
+        if (key >= 0)
+        {
+            uint8_t pad = keyPositionToPads[key];
+            cPatternEditor::keyboardManager.onPadChange(pad, 1);
+            cPatternEditor::keyboardManager.onPadChange(pad, 0);
+            if (trace)
+                printf("input: keyboard key %d (pad %u)\n", key, pad);
+        }
+        return; // the keyboard is up: taps elsewhere above the labels do nothing
+    }
     if (fxListOpen())
     {
         cList* list = (cList*)display.mpdjControl(mtPopups.mpdjStepPopupList());
