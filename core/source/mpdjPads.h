@@ -86,8 +86,11 @@ struct strPadMap
     // 2026-11-16 (slice layer to bank): the slice the pad plays, + 1 (0 = none, the whole
     // program); Slice programs play it with the Slice FX, Beat Slice ones by note
     uint8_t slice[kPads];
+    // 2026-11-16 (Pad Assign Chance): 100 - the chance % a recorded hit gets (0 = always,
+    // no Chance FX written)
+    uint8_t chanceLoss[kPads];
 
-    constexpr strPadMap() : pad{}, color{}, dynLoss{}, curve{}, slice{} { setDefault(); }
+    constexpr strPadMap() : pad{}, color{}, dynLoss{}, curve{}, slice{}, chanceLoss{} { setDefault(); }
 
     // Pad N -> program N -> track N, no choke group, no cut on release, Auto
     // colors. (5d-5, Mike 2026-11-14: the hats' built-in group 1 + cut is
@@ -101,6 +104,7 @@ struct strPadMap
             dynLoss[i] = 0;
             curve[i] = 0;
             slice[i] = 0;
+            chanceLoss[i] = 0;
         }
     }
 };
@@ -305,6 +309,11 @@ const char* mpdjCapture();
 void mpdjCaptureRow(int64_t at, int rows, bool tc, int* row, int8_t* micromove);
 // Slice layer to bank (2026-11-16): the slice a pad plays (-1 = none), set / clear it
 int padSlice(int pad);
+// Pad Assign Chance (2026-11-16): 5-100 %, 100 = always
+int padChance(int pad);
+void setPadChance(int pad, int chance);
+void padChanceWrite(uint8_t* loss);
+void padChanceRead(const uint8_t* loss); // nullptr = always (older files)
 void setPadSlice(int pad, int slice);
 void padSlicesWrite(uint8_t* slices);
 void padSlicesRead(const uint8_t* slices); // nullptr = none (older files)

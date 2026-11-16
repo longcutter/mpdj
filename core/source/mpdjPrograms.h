@@ -91,14 +91,17 @@ struct strMpdjProjectData
     uint8_t padCurve[kPads];
     // version 9 (2026-11-16): the slice each pad plays + 1 (0 = none; slice layer to bank)
     uint8_t padSlice[kPads];
+    // version 13 (2026-11-16): 100 - each pad's Chance % (0 = always)
+    uint8_t padChanceLoss[kPads];
 };
 static constexpr size_t kMpdjProjectDataV1Size = 8 + 4 * kProgramSlots; // version 1 ended here
 static constexpr size_t kMpdjProjectDataV2Size = kMpdjProjectDataV1Size + 32; // version 2 ended here
 static constexpr size_t kMpdjProjectDataV3Size = kMpdjProjectDataV2Size + 4 * kPads; // version 3 ended here
 static constexpr size_t kMpdjProjectDataV4Size = kMpdjProjectDataV3Size + kPads; // versions 4-7 ended here
 static constexpr size_t kMpdjProjectDataV8Size = kMpdjProjectDataV4Size + 2 * kPads; // version 8 ended here
-static_assert(sizeof(strMpdjProjectData) == kMpdjProjectDataV8Size + kPads);
-static constexpr uint8_t kMpdjProjectDataVersion = 12; // 12: swing grid + humanize in reservedTracks[18..19]; // 11: Turing Machine settings in reservedTracks[2..19] (same size); // 10: per-track swing in reservedTracks[0..1] (same size); 9: pad slices (+64 bytes); // 5 (5f-1): flags in the header; 6 (5g-6): loopSync in the slots; 7: swing (same size); 8: pad dynamics + curve (+128 bytes)
+static constexpr size_t kMpdjProjectDataV9Size = kMpdjProjectDataV8Size + kPads; // versions 9-12 ended here
+static_assert(sizeof(strMpdjProjectData) == kMpdjProjectDataV9Size + kPads);
+static constexpr uint8_t kMpdjProjectDataVersion = 13; // 13: pad chance (+64 bytes); // 12: swing grid + humanize in reservedTracks[18..19]; // 11: Turing Machine settings in reservedTracks[2..19] (same size); // 10: per-track swing in reservedTracks[0..1] (same size); 9: pad slices (+64 bytes); // 5 (5f-1): flags in the header; 6 (5g-6): loopSync in the slots; 7: swing (same size); 8: pad dynamics + curve (+128 bytes)
 static constexpr uint8_t kSwingMin = 50, kSwingMax = 75; // project swing, % (50 = straight)
 
 // Slot types for the current project (mtProject.programs)

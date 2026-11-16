@@ -25,6 +25,7 @@ class cPadAssign : public ModuleBase
         ParamDynamics, // 2026-11-16: per-pad dynamics and velocity curve
         ParamCurve,
         ParamSlice, // 2026-11-16: the slice a pad plays (slice layer to bank)
+        ParamChance, // 2026-11-16: recorded hits get a Chance FX (100 % = none)
         ParamCount
     };
 

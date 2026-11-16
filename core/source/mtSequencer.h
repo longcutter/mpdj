@@ -957,6 +957,9 @@ class Sequencer
                        int slice = -1); // slice >= 0: play that slice (Slice FX, 5g-4)
     // 5g-4: the Slice FX on a row (FX1 if empty or a Slice, else FX2); ui = the edited pattern
     void mpdjSetSlice(uint8_t track, uint8_t row, uint8_t slice, bool ui = false);
+    // MPDJ (2026-11-16): a pad's Chance (1-99 %) on a written hit: an FX slot holding a
+    // Chance, else an empty one (the second first), else none
+    void mpdjSetChance(uint8_t track, uint8_t row, uint8_t chance, bool ui = false);
     // Q-Link mode 4 quick control on the selection (mpdjQuick.cpp)
     bool mpdjQuickChange(uint8_t fxType, int16_t delta, int16_t* value);
     // cut (5b-6a): a sample voice gets the 5 ms choke fade instead of its

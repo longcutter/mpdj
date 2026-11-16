@@ -3471,6 +3471,25 @@ void Sequencer::mpdjSetSlice(uint8_t track, uint8_t row, uint8_t slice, bool ui)
     newFileManager.setActualPatternStructChanged();
 }
 
+void Sequencer::mpdjSetChance(uint8_t track, uint8_t row, uint8_t chance, bool ui)
+{
+    strPattern* pattern = ui ? getPatternToUI() : currentPattern;
+    if (!pattern || track >= kAllTracks || row > pattern->track[0].length || chance >= 100)
+        return;
+    strPattern::strTrack::strStep* step = &pattern->track[track].step[row];
+    int slot = -1;
+    for (int i = 0; i < 2; i++)
+        if (step->fx[i].type == fx.FX_TYPE_CHANCE)
+            slot = i;
+    if (slot < 0)
+        slot = step->fx[1].type == fx.FX_TYPE_NONE ? 1 : (step->fx[0].type == fx.FX_TYPE_NONE ? 0 : -1);
+    if (slot < 0)
+        return; // both FX columns taken
+    step->fx[slot].type = fx.FX_TYPE_CHANCE;
+    step->fx[slot].value = chance;
+    newFileManager.setActualPatternStructChanged();
+}
+
 void Sequencer::mpdjSetRoll(uint8_t track, uint8_t row, uint8_t rollVal)
 {
     if (track >= kAllTracks || row > currentPattern->track[0].length)

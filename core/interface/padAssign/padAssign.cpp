@@ -19,13 +19,14 @@ static cPadAssign* PA = &padAssign;
 namespace
 {
 const char* const kParamNames[cPadAssign::ParamCount] = { "Program", "Track", "Tune",  "Level",   "Mode",
-                                                          "Choke",   "Cut",   "Color", "Dynamics", "Curve", "Slice" };
+                                                          "Choke",   "Cut",   "Color", "Dynamics", "Curve", "Slice",
+                                                          "Chance" };
 const char* const kListNames[cPadAssign::ParamCount] = { "Program",        "Track", "Tune",     "Level",
                                                          "Mode",           "Choke group",
                                                          "Cut on release", "Color", "Dynamics", "Velocity curve",
-                                                         "Slice" };
+                                                         "Slice", "Rec chance" };
 
-// 8 screen labels for 11 settings: they show 1-8, or 4-11 while Dynamics / Curve / Slice is
+// 8 screen labels for 12 settings: they show 1-8, or 5-12 while Dynamics / Curve / Slice / Chance is
 int labelBase(int param) { return param >= 8 ? cPadAssign::ParamCount - 8 : 0; }
 
 uint32_t rgb(const uint8_t* c)
@@ -416,6 +417,18 @@ bool cPadAssign::applyValue(int steps)
         setPadSlice(selPad, s);
         break;
     }
+    case ParamChance:
+    {
+        int c = padChance(selPad), n = c + 5 * dir;
+        if (n < 5)
+            n = 5;
+        if (n > 100)
+            n = 100;
+        if (n == c)
+            return false;
+        setPadChance(selPad, n);
+        break;
+    }
     default: return false;
     }
     newFileManager.setProjectStructChanged();
@@ -784,6 +797,11 @@ void cPadAssign::fillValues()
             snprintf(labelValues[ParamSlice], sizeof labelValues[0], "%s", sliced ? "Whole" : "-");
         else
             snprintf(labelValues[ParamSlice], sizeof labelValues[0], "%d", s + 1);
+    }
+    {
+        int c = padChance(selPad);
+        snprintf(paramValues[ParamChance], sizeof paramValues[0], c >= 100 ? "Always" : "%d%%", c);
+        snprintf(labelValues[ParamChance], sizeof labelValues[0], c >= 100 ? "Always" : "%d%%", c);
     }
 }
 

@@ -199,6 +199,27 @@ void drumGridGen()
     cDrumGrid::generate(200, 90, full, 60, 77, 64, b);
     check(memcmp(a, b, sizeof a) == 0, "same settings and seed = same rows");
 }
+void padChanceCheck()
+{
+    s_section = "pad chance";
+    auto keep = mtProject.pads;
+    check(padChance(5) == 100, "default: always");
+    setPadChance(5, 55);
+    check(padChance(5) == 55, "set 55 %");
+    setPadChance(5, 0);
+    check(padChance(5) == 5, "at least 5 %");
+    setPadChance(5, 40);
+    static strMpdjProjectData file;
+    programsWriteToFile(file);
+    setPadChance(5, 100);
+    programsReadFromFile(file);
+    check(padChance(5) == 40, "round trip");
+    file.version = 12;
+    programsReadFromFile(file);
+    check(padChance(5) == 100, "a version 12 block: always");
+    mtProject.pads = keep;
+}
+
 void skipBack()
 {
     s_section = "skip-back";
@@ -233,6 +254,7 @@ int batchSelfTest()
     turingGen();
     drumGridGen();
     skipBack();
+    padChanceCheck();
     printf("batch test: programs / pads / slices %s; %d checks passed, %d failed\n",
            older ? "FAILED (see above)" : "passed", s_pass, s_fail);
     printf("batch test: %s\n", (older || s_fail) ? "FAILED" : "passed");
