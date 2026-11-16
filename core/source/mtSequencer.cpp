@@ -829,7 +829,7 @@ AUDIO_CORE_RAM void Sequencer::play_microStep(int row)
             !player.swing.isActive && mtProject.mpdjSwing > 50 && mtProject.mpdjSwing <= 75 &&
             mtProject.mpdjSwingOff != 0 && !(mtProject.mpdjSwingOff & (1u << row)))
         {
-            int d = (int)((2 * mtProject.mpdjSwing - 100) * 48 + 50) / 100;
+            int d = mpdjSwingDelay(mtProject.mpdjSwing);
             playerRow.micromove.set(playerRow.micromove.isActive ? playerRow.micromove.offsetValue + d : d);
         }
 
