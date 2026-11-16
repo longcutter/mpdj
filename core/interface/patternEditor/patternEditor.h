@@ -119,6 +119,8 @@ class cPatternEditor : public ModuleBase
     void changeFillDataByActionButton(uint8_t place);
     bool isFillPlaceValid(uint8_t place);
     void setFillPlace(uint8_t place, int8_t dir = 0);
+    // MPDJ (touch, 2026-11-16): a tap on row `row` of the Fill list for place `place`
+    void mpdjTapFillList(uint8_t place, int row);
     void changeFillPlace(int8_t diff);
     void refreshFillPlace();
 
