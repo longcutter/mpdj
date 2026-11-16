@@ -432,13 +432,14 @@ struct CaptureHit
     int64_t at; // pass * rows * 48 + row * 48 + microstep, on the hit's track
     uint8_t track, program, note, velo;
     int8_t slice;
+    uint8_t chance; // the pad's Chance % (100 = always)
 };
 constexpr int kCaptureMax = 1024;
 CaptureHit s_capture[kCaptureMax];
 int s_captureCount = 0, s_captureHead = 0; // ring: the oldest at head - count
 int64_t s_captureLast = -1;
 
-void captureKeep(uint8_t track, uint8_t program, uint8_t note, uint8_t velo, int8_t slice)
+void captureKeep(uint8_t track, uint8_t program, uint8_t note, uint8_t velo, int8_t slice, uint8_t chance)
 {
     uint32_t pass;
     int row, u, last;
@@ -447,7 +448,7 @@ void captureKeep(uint8_t track, uint8_t program, uint8_t note, uint8_t velo, int
     if (at < s_captureLast - 48) // playback started again: an older run doesn't line up
         s_captureCount = 0;
     s_captureLast = at;
-    s_capture[s_captureHead] = { at, track, program, note, velo, slice };
+    s_capture[s_captureHead] = { at, track, program, note, velo, slice, chance };
     s_captureHead = (s_captureHead + 1) % kCaptureMax;
     if (s_captureCount < kCaptureMax)
         s_captureCount++;
@@ -493,6 +494,7 @@ const char* padPress(int pad, const strPadSlot* p, uint8_t velocity)
         s_lastRecPad[p->track] = (int8_t)pad;
         if (s_held[pad].slice >= 0)
             sequencer.mpdjSetSlice(p->track, (uint8_t)w.row, (uint8_t)s_held[pad].slice); // 5g-4
+        sequencer.mpdjSetChance(p->track, (uint8_t)w.row, (uint8_t)padChance(dynamicsPad(pad)));
         // Note Repeat (5b-7c): the press carries a Roll at the division
         uint8_t roll = s_repeatOn.load() ? mpdjRollForPeriod(s_repeatPeriod.load()) : 0;
         s_held[pad].rolled = roll != 0;
@@ -521,7 +523,7 @@ const char* padPress(int pad, const strPadSlot* p, uint8_t velocity)
     }
 #endif
     if (!s_held[pad].recorded && sequencer.isPlay() && mpdjOn(MpdjFeature::Capture))
-        captureKeep(p->track, p->program, note, velo, s_held[pad].slice);
+        captureKeep(p->track, p->program, note, velo, s_held[pad].slice, (uint8_t)padChance(dynamicsPad(pad)));
     if (s_repeatOn.load())
         startRepeat(pad); // Note Repeat (5b-7a): the press was the first hit
     return nullptr;
@@ -761,6 +763,7 @@ void mpdjPadsPoll()
         {
             if (h.slice >= 0)
                 sequencer.mpdjSetSlice((uint8_t)h.track, (uint8_t)w.row, (uint8_t)h.slice); // 5g-4
+            sequencer.mpdjSetChance((uint8_t)h.track, (uint8_t)w.row, (uint8_t)padChance(dynamicsPad(pad)));
             h.recorded = true;
             s_lastRecPad[h.track] = (int8_t)pad;
 #ifdef PLATFORM_MPC
@@ -796,6 +799,7 @@ int mpdjPadStepWrite(int pad, int row, uint8_t velocity)
         return -1;
     if (slice >= 0)
         sequencer.mpdjSetSlice(p->track, (uint8_t)row, (uint8_t)slice, true); // 5g-4: the slice layer's slice
+    sequencer.mpdjSetChance(p->track, (uint8_t)row, (uint8_t)padChance(dynamicsPad(pad)), true);
     if (!writeVol)
         vol = -1;
 #ifdef PLATFORM_MPC
@@ -886,6 +890,28 @@ void setPadSlice(int pad, int slice)
         mtProject.pads.slice[pad] = (slice >= 0 && slice < MAX_SLICE_NUMBER) ? (uint8_t)(slice + 1) : 0;
 }
 
+int padChance(int pad)
+{
+    return (pad >= 0 && pad < kPads) ? 100 - mtProject.pads.chanceLoss[pad] : 100;
+}
+
+void setPadChance(int pad, int chance)
+{
+    if (pad >= 0 && pad < kPads)
+        mtProject.pads.chanceLoss[pad] = (uint8_t)(100 - (chance < 5 ? 5 : (chance > 100 ? 100 : chance)));
+}
+
+void padChanceWrite(uint8_t* loss)
+{
+    memcpy(loss, mtProject.pads.chanceLoss, kPads);
+}
+
+void padChanceRead(const uint8_t* loss)
+{
+    for (int i = 0; i < kPads; i++)
+        mtProject.pads.chanceLoss[i] = (loss && loss[i] <= 95) ? loss[i] : 0;
+}
+
 void padSlicesWrite(uint8_t* slices)
 {
     memcpy(slices, mtProject.pads.slice, kPads);
@@ -943,6 +969,7 @@ const char* mpdjCapture()
         {
             if (h.slice >= 0)
                 sequencer.mpdjSetSlice(track, (uint8_t)r, (uint8_t)h.slice, true);
+            sequencer.mpdjSetChance(track, (uint8_t)r, h.chance, true);
             written++;
         }
         else
@@ -1641,5 +1668,8 @@ int mpdjStepSeqToggle(int row, uint8_t velocity)
     if (mtProject.mpdjFullLevel)
         velocity = 127;
     uint8_t velo = padVelocityFor(mpdjStepSeqPad(), p->program, velocity ? velocity : 1);
-    return sequencer.mpdjPadStepWrite(p->track, (uint8_t)row, p->program, note, velo, padVelocityToVolume()) < 0 ? -1 : 1;
+    if (sequencer.mpdjPadStepWrite(p->track, (uint8_t)row, p->program, note, velo, padVelocityToVolume()) < 0)
+        return -1;
+    sequencer.mpdjSetChance(p->track, (uint8_t)row, (uint8_t)padChance(mpdjStepSeqPad()), true);
+    return 1;
 }
