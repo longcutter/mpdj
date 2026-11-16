@@ -1292,6 +1292,7 @@ void mpdjEraseTick(int row)
 // ---- STEP SEQ (5f-4) -----------------------------------------------------------
 static int s_stepPad = -1;
 
+int mpdjLastPadIndex() { return s_lastPad; } // MPDJ Kits: Save Kit's default bank
 int mpdjStepSeqPad() { return s_stepPad >= 0 ? s_stepPad : (s_lastPad >= 0 ? s_lastPad : 0); }
 
 void mpdjStepSeqSetPad(int pad)

@@ -161,6 +161,16 @@ class cSampleImporter : public ModuleBase
     // a MIDI add waiting for the replace confirm / for samples to be deleted
     bool midiAddPending = false;
     bool midiAddWaitsForDelete = false;
+    // MPDJ Kits (mpdjKits.h): Add on a kit folder opens it, marks its programs and
+    // adds them from the selected slot; kit.txt goes to the pads afterwards
+    bool startKitAdd();
+    bool isKitEntry(int idx); // a folder in the file list that holds a kit
+    void kitFolderListed();
+    bool kitAddPending = false; // waiting for the kit folder's listing
+    bool kitImporting = false;  // waiting for the import to end
+    uint8_t kitBaseSlot = 0;
+    uint8_t kitCount = 0;
+    char kitPath[256] = { 0 };
     uint8_t midiAddFirstSlot = 0;
     uint8_t midiAddFirstChannel = 1;
     uint8_t midiAddCount = 0;

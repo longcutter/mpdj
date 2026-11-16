@@ -120,6 +120,8 @@ uint8_t padGroupFor(uint8_t program, uint8_t track);
 // Gate pad and frees the track for a One shot pad. The caller decides where
 // pads mean this (MPC: the Pattern screen without popups, not recording).
 const char* mpdjPadPress(int pad, uint8_t velocity);
+// the last pad played from the pad map, -1 before any (Kits: the bank to save)
+int mpdjLastPadIndex();
 void mpdjPadRelease(int pad);
 
 // Note Repeat (step 5b-7): while it's on (NOTE REPEAT held, or latched with

@@ -171,12 +171,8 @@ void cEdit::update()
 
     API_END();
 
-    if (text != nullptr)
-    {
-        API_COLOR(colors[0]);
-        API_CMD_TEXT(posX, posY + height / 2, font->handle, OPT_CENTER | OPT_CENTERY, text);
-    }
-
+    // MPDJ: the selection box first, the text over it (drawn the other way round
+    // the opaque box hid a selected name, e.g. Save As / Save Kit's suggested name)
     if (data != nullptr && data->selectionWidth > 0)
     {
         API_COLOR(colors[3]);
@@ -190,5 +186,11 @@ void cEdit::update()
         API_VERTEX2F(selEndPosition, selYPos + font->height);
         API_END();
         API_LINE_WIDTH(16);
+    }
+
+    if (text != nullptr)
+    {
+        API_COLOR(colors[0]);
+        API_CMD_TEXT(posX, posY + height / 2, font->handle, OPT_CENTER | OPT_CENTERY, text);
     }
 }

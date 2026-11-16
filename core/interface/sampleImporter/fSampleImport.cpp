@@ -1,5 +1,6 @@
 #include "fileManager.h"
 #include "fileManagerDefs.h"
+#include "mpdjKits.h"
 #include "sampleImporter/sampleImporter.h"
 
 #include "core/interfaceMenuPopup.h"
@@ -32,6 +33,7 @@ static void functMenu(uint8_t state);
 static void functPlayAction();
 
 static void functEnter();
+static void functEnterOrKit();
 static void functRename();
 static void functDeleteUnused();
 static void functShift(uint8_t state);
@@ -88,6 +90,7 @@ static void functDeleteUnusedInstrumentsConfirm();
 static void functReplaceInstrumentConfirm();
 static void functReplaceInstrumentDeny();
 static void functSelectPreviewVolume(uint8_t state);
+static void instrumentAdd(bool addNext);
 
 void cSampleImporter::update()
 {
@@ -110,6 +113,9 @@ void cSampleImporter::update()
         ip->unblockAllInputs();
 
         newFileManager.clearStatus();
+
+        if (kitAddPending) // MPDJ Kits: the kit folder is listed, add its programs
+            kitFolderListed();
     }
     else if (managerStatus == fmDrawingSampleWaveformEnd)
     {
@@ -131,6 +137,16 @@ void cSampleImporter::update()
     }
     else if (managerStatus == fmImportSamplesEnd)
     {
+        if (kitImporting) // MPDJ Kits: the programs are in, now the pad settings
+        {
+            kitImporting = false;
+            mpdjKits::applyPadSettings(kitPath, kitBaseSlot, kitCount);
+            static char msg[80];
+            const char* name = strrchr(kitPath, '/');
+            snprintf(msg, sizeof msg, "Kit %s: slots %d-%d", name ? name + 1 : kitPath, kitBaseSlot + 1,
+                     kitBaseSlot + kitCount);
+            mtPopups.show(0, msg);
+        }
         if (addNextFlag)
         {
             addNextFlag = 0;
@@ -195,6 +211,7 @@ void cSampleImporter::update()
     }
     else if (managerStatus >= fmError)
     {
+        kitAddPending = kitImporting = false; // MPDJ Kits
         ip->unblockAllInputs();
 
         newFileManager.clearStatus();
@@ -364,7 +381,7 @@ void cSampleImporter::setDefaultScreenFunct()
     // ip->setButtonObj(interfaceButton0, buttonPress, functChangeFolder);
     // ip->setButtonObj(interfaceButton1, buttonPress, functChangeFolder);
 
-    ip->setButtonObj(interfaceButton0, buttonPress, functEnter);
+    ip->setButtonObj(interfaceButton0, buttonPress, functEnterOrKit); // MPDJ: "Add Kit" on a kit folder
     ip->setButtonObj(interfaceButton1, buttonPress, functInstrumentAddNext); // 3
     commonPreviewButton = interfaceButton2;
     ip->setButtonObj(commonPreviewButton, functPreviewFile);      // 4
@@ -433,6 +450,7 @@ static void instrumentAdd(bool addNext)
     }
     if (*SI->explorerNames[SI->selectedFile] == '/')
     {
+        SI->startKitAdd(); // MPDJ Kits: Add on a kit folder loads the kit
         return;
     }
 
@@ -444,7 +462,8 @@ static void instrumentAdd(bool addNext)
 
     if (replaceEnd >= kSampleInstrumentsCount)
     {
-        mtPopups.show(0, "Too many samples selected");
+        mtPopups.show(0, SI->kitImporting ? "The kit doesn't fit after this slot" : "Too many samples selected");
+        SI->kitImporting = false; // MPDJ Kits
         return;
     }
     uint8_t instrToReplaceCount = countMidiPrograms(replaceStart, replaceEnd); // MPDJ
@@ -966,6 +985,15 @@ static void functEncoder(int16_t value)
         case 2: SI->changePreviewVolume(value); break;
         default: break;
     }
+}
+
+// MPDJ Kits: screen button 1 on a kit folder loads the kit ("Add Kit"); ENCODER
+// PUSH (functEnter) still opens the folder
+static void functEnterOrKit()
+{
+    if (SI->selectedPlace == 0 && SI->startKitAdd())
+        return;
+    functEnter();
 }
 
 static void functEnter()
@@ -1723,8 +1751,75 @@ void cSampleImporter::importSamples()
     }
     else
     {
+        kitImporting = false; // MPDJ Kits
         mtPopups.show(0, "Not enough sample memory");
     }
+}
+
+//==============================================================================================
+// MPDJ Kits (mpdjKits.h)
+
+bool cSampleImporter::isKitEntry(int idx)
+{
+    if (explorerNames == nullptr || midiBrowse || idx < 0 || idx >= locationExplorerCount)
+        return false;
+    const char* entry = explorerNames[idx];
+    if (*entry != '/' || strcmp(entry, "/..") == 0 || idx == midiFolderIdx)
+        return false;
+    const char* base = newFileManager.getExplorerPath();
+    char path[256];
+    snprintf(path, sizeof path, "%s%s", strcmp(base, "/") == 0 ? "" : base, entry);
+    return mpdjKits::isKitFolder(path);
+}
+
+bool cSampleImporter::startKitAdd()
+{
+    if (selectedPlace != 0 || !isKitEntry(selectedFile))
+        return false;
+    const char* base = newFileManager.getExplorerPath();
+    snprintf(kitPath, sizeof kitPath, "%s%s", strcmp(base, "/") == 0 ? "" : base, explorerNames[selectedFile]);
+    kitBaseSlot = (uint8_t)getSelectionStart(listInstruments);
+    kitAddPending = true;
+    playFromPads(INTERFACE_BUTTON_PREVIEW, buttonRelease, -1);
+    if (newFileManager.browseSdCard(&selectedFile))
+        ip->blockAllInputs();
+    else
+        kitAddPending = false;
+    return true;
+}
+
+// the kit folder is open: mark its program files (they sort by number) and Add
+// them from the slot that was selected, as a multi-file Add does
+void cSampleImporter::kitFolderListed()
+{
+    kitAddPending = false;
+    int first = -1, last = -1;
+    for (int i = 0; i < locationExplorerCount; i++)
+    {
+        if (*explorerNames[i] != '/' && hasFileExtension(explorerNames[i], "pti"))
+        {
+            if (first < 0)
+                first = i;
+            last = i;
+        }
+    }
+    if (first < 0)
+    {
+        mtPopups.show(0, "This kit has no programs");
+        return;
+    }
+    memset(&selectionTab[listFiles][0], 0, maxListLength);
+    for (int i = first; i <= last; i++)
+        selectionTab[listFiles][i] = 1;
+    selectionLength[listFiles] = (uint8_t)(last - first + 1);
+    selectedFile = (uint8_t)first;
+    display.setControlValue(explorerListControl, selectedFile);
+    display.refreshControl(explorerListControl);
+    cancelSelect(listInstruments);
+    selectedSlot = kitBaseSlot;
+    kitCount = (uint8_t)(last - first + 1);
+    kitImporting = true;
+    instrumentAdd(false);
 }
 
 //==============================================================================================
@@ -2637,6 +2732,7 @@ static void functReplaceInstrumentConfirm()
 static void functReplaceInstrumentDeny()
 {
     SI->midiAddPending = false; // MPDJ
+    SI->kitImporting = false;   // MPDJ Kits
     SI->clearInfoPopupHandlerFunctions();
     SI->hideInfoPopup();
 

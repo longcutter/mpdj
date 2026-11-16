@@ -1,0 +1,11 @@
+MPDJ kit 1
+# NN mode group cut color (mode auto / oneshot / gate, choke group 0-31, cut on release 0 / 1, color 0 = Auto, 1-16)
+# MPDJ 8: the hats share choke group 1; colors by family (kicks red, snares orange, hats yellow, toms green, cymbals cyan, percussion violet)
+01 auto 0 0 1
+02 auto 0 0 2
+03 auto 1 0 3
+04 auto 1 0 3
+05 auto 0 0 2
+06 auto 0 0 2
+07 auto 0 0 10
+08 auto 0 0 1

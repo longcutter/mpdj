@@ -1,3 +1,4 @@
+#include "mpdjKits.h"
 #include "mtSliceDetector.h"
 #include <mtAudioExport.h>
 #include <mtRandomNameGenerator.h>
@@ -48,6 +49,9 @@ static void functImportMod();
 static void functSaveProject();
 static void functSaveAsProject();
 static void functExport();
+#ifdef PLATFORM_MPC
+static void functSaveKit(); // MPDJ Kits (mpdjKits.h)
+#endif
 //****************************************************
 // New project
 static void functSaveChangesCancelNewProject();
@@ -268,6 +272,9 @@ void cProjectEditor::setDefaultScreenFunct()
     ip->setButtonObj(interfaceButton3, buttonPress, functSaveProject);
     ip->setButtonObj(interfaceButton4, buttonPress, functSaveAsProject);
     ip->setButtonObj(interfaceButton5, buttonPress, functExport);
+#ifdef PLATFORM_MPC
+    ip->setButtonObj(interfaceButton6, buttonPress, functSaveKit);
+#endif
 
     ip->setButtonObj(interfaceButtonPlay, buttonPress, functPlayAction);
 
@@ -1012,6 +1019,75 @@ static void functKeyboardAutoName()
 {
     PE->keyboardManager.setRandomName();
 }
+
+#ifdef PLATFORM_MPC
+//===============================================================================================================
+// MPDJ Kits (Mike 2026-11-16): Save Kit writes one bank's 16 program slots (the bank
+// last played from the pad map; screen button 3 steps through A-D) as /Kits/<name>
+static uint8_t s_kitBank = 0;
+static bool s_kitReplaceAsked = false;
+static char s_kitBankText[2][16];
+
+static void showKitBank()
+{
+    snprintf(s_kitBankText[0], sizeof s_kitBankText[0], "Bank %c", 'A' + s_kitBank);
+    snprintf(s_kitBankText[1], sizeof s_kitBankText[1], "%d-%d", s_kitBank * 16 + 1, s_kitBank * 16 + 16);
+    display.setControlText(PE->label[2], s_kitBankText[0]);
+    display.setControlText2(PE->label[2], s_kitBankText[1]);
+    display.setControlValue(PE->label[2], 1);
+    display.refreshControl(PE->label[2]);
+}
+
+static void functSaveKitBank()
+{
+    s_kitBank = (s_kitBank + 1) % 4;
+    s_kitReplaceAsked = false;
+    showKitBank();
+}
+
+static void functSaveKitCancel()
+{
+    PE->keyboardManager.deactivateKeyboard();
+    PE->showDefaultScreen();
+    PE->setDefaultScreenFunct();
+}
+
+static void functSaveKitConfirm()
+{
+    const char* name = PE->keyboardManager.getName();
+    if (!name || !*name)
+        return;
+    if (mpdjKits::exists(name) && !s_kitReplaceAsked)
+    {
+        s_kitReplaceAsked = true;
+        mtPopups.show(0, "That kit exists:", "Save again to replace it");
+        return;
+    }
+    static char msg[80];
+    mpdjKits::saveBank(s_kitBank, name, msg, sizeof msg);
+    functSaveKitCancel();
+    mtPopups.show(0, msg);
+}
+
+static void functSaveKit()
+{
+    s_kitBank = (uint8_t)mpdjKits::lastPlayedBank();
+    s_kitReplaceAsked = false;
+    PE->ip->clearButtonsRange(interfaceButton0, interfaceButton7);
+    PE->ip->setButtonObj(interfaceButton0, buttonPress, functKeyboardConfirmKey);
+    PE->ip->setButtonObj(interfaceButton1, buttonPress, functKeyboardAutoName);
+    PE->ip->setButtonObj(interfaceButton2, buttonPress, functSaveKitBank);
+    PE->ip->setButtonObj(interfaceButton6, buttonPress, functSaveKitCancel);
+    PE->ip->setButtonObj(interfaceButton7, buttonPress, functSaveKitConfirm);
+    PE->ip->setButtonObj(interfaceButtonInsert, buttonPress, functKeyboardConfirmKey);
+    static char name[16];
+    snprintf(name, sizeof name, "Kit %c", 'A' + s_kitBank);
+    PE->keyboardManager.fillName(name);
+    PE->keyboardManager.activateKeyboard(31);
+    PE->showKeyboard("Save Kit");
+    showKitBank();
+}
+#endif
 
 //===============================================================================================================
 // open

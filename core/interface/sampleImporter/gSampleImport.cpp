@@ -485,7 +485,7 @@ void cSampleImporter::showAddOrEnter()
 {
     if (explorerNames != nullptr && *explorerNames[selectedFile] == '/')
     {
-        display.setControlText(label[0], "Enter");
+        display.setControlText(label[0], isKitEntry(selectedFile) ? "Add Kit" : "Enter"); // MPDJ Kits
 
         if (selectedPlace == 0)
         {

@@ -143,7 +143,11 @@ void cProjectEditor::showDefaultScreen()
     display.setControlText(label[3], "Save");
     display.setControlText(label[4], "Save As");
     display.setControlText(label[5], "Export");
+#ifdef PLATFORM_MPC
+    display.setControlText(label[6], "Save Kit"); // MPDJ Kits
+#else
     display.setControlText(label[6], "");
+#endif
     display.setControlText(label[7], "");
 
     display.setControlText2(label[0], "Project");
