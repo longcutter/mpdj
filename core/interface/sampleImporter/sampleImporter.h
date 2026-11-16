@@ -361,17 +361,17 @@ class cSampleImporter : public ModuleBase
     };
 
     const char* firstLineDeletePopupOptions[infoPupupFirstLineTextCount] = {
-        (char*)"This action will delete the instrument.",
-        (char*)"This action will delete the instruments."
+        (char*)"This action will delete the program.",
+        (char*)"This action will delete the programs."
     };
 
     const char* firstLineReplacePopupOptions[infoPupupFirstLineTextCount] = {
-        (char*)"This action will replace the instrument.",
-        (char*)"This action will replace the instruments."
+        (char*)"This action will replace the program.",
+        (char*)"This action will replace the programs."
     };
 
     const char* firstLineDeleteUnusedPopupOptions =
-      "This action will delete all unused instruments.";
+      "This action will delete all unused programs.";
 
     const char* firstLineDeleteInfoPopup =
       firstLineDeletePopupOptions[oneInstrumentInfoPupupFirstLineText];

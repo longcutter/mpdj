@@ -328,7 +328,7 @@ void InterfacePopups::showInstrumentsPopup(enumStepPopups mode)
     display.setControlStyle(bgLabel, controlStyleShow | controlStyleBackground);
     display.refreshControl(bgLabel);
 
-    display.setControlText(textLabel1, "  Instruments");
+    display.setControlText(textLabel1, "  Programs");
     display.setControlColors(textLabel1, display.getTheme().stepPopupTitleLabelColor);
     display.setControlPosition(textLabel1, 600 + 1, 0);
     display.setControlSize(textLabel1, 200, 26);
@@ -1359,7 +1359,7 @@ void InterfacePopups::showProgramsImportNotice()
     {
         show(0,
              "Polyend Tracker project imported:",
-             "MIDI instruments M01-M16 are now",
+             "MIDI programs M01-M16 are now",
              "programs 49-64 (MIDI channels 1-16).",
              8);
     }

@@ -688,7 +688,7 @@ void cPatternEditor::showFillPopup()
             break;
         case 1:
             showFillInstr();
-            display.setControlText(patternPopupTitleLabel, " Fill Instruments");
+            display.setControlText(patternPopupTitleLabel, " Fill Programs");
             break;
         case 2:
             if (isMicVolView)
@@ -794,7 +794,7 @@ void cPatternEditor::refreshFillType()
 
         if (fillData[fillIdx].type == 0)
         {
-            display.setControlText(label[4], "Instrument");
+            display.setControlText(label[4], "Program");
         }
         else
         {
@@ -1437,7 +1437,7 @@ void cPatternEditor::showFullMemoryInBank()
 // komunikat ze nie ma wolnych instrumentow dla rendera
 void cPatternEditor::showFullInstrumentInBank()
 {
-    mtPopups.show(2, "There are not enough instruments"); // todo: podzielic
+    mtPopups.show(2, "There are not enough programs"); // todo: podzielic
 }
 
 void cPatternEditor::showActionButtonPage1Labels()

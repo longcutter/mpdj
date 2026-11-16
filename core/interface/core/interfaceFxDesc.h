@@ -12,17 +12,17 @@ const char* const fxDescriptions[FX_COUNT] = {
     "Destination: Sample, Synth, MIDI \n\nToggle off the effect used on previous step.",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_VOLUME,
     "Destination: Sample, Synth, MIDI \n\n"
-    "Sets the Volume of an Instrument. "
-    "For MIDI instruments this sends the NOTE ON Velocity parameter. "
-    "For Synth instruments sets the Macro 7. \n\n"
+    "Sets the Volume of a Program. "
+    "For MIDI programs this sends the NOTE ON Velocity parameter. "
+    "For Synth programs sets the Macro 7. \n\n"
     "From 0% to 100%.",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_PANNING,
     "Destination: Sample, Synth \n\n"
-    "Sets the Panning of an Instrument or Synth.\n\n"
+    "Sets the Panning of a Program or Synth.\n\n"
     "From -50 (L) to +50 (R).",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_MICROTUNING,
     "Destination: Sample, Synth, MIDI \n\nSets the microtuning adjustments. "
-    "For MIDI instruments and Synths this sends the pitchbend message."
+    "For MIDI programs and Synths this sends the pitchbend message."
     "\n\n"
     "From -99 cents to +99 cents.",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_GLIDE,
@@ -89,7 +89,7 @@ const char* const fxDescriptions[FX_COUNT] = {
     // Sequencer::strFxConsts::enFxType::FX_TYPE_RANDOM_INSTRUMENT,
     "Destination: Sample, Synth, MIDI "
     "\n\n"
-    "Sets the range of randomization for Instrument, Synth or MIDI channel number with each "
+    "Sets the range of randomization for Program, Synth or MIDI channel number with each "
     "sequencer pass."
     "\n"
     "\n"
@@ -124,12 +124,12 @@ const char* const fxDescriptions[FX_COUNT] = {
     "\n"
     "From 0% to 100%.",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_SAMPLE_SLICE,
-    "Destination: Sample \n\nSets the slice number of a instrument with a Slice playback type."
+    "Destination: Sample \n\nSets the slice number of a program with a Slice playback type."
     "\n"
     "\n"
     "From 1 to 48.",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_VOLUME_LFO,
-    "Destination: Sample \n\nSets the LFO rate for instrument Volume. LFO is synced to project "
+    "Destination: Sample \n\nSets the LFO rate for program Volume. LFO is synced to project "
     "Tempo."
     "\n"
     "\n"
@@ -138,7 +138,7 @@ const char* const fxDescriptions[FX_COUNT] = {
     // Sequencer::strFxConsts::enFxType::FX_TYPE_PANNING_LFO,
     "Destination: Sample "
     "\n\n"
-    "Sets the LFO rate for instrument Panning."
+    "Sets the LFO rate for program Panning."
     "\n\n"
     "Values: 128; 96; 64; 48; 32; 24; 16; 12; 8; 6; 4; 3; 2; 3/2; 1; 3/4; 1/2; 3/8; 1/3; 1/4; "
     "316 (3/16); 1/6; 1/8; /12 (1/12); /16 (1/16); /24 (1/24); /32 (1/32); /48 (1/48); /64 (1/64).",
@@ -159,7 +159,7 @@ const char* const fxDescriptions[FX_COUNT] = {
     "Values: 128; 96; 64; 48; 32; 24; 16; 12; 8; 6; 4; 3; 2; 3/2; 1; 3/4; 1/2; 3/8; 1/3; 1/4; "
     "316 (3/16); 1/6; 1/8; /12 (1/12); /16 (1/16); /24 (1/24); /32 (1/32); /48 (1/48); /64 (1/64).",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_FINETUNE_LFO,
-    "Destination: Sample \n\nSets the LFO rate for instrument Finetune. LFO is synced to project "
+    "Destination: Sample \n\nSets the LFO rate for program Finetune. LFO is synced to project "
     "Tempo."
     "\n"
     "\n"
@@ -168,27 +168,27 @@ const char* const fxDescriptions[FX_COUNT] = {
     // Sequencer::strFxConsts::enFxType::FX_TYPE_OVERDRIVE,
     "Destination: Sample \n"
     "\n"
-    "Sets the amount of instrument Overdrive.\n"
+    "Sets the amount of program Overdrive.\n"
     "\n"
     "From 0% to 100%.",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_FILTER_LOWPASS,
     "Destination: Sample \n"
     "\n"
-    "Sets the cutoff amount of the instrument Low-pass Filter."
+    "Sets the cutoff amount of the program Low-pass Filter."
     "\n"
     "\n"
     "From 0% to 100%.",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_FILTER_BANDPASS,
     "Destination: Sample \n"
     "\n"
-    "Sets the cutoff amount of the instrument Band-pass Filter."
+    "Sets the cutoff amount of the program Band-pass Filter."
     "\n"
     "\n"
     "From 0% to 100%.",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_FILTER_HIGHPASS,
     "Destination: Sample \n"
     "\n"
-    "Sets the cutoff amount of the instrument High-pass Filter."
+    "Sets the cutoff amount of the program High-pass Filter."
     "\n"
     "\n"
     "From 0% to 100%.",
@@ -205,14 +205,14 @@ const char* const fxDescriptions[FX_COUNT] = {
     // Sequencer::strFxConsts::enFxType::FX_TYPE_BIT_DEPTH,
     "Destination: Sample \n"
     "\n"
-    "Sets the instrument bit depth."
+    "Sets the program bit depth."
     "\n"
     "\n"
     "From 4 bits to 16 bits.",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_TUNE,
     "Destination: Sample \n"
     "\n"
-    "Sets the instrument tuning adjustments."
+    "Sets the program tuning adjustments."
     "\n"
     "\n"
     "From -24 semitones \nto 24 semitones.",
@@ -242,54 +242,54 @@ const char* const fxDescriptions[FX_COUNT] = {
     "In Wavetable mode, modulates filter speed and time warp.",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_GRANULAR_LENGTH,
     "Destination: Sample \n\n"
-    "Sets the Grain Length for an Instrument in Granular Playback mode.\n\n"
+    "Sets the Grain Length for a Program in Granular Playback mode.\n\n"
     "0-50% maps 1ms to 100ms, 50-100% maps 100ms to 1000ms (clamped to sample length).\n\n"
     "From 0% to 100%.",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_SEND_CC_A,
-    "Destination: MIDI, Synth \n\nSends MIDI CC number set to A in MIDI Instrument Parameters."
+    "Destination: MIDI, Synth \n\nSends MIDI CC number set to A in MIDI Program Parameters."
     "\n"
     "\n"
-    "For Synth instruments sets the Macro 1."
+    "For Synth programs sets the Macro 1."
     "\n"
     "\n"
     "From 0 to 127.",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_SEND_CC_B,
-    "Destination: MIDI, Synth \n\nSends MIDI CC number set to B in MIDI Instrument Parameters."
+    "Destination: MIDI, Synth \n\nSends MIDI CC number set to B in MIDI Program Parameters."
     "\n"
     "\n"
-    "For Synth instruments sets the Macro 2."
+    "For Synth programs sets the Macro 2."
     "\n"
     "\n"
     "From 0 to 127.",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_SEND_CC_C,
-    "Destination: MIDI, Synth \n\nSends MIDI CC number set to C in MIDI Instrument Parameters."
+    "Destination: MIDI, Synth \n\nSends MIDI CC number set to C in MIDI Program Parameters."
     "\n"
     "\n"
-    "For Synth instruments sets the Macro 3."
+    "For Synth programs sets the Macro 3."
     "\n"
     "\n"
     "From 0 to 127.",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_SEND_CC_D,
-    "Destination: MIDI, Synth \n\nSends MIDI CC number set to D in MIDI Instrument Parameters."
+    "Destination: MIDI, Synth \n\nSends MIDI CC number set to D in MIDI Program Parameters."
     "\n"
     "\n"
-    "For Synth instruments sets the Macro 4."
+    "For Synth programs sets the Macro 4."
     "\n"
     "\n"
     "From 0 to 127.",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_SEND_CC_E,
-    "Destination: MIDI, Synth \n\nSends MIDI CC number set to E in MIDI Instrument Parameters."
+    "Destination: MIDI, Synth \n\nSends MIDI CC number set to E in MIDI Program Parameters."
     "\n"
     "\n"
-    "For Synth instruments sets the Macro 5."
+    "For Synth programs sets the Macro 5."
     "\n"
     "\n"
     "From 0 to 127.",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_SEND_CC_F,
-    "Destination: MIDI, Synth \n\nSends MIDI CC number set to F in MIDI Instrument Parameters."
+    "Destination: MIDI, Synth \n\nSends MIDI CC number set to F in MIDI Program Parameters."
     "\n"
     "\n"
-    "For Synth instruments sets the Macro 6."
+    "For Synth programs sets the Macro 6."
     "\n"
     "\n"
     "From 0 to 127.",
@@ -321,18 +321,18 @@ const char* const fxDescriptions[FX_COUNT] = {
     // Sequencer::strFxConsts::enFxType::FX_TYPE_OFF,
     "Destination: Sample, MIDI \n\nToggle off the effect used on previous step.",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_VOLUME,
-    "Destination: Sample, MIDI \n\nSets the Volume of an Instrument. For MIDI instruments "
+    "Destination: Sample, MIDI \n\nSets the Volume of a Program. For MIDI programs "
     "this sends the NOTE ON Velocity "
     "parameter. \n\nFrom 0% to 100%.",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_PANNING,
-    "Destination: Sample \n\nSets the Panning of an Instrument.\n\nFrom -50 (L) to +50 (R).",
+    "Destination: Sample \n\nSets the Panning of a Program.\n\nFrom -50 (L) to +50 (R).",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_MICROTUNING,
     "Destination: Sample, MIDI \n\nSets the microtuning adjustments."
     "\n"
     "\nFrom -99 cents to +99 cents."
     "\n"
     "\n"
-    "For MIDI instruments sends pitchbend message.",
+    "For MIDI programs sends pitchbend message.",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_GLIDE,
     "Destination: Sample \n\nSets the time it takes for the pitch of previous note to travel to "
     "the "
@@ -396,7 +396,7 @@ const char* const fxDescriptions[FX_COUNT] = {
     "\n"
     "From +/- 0 to +/- 100",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_RANDOM_INSTRUMENT,
-    "Destination: Sample, MIDI \n\nSets the range of randomization for Instrument number "
+    "Destination: Sample, MIDI \n\nSets the range of randomization for Program number "
     "with each sequencer pass."
     "\n"
     "\n"
@@ -428,12 +428,12 @@ const char* const fxDescriptions[FX_COUNT] = {
     "\n"
     "From 0% to 100%.",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_SAMPLE_SLICE,
-    "Destination: Sample \n\nSets the slice number of a instrument with a Slice playback type."
+    "Destination: Sample \n\nSets the slice number of a program with a Slice playback type."
     "\n"
     "\n"
     "From 1 to 48.",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_VOLUME_LFO,
-    "Destination: Sample \n\nSets the LFO rate for instrument Volume. LFO is synced to project "
+    "Destination: Sample \n\nSets the LFO rate for program Volume. LFO is synced to project "
     "Tempo."
     "\n"
     "\n"
@@ -462,7 +462,7 @@ const char* const fxDescriptions[FX_COUNT] = {
     "Values: 128; 96; 64; 48; 32; 24; 16; 12; 8; 6; 4; 3; 2; 3/2; 1; 3/4; 1/2; 3/8; 1/3; 1/4; "
     "316 (3/16); 1/6; 1/8; /12 (1/12); /16 (1/16); /24 (1/24); /32 (1/32); /48 (1/48); /64 (1/64).",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_FINETUNE_LFO,
-    "Destination: Sample \n\nSets the LFO rate for instrument Finetune. LFO is synced to project "
+    "Destination: Sample \n\nSets the LFO rate for program Finetune. LFO is synced to project "
     "Tempo."
     "\n"
     "\n"
@@ -534,36 +534,36 @@ const char* const fxDescriptions[FX_COUNT] = {
     "In Wavetable mode, modulates filter speed and time warp.",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_GRANULAR_LENGTH,
     "Destination: Sample \n\n"
-    "Sets the Grain Length for an Instrument in Granular Playback mode.\n\n"
+    "Sets the Grain Length for a Program in Granular Playback mode.\n\n"
     "0-50% maps 1ms to 100ms, 50-100% maps 100ms to 1000ms (clamped to sample length).\n\n"
     "From 0% to 100%.",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_SEND_CC_A,
-    "Destination: MIDI \n\nSends MIDI CC number set to A in MIDI Instrument Parameters."
+    "Destination: MIDI \n\nSends MIDI CC number set to A in MIDI Program Parameters."
     "\n"
     "\n"
     "From 0 to 127.",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_SEND_CC_B,
-    "Destination: MIDI \n\nSends MIDI CC number set to B in MIDI Instrument Parameters."
+    "Destination: MIDI \n\nSends MIDI CC number set to B in MIDI Program Parameters."
     "\n"
     "\n"
     "From 0 to 127.",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_SEND_CC_C,
-    "Destination: MIDI \n\nSends MIDI CC number set to C in MIDI Instrument Parameters."
+    "Destination: MIDI \n\nSends MIDI CC number set to C in MIDI Program Parameters."
     "\n"
     "\n"
     "From 0 to 127.",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_SEND_CC_D,
-    "Destination: MIDI \n\nSends MIDI CC number set to D in MIDI Instrument Parameters."
+    "Destination: MIDI \n\nSends MIDI CC number set to D in MIDI Program Parameters."
     "\n"
     "\n"
     "From 0 to 127.",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_SEND_CC_E,
-    "Destination: MIDI \n\nSends MIDI CC number set to E in MIDI Instrument Parameters."
+    "Destination: MIDI \n\nSends MIDI CC number set to E in MIDI Program Parameters."
     "\n"
     "\n"
     "From 0 to 127.",
     // Sequencer::strFxConsts::enFxType::FX_TYPE_SEND_CC_F,
-    "Destination: MIDI \n\nSends MIDI CC number set to F in MIDI Instrument Parameters."
+    "Destination: MIDI \n\nSends MIDI CC number set to F in MIDI Program Parameters."
     "\n"
     "\n"
     "From 0 to 127.",

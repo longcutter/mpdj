@@ -324,9 +324,9 @@ const char limiterDesc[] = { "Determines how attack and release of the limiter a
                              "not be able to catch very sudden changes in amplitude. Extreme "
                              "limiting reacts much faster which colors the sound. " };
 
-const char sendsDesc[] = { "Pre-fader sends are independent of the instrument volume. This allows "
+const char sendsDesc[] = { "Pre-fader sends are independent of the program volume. This allows "
                            "the wet signal to be louder than the dry signal. "
-                           "Post-fader sends are proportional to the instrument volume. This gives "
+                           "Post-fader sends are proportional to the program volume. This gives "
                            "a more consistent sound when volume is modulated. " };
 
 const char headroomDesc[] = {

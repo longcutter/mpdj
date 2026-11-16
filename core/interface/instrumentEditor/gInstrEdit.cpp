@@ -352,19 +352,19 @@ void cInstrumentEditor::showTitleBar()
         case mtInstEditModeParams:
             if (isEffectsWindow)
             {
-                label = "Instrument Effects";
+                label = "Program Effects";
             }
             else
             {
-                label = "Instrument Parameters 1/2";
+                label = "Program Parameters 1/2";
             }
             break;
-        case mtInstEditModeEnv: label = "Instrument Automation 2/2"; break;
+        case mtInstEditModeEnv: label = "Program Automation 2/2"; break;
         case mtInstEditModeMidi:
-            label = "MIDI Instrument Parameters";
+            label = "MIDI Program Parameters";
             songTimer.hide();
             break;
-        case mtInstEditModeInstrSynth: label = "Instrument MIDI Mapping"; break;
+        case mtInstEditModeInstrSynth: label = "Program MIDI Mapping"; break;
 #if GUI_HANDLE_SYNTH
         case mtInstEditModeSynth: label = "Synth Parameters 1/2"; break;
         case mtInstEditModeSynthMacros: label = "Synth Macros 2/2"; break;
@@ -381,7 +381,7 @@ void cInstrumentEditor::showTitleBar()
             break;
         }
 #endif
-        default: label = "Instrument Parameters"; break;
+        default: label = "Program Parameters"; break;
     }
 
     titleBar->show(true);
@@ -718,7 +718,7 @@ void cInstrumentEditor::showEffectScreen()
     display.setControlText(label[1], "Bit depth");
     display.setControlText(label[2], "Reverb send");
     display.setControlText(label[3], "Delay send");
-    display.setControlText(label[4], "Instrument");
+    display.setControlText(label[4], "Program");
     display.setControlText2(label[4], "MIDI Mapping");
 
     for (uint8_t i = 5; i < 7; i++)
@@ -977,7 +977,7 @@ void cInstrumentEditor::showInstrumentSynth()
     display.setControlText(label[2], "");
     display.setControlText(label[3], "");
     display.setControlText(label[4], "");
-    display.setControlText(label[5], "Instruments");
+    display.setControlText(label[5], "Programs");
     display.setControlText(label[6], "");
     display.setControlText(label[7], "Back");
 

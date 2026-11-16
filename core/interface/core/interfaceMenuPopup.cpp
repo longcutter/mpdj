@@ -5,7 +5,7 @@ InterfaceMenuPopup mtMenuPopup;
 
 const uint8_t kMenuModulesCount = 11;
 const char* const kModuleNamesList[kMenuModulesCount] = { "Pattern",
-                                                          "Instrument Parameters",
+                                                          "Program Parameters",
                                                           "Sample Playback",
                                                           "Master",
                                                           "Song",
