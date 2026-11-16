@@ -15,6 +15,8 @@
 //   MPDJ_AUDIO_STATS=1     every 5 s: render time and xruns
 #pragma once
 
+#include <atomic>
+
 class Tracker;
 
 namespace MpcAudio
@@ -35,4 +37,8 @@ int codecCard();
 // curve) and headphone mute.
 void setVolume(float v);
 void setHeadphoneMuted(bool muted);
+
+// The output's peak in the last block, 0..1 after the volume (the screensaver's
+// visuals follow it; written by the audio thread)
+extern std::atomic<float> outputLevel;
 } // namespace MpcAudio

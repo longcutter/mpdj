@@ -228,6 +228,7 @@ void renderBlock(bool haveInput, const float* auxL = nullptr, const float* auxR 
     // Gain ramps across the block so volume changes and mutes don't click.
     float target = (keyMuted || headphoneMuted) ? 0.0f : volumeGain.load();
     float g = currentGain, step = (target - g) / kBlock;
+    int blockPeak = 0;
     for (unsigned i = 0; i < kBlock; i++)
     {
         int a = abs(blockL[i]), b = abs(blockR[i]);
@@ -235,6 +236,10 @@ void renderBlock(bool haveInput, const float* auxL = nullptr, const float* auxR 
             peakEngine = a;
         if (b > peakEngine)
             peakEngine = b;
+        if (a > blockPeak)
+            blockPeak = a;
+        if (b > blockPeak)
+            blockPeak = b;
         g += step;
         if (g == 1.0f)
         {
@@ -248,6 +253,7 @@ void renderBlock(bool haveInput, const float* auxL = nullptr, const float* auxR 
         }
     }
     currentGain = target;
+    MpcAudio::outputLevel.store(blockPeak * target / 32768.0f, std::memory_order_relaxed);
 }
 
 void* audioThread(void*)
@@ -629,3 +635,5 @@ void MpcAudio::stop()
         wav = nullptr;
     }
 }
+
+std::atomic<float> MpcAudio::outputLevel{ 0.0f };

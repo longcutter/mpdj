@@ -433,6 +433,14 @@ void checkConfig()
         mtConfig.general.patternDefaultView = 0;
     if (mtConfig.general.eightViewColumn > 4)
         mtConfig.general.eightViewColumn = 0;
+    if (mtConfig.general.screensaver > 1)
+        mtConfig.general.screensaver = 1;
+    if (mtConfig.general.screensaverTime > 5)
+        mtConfig.general.screensaverTime = 2;
+    if (mtConfig.general.screensaverKind > 1)
+        mtConfig.general.screensaverKind = 0;
+    if (mtConfig.general.screensaverDim > 1)
+        mtConfig.general.screensaverDim = 1;
 #endif
     if (mtConfig.general.performanceSource > 1)
         mtConfig.general.performanceSource = 0;
@@ -609,6 +617,10 @@ void resetConfig()
         mtConfig.general.quickControl[i] = mpdjQuick::kDefault[i];
     mtConfig.general.patternDefaultView = 0;
     mtConfig.general.eightViewColumn = 0;
+    mtConfig.general.screensaver = 1;
+    mtConfig.general.screensaverTime = 2;
+    mtConfig.general.screensaverKind = 0;
+    mtConfig.general.screensaverDim = 1;
 #endif
 
     // interface ----------------------------------------
