@@ -70,6 +70,27 @@ void functSwingEdit(uint8_t button, uint8_t state)
         TM->toggleSwingEdit();
 }
 
+// grooves (2026-11-16): button 3 = the swing's grid, button 4 = humanize 0 / 2 / 4 .. 12
+void functGrid(uint8_t button, uint8_t state)
+{
+    (void)button;
+    if (state != buttonPress)
+        return;
+    mtProject.mpdjSwingGrid = mtProject.mpdjSwingGrid ? 0 : 1;
+    newFileManager.setProjectStructChanged();
+    TM->refresh();
+}
+
+void functHumanize(uint8_t button, uint8_t state)
+{
+    (void)button;
+    if (state != buttonPress)
+        return;
+    mtProject.mpdjHumanize = mtProject.mpdjHumanize >= 12 ? 0 : mtProject.mpdjHumanize + 2;
+    newFileManager.setProjectStructChanged();
+    TM->refresh();
+}
+
 void functTiming(uint8_t button, uint8_t state)
 {
     (void)button;
@@ -77,7 +98,7 @@ void functTiming(uint8_t button, uint8_t state)
         TM->cycleTiming();
 }
 
-const char* const kLabels[8] = { "Unmute all", "Swing", "", "", "", "", "Timing", "Pads" };
+const char* const kLabels[8] = { "Unmute all", "Swing", "Swing on", "Humanize", "", "", "Timing", "Pads" };
 const char* const kTimingNames[3] = { "Now", "Next bar", "Pattern" };
 const char* const kTimingShort[3] = { "", "next bar", "@ pattern" };
 } // namespace
@@ -103,7 +124,7 @@ void cTrackMute::initDisplayControls()
         p.w = 800 / 8 - 6;
         p.y = 424;
         p.h = 55;
-        p.value = (i >= 6 || i == 1) ? 1 : 0; // Swing, Timing and Pads have two lines
+        p.value = (i >= 6 || (i >= 1 && i <= 3)) ? 1 : 0; // two lines: name, value
         label[i] = display.createControl<cLabel>(&p);
     }
     strControlProperties pb;
@@ -141,6 +162,8 @@ void cTrackMute::start(uint32_t options)
         ip->setButtonObj(b, buttonPress, functSwitchModule);
     ip->setButtonObj(interfaceButton0, functUnmuteAll);
     ip->setButtonObj(interfaceButton1, functSwingEdit);
+    ip->setButtonObj(interfaceButton2, functGrid);
+    ip->setButtonObj(interfaceButton3, functHumanize);
     ip->setButtonObj(interfaceButton6, functTiming);
     ip->setButtonObj(interfaceButton7, functMode);
     ip->setButtonObj(interfaceButtonPlay, buttonPress, functPlayAction);
@@ -308,6 +331,17 @@ void cTrackMute::refresh()
     snprintf(swingText, sizeof swingText, "%s", swingEdit ? "Editing" : (mtProject.mpdjSwingOff ? "Some" : "All"));
     display.setControlText2(label[1], swingText);
     display.refreshControl(label[1]);
+    snprintf(gridText, sizeof gridText, "%s", mtProject.mpdjSwingGrid ? "8ths" : "16ths");
+    display.setControlText2(label[2], gridText);
+    display.refreshControl(label[2]);
+    // humanize in ms at the current tempo (a row = 48 microsteps)
+    if (mtProject.mpdjHumanize)
+        snprintf(humanText, sizeof humanText, "0-%d ms",
+                 (int)(mtProject.mpdjHumanize * 15000.0f / 48.0f / (mtProject.values.globalTempo > 0 ? mtProject.values.globalTempo : 120.0f) + 0.5f));
+    else
+        snprintf(humanText, sizeof humanText, "Off");
+    display.setControlText2(label[3], humanText);
+    display.refreshControl(label[3]);
     snprintf(modeText, sizeof modeText, "%s", mtConfig.general.trackMuteMode ? "Momentary" : "Latch");
     display.setControlText2(label[7], modeText);
     display.refreshControl(label[7]);

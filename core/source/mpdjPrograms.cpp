@@ -133,6 +133,9 @@ void programsWriteToFile(strMpdjProjectData& out)
     out.reservedTracks[1] = (uint8_t)(mtProject.mpdjSwingOff >> 8);
     static_assert(sizeof(mtProject.mpdjTuring) <= sizeof(out.reservedTracks) - 2, "Turing settings fit");
     memcpy(&out.reservedTracks[2], &mtProject.mpdjTuring, sizeof(mtProject.mpdjTuring)); // version 11
+    static_assert(2 + sizeof(mtProject.mpdjTuring) <= 18, "grooves after the Turing settings");
+    out.reservedTracks[18] = mtProject.mpdjSwingGrid; // version 12
+    out.reservedTracks[19] = mtProject.mpdjHumanize;
     padsWrite(out.pads);
     padColorsWrite(out.padColor);
     padDynamicsWrite(out.padDynLoss, out.padCurve);
@@ -173,6 +176,8 @@ bool programsReadFromFile(const strMpdjProjectData& in)
         mtProject.mpdjSwing = kSwingMin;
         mtProject.mpdjSwingOff = 0;
         mtProject.mpdjTuring = {};
+        mtProject.mpdjSwingGrid = 0;
+        mtProject.mpdjHumanize = 0;
         s_importNotice = true;
         return false;
     }
@@ -185,6 +190,8 @@ bool programsReadFromFile(const strMpdjProjectData& in)
         memcpy(&mtProject.mpdjTuring, &in.reservedTracks[2], sizeof(mtProject.mpdjTuring));
     else
         mtProject.mpdjTuring = {};
+    mtProject.mpdjSwingGrid = (in.version >= 12 && in.reservedTracks[18] <= 1) ? in.reservedTracks[18] : 0;
+    mtProject.mpdjHumanize = (in.version >= 12 && in.reservedTracks[19] <= 12) ? in.reservedTracks[19] : 0;
     tracksReadFromFile(in.version >= 2 ? &in : nullptr);
     padsRead(in.version >= 3 ? in.pads : nullptr);
     padColorsRead(in.version >= 4 ? in.padColor : nullptr);

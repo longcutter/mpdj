@@ -1062,6 +1062,10 @@ struct strMtProject
         uint16_t reg;
         uint32_t seed;
     } mpdjTuring = {};
+    // MPDJ (2026-11-16, grooves): the swing's grid (0 = 16ths, 1 = 8ths) and a late-only
+    // humanize of 0-12 microsteps on the swung tracks; MPDJ block version 12, reservedTracks[18..19]
+    uint8_t mpdjSwingGrid = 0;
+    uint8_t mpdjHumanize = 0;
 
     // MPDJ (step 5b-1): pad -> program -> track, saved in the MPDJ block; mpdjPads.h
     strPadMap pads;

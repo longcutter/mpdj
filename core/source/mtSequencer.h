@@ -875,6 +875,22 @@ class Sequencer
     volatile bool mpdjFill = false;
     // MPDJ (2026-11-16): per-track swing's delay of an off-beat row, in microsteps (48 a row)
     static int mpdjSwingDelay(int swing) { return ((2 * swing - 100) * 48 + 50) / 100; }
+    // grooves (2026-11-16): the clock swings only when every track swings on 16ths without
+    // humanize; otherwise swung tracks are delayed note by note
+    static bool mpdjClockSwing()
+    {
+        return mtProject.mpdjSwingOff == 0 && mtProject.mpdjSwingGrid == 0 && mtProject.mpdjHumanize == 0;
+    }
+    // the delay (microsteps) the groove gives a note at `pos` on a swung track, without
+    // humanize: 16ths delay odd rows, 8ths every third and fourth row's start (pos % 4 == 2)
+    static int mpdjGrooveDelay(int pos, int swing, int grid)
+    {
+        if (swing <= 50 || swing > 75)
+            return 0;
+        if (grid == 1)
+            return (pos & 3) == 2 ? 2 * mpdjSwingDelay(swing) : 0;
+        return (pos & 1) ? mpdjSwingDelay(swing) : 0;
+    }
     // MPDJ_BATCH_TEST: a Chance condition at a pass, Fill on / off
     bool mpdjTestChance(uint8_t track, uint8_t value, uint32_t pass, bool fill)
     {

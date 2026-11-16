@@ -47,6 +47,8 @@ class cTrackMute : public ModuleBase
     char modeText[12];
     char timingText[12];
     char swingText[12];
+    char gridText[8];
+    char humanText[12];
     uint32_t lastBlinkMs = 0;
     void flip(int track, bool queueable); // queue (Latch + timing + playing) or now
 };
