@@ -917,6 +917,8 @@ void MpcInput::onButton(uint8_t note, bool down)
     {
         if (note == kNoteErase)
             mpdjEraseEnd(); // ERASE + pad (5f-3): the hold ends
+        if (note == 82)
+            sequencer.mpdjFill = false; // PLAY let go: Fill ends
         if (note == 53 && metroPress) // SHIFT+TAP TEMPO let go
         {
             metroPress = false;
@@ -1055,7 +1057,13 @@ void MpcInput::onButton(uint8_t note, bool down)
 
         case Act::Play:
             if (playing)
+            {
+                // held while playing = Fill (2026-11-16): steps with the FIL chance
+                // condition play, !FL ones don't, until it's let go
+                sequencer.mpdjFill = true;
+                mtPopups.show(0, "Fill");
                 break;
+            }
             if (onPattern)
                 tapWithShift(interfaceButtonPlay); // Tracker Shift+Play = from the cursor
             else

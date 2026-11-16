@@ -1826,6 +1826,13 @@ void cPatternEditor::showActualParamOnBar(bool forceShow)
                              n,
                              m);
                 }
+                else if (val >= sequencer.fx.CHANCE_FIRST && val <= sequencer.fx.CHANCE_NOT_FILL)
+                {
+                    // MPDJ (2026-11-16)
+                    static const char* const kTitles[4] = { "Chance: First pass", "Chance: Not first pass",
+                                                            "Chance: Fill (hold PLAY)", "Chance: Not fill" };
+                    strncpy(rightTitleBarLabel, kTitles[val - sequencer.fx.CHANCE_FIRST], 35);
+                }
             }
             else
             {

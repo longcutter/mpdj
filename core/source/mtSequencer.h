@@ -266,7 +266,13 @@ class Sequencer
             CHANCE_PLAY_SKIP_END = CHANCE_PLAY_SKIP_START + CHANCE_CYCLE_COUNT - 1,
             CHANCE_SKIP_PLAY_START = CHANCE_PLAY_SKIP_END + 1,
             CHANCE_SKIP_PLAY_END = CHANCE_SKIP_PLAY_START + CHANCE_CYCLE_COUNT - 1,
-            CHANCE_MAX = CHANCE_SKIP_PLAY_END,
+            // MPDJ (2026-11-16, Elektron-style conditions the Tracker didn't have): the first
+            // pass since play started / not it, while Fill is held (PLAY held while playing) / not
+            CHANCE_FIRST = CHANCE_SKIP_PLAY_END + 1,
+            CHANCE_NOT_FIRST,
+            CHANCE_FILL,
+            CHANCE_NOT_FILL,
+            CHANCE_MAX = CHANCE_NOT_FILL,
         };
 
     } fx;
@@ -865,6 +871,8 @@ class Sequencer
     void fillRandomVolume(int16_t fillStep, int16_t fromVal, int16_t toVal, int16_t density);
 
     bool isEuclideanStep(uint8_t offset, int16_t density);
+    // MPDJ (2026-11-16): Fill for the FIL / !FL chance conditions (PLAY held while playing)
+    volatile bool mpdjFill = false;
     // MPDJ (2026-11-16): Euclidean fill rotation, steps later (set by the Fill popup)
     int16_t mpdjEuclidRotate = 0;
 
