@@ -501,6 +501,10 @@ void cPatternEditor::refreshPattern()
     seq = sequencer.getPatternToUI();
     trackerPattern.patternLength = seq->track[0].length + 1;
     trackerPattern.selectedParam = editParam;
+#ifdef PLATFORM_MPC
+    trackerPattern.mpdjSix = mpdjSixView && patternViewMode == 0;
+    trackerPattern.mpdjMicVol = isMicVolView;
+#endif
 
     //----------------------------------------------------------------------------
     // disable part of the pattern when needed
@@ -674,6 +678,8 @@ void cPatternEditor::refreshPattern()
                 row.fx[1][2] = 0;
                 row.fx[1][3] = 0;
                 row.fx[1][4] = 0;
+                row.vol[0] = 0;
+                row.mic[0] = 0;
                 continue;
             }
 
@@ -765,8 +771,26 @@ void cPatternEditor::refreshPattern()
             }
 
             //--------------------------------------------------------------------------------------------
-
+#ifdef PLATFORM_MPC
+            // MPDJ six-column view: volume and micromove get their own cells (3 characters,
+            // the Tracker's labels without the V / m) and the FX cells always show the FX
+            if (mpdjSixView)
+            {
+                if (seqStep.volume >= 0)
+                    sequencer.makeFxValLabelWithAlgin(row.vol, 4, sequencer.fx.FX_TYPE_VOLUME,
+                                                      seqStep.volume, Sequencer::fxValLabelAlign_right);
+                else
+                    strcpy(row.vol, "---");
+                if (seqStep.micromove >= 0)
+                    sequencer.makeFxValLabelWithAlgin(row.mic, 4, sequencer.fx.FX_TYPE_MICROMOVE,
+                                                      seqStep.micromove, Sequencer::fxValLabelAlign_right);
+                else
+                    strcpy(row.mic, "---");
+            }
+            if (isMicVolView && !mpdjSixView)
+#else
             if (isMicVolView)
+#endif
             {
                 if (seqStep.micromove >= 0)
                 {
@@ -949,6 +973,10 @@ int8_t cPatternEditor::getStepVol()
 void cPatternEditor::focusOnActual()
 {
     int columnCounts = patternViewMode > 0 ? 8 : 4;
+#ifdef PLATFORM_MPC
+    if (mpdjSixView && patternViewMode == 0)
+        columnCounts = 3; // MPDJ six-column view
+#endif
 
     if (trackerPattern.actualTrack >= trackerPattern.firstVisibleTrack + columnCounts)
     {
@@ -1461,6 +1489,9 @@ void cPatternEditor::refreshEditState()
         }
 
         trackerPattern.selectedParam = editParam;
+#ifdef PLATFORM_MPC
+        trackerPattern.mpdjMicVol = isMicVolView;
+#endif
 
         focusOnActual();
 

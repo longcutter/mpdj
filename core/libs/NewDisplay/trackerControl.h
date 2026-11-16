@@ -15,6 +15,8 @@ struct strTrackerPattern
             char note[5];
             char instr[4]; // 3 znak >0 jesli midi
             char fx[2][5];
+            char vol[4]; // MPDJ six-column view: the volume / micromove columns
+            char mic[4];
         } row[15];
 
     } track[kTrackCount];
@@ -57,6 +59,12 @@ struct strTrackerPattern
     bool showTrackNames;
     const char* tracksNames[kTrackCount];
 
+    // MPDJ (2026-11-15): six-column view, 3 tracks of Note, Program, Volume,
+    // Micromove, FX1, FX2. selectedParam keeps the Tracker's 0-3; mpdjMicVol
+    // tells whether 2 / 3 mean Micromove / Volume (the editor's Mic/Vol state)
+    uint8_t mpdjSix;
+    uint8_t mpdjMicVol;
+
     void init()
     {
         for (uint8_t t = 0; t < kTrackCount; t++)
@@ -72,6 +80,8 @@ struct strTrackerPattern
                 for (int i = 0; i < 4; i++)
                 {
                     track[t].row[r].instr[i] = 0;
+                    track[t].row[r].vol[i] = 0;
+                    track[t].row[r].mic[i] = 0;
                 }
             }
             inactive[t] = 0;
@@ -97,6 +107,8 @@ struct strTrackerPattern
         selectColumn = 0;
         popupMode = 0;
         showTrackNames = false;
+        mpdjSix = 0;
+        mpdjMicVol = 0;
     }
 };
 
@@ -143,6 +155,8 @@ class cTracker : public cDisplayControl
     void instruments();
     void fxes1();
     void fxes2();
+    void mpdjVolMic(); // six-column view
+    uint8_t mpdjSixParam(); // the cursor's column 0-5 in the six-column view
 
     uint8_t displayMode;
     uint16_t tracksWidth;

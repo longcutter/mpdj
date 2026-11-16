@@ -322,6 +322,9 @@ class cPatternEditor : public ModuleBase
     void initExternalRamState();
 
     bool isMicVolView = false;
+#ifdef PLATFORM_MPC
+    bool mpdjSixView = false; // MPDJ: Note, Program, Volume, Micromove, FX1, FX2 for 3 tracks
+#endif
     bool toggledMicVolOnPress = false;
 
     // int16_t fillStep = 1;

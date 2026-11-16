@@ -184,6 +184,12 @@ const uint8_t paramToStateOffset[4] = {
 
 #endif
 
+// MPDJ six-column view (3 tracks, 248 wide): text x, and the cursor box from the
+// track's left + 2 (5 left of the text, as the Tracker's own offsets)
+static const uint8_t sixParamsOffset[6] = { 6, 44, 74, 112, 152, 200 };
+static const uint8_t sixParamsSelOffset[6] = { 1, 39, 69, 107, 147, 195 };
+static const uint8_t sixParamsSelWidth[6] = { 36, 26, 36, 36, 46, 46 };
+
 const uint8_t paramToStateOffset[4] = {
     1,
     2,
@@ -308,7 +314,13 @@ void cTracker::update()
 
     stepHight = height / 15;
 
-    if (displayMode > 0)
+    if (tracks->mpdjSix)
+    {
+        tracksWidth = (800 - (rightOffset + leftOffset)) / 3;
+        columnsCount = (tracks->popupMode & 4) ? 1 : (tracks->popupMode & 2) ? 2 : 3;
+        paramCount = 6;
+    }
+    else if (displayMode > 0)
     {
         tracksWidth = (800 - (rightOffset + leftOffset)) / 8;
         columnsCount = (tracks->popupMode & 2) ? 6 : 8;
@@ -400,6 +412,8 @@ void cTracker::update4()
     {
         // volumes();
         fxes1();
+        if (paramCount == 6)
+            mpdjVolMic();
     }
 }
 
@@ -682,6 +696,19 @@ void cTracker::selection()
                 }
             }
         }
+        else if (paramCount == 6)
+        {
+            uint8_t p = mpdjSixParam();
+            for (uint8_t i = 0; i < 8; i++)
+            {
+                uint16_t SelPosX = select1_x + sixParamsSelOffset[p] + (tracksWidth * i);
+                if (SelPosX < select2_x && SelPosX > select1_x)
+                {
+                    API_VERTEX2F(SelPosX, select1_y + 1);
+                    API_VERTEX2F(SelPosX + sixParamsSelWidth[p], sel2_y_temp);
+                }
+            }
+        }
         else if (paramCount == 4)
         {
             for (uint8_t i = 0; i < 8; i++)
@@ -764,6 +791,11 @@ void cTracker::selection()
             rect_select_x = select_x + fourParamsSelOffset[tracks->selectedParam];
             rect_select_width = fourParamsSelWidth[tracks->selectedParam];
         }
+        else if (paramCount == 6)
+        {
+            rect_select_x = select_x + sixParamsSelOffset[mpdjSixParam()];
+            rect_select_width = sixParamsSelWidth[mpdjSixParam()];
+        }
 
         API_COLOR(selection_color);
         API_LINE_WIDTH(kRedFrameWidth);
@@ -796,6 +828,63 @@ void cTracker::selection()
 
             API_END();
         }
+    }
+}
+
+// MPDJ six-column view: the cursor's column, Note 0, Program 1, Volume 2,
+// Micromove 3, FX1 4, FX2 5 (the editor's Mic/Vol state picks 2-3 or 4-5)
+uint8_t cTracker::mpdjSixParam()
+{
+    uint8_t p = tracks->selectedParam;
+    if (p == 2)
+        return tracks->mpdjMicVol ? 3 : 4;
+    if (p == 3)
+        return tracks->mpdjMicVol ? 2 : 5;
+    return p > 1 ? 0 : p;
+}
+
+// MPDJ six-column view: Volume (the FX2 colours, as in the Mic/Vol view) and
+// Micromove (the FX1 colours)
+void cTracker::mpdjVolMic()
+{
+    for (int col = 2; col <= 3; col++)
+    {
+        uint32_t on = col == 2 ? colors[5] : colors[4], off = col == 2 ? colors[9] : colors[8];
+        API_SAVE_CONTEXT();
+        API_COLOR(on);
+        actualColor = lastFontColor = on;
+        lastFontHandle = -1;
+        s_lastCell = -1;
+        API_BEGIN(BITMAPS);
+
+        uint8_t offset_y = posY + 12;
+        uint16_t offset_x = rightOffset + sixParamsOffset[col];
+        int8_t mark = (mpdjSixParam() == col && tracks->selectState) ? tracks->actualTrack - tracks->firstVisibleTrack : -1;
+
+        for (uint16_t i = 0; i < columnsCount; i++)
+        {
+            uint8_t track = tracks->firstVisibleTrack + i;
+            for (uint16_t j = 0; j < rowCount; j++)
+            {
+                int16_t param_x = offset_x + i * tracksWidth;
+                int16_t param_y = offset_y + j * stepHight;
+                char* text = col == 2 ? tracks->track[track].row[j].vol : tracks->track[track].row[j].mic;
+                if (selectActive && mark >= 0 && param_x > select1_x && param_x < select2_x &&
+                    param_y > select1_y && param_y < select2_y)
+                    actualColor = colors[14];
+                else if (j == 7 && i == mark)
+                    actualColor = colors[14];
+                else if (tracks->inactive[track])
+                    actualColor = colors[12];
+                else if (*text == '-')
+                    actualColor = off;
+                else
+                    actualColor = on;
+                String2Bitmaps(param_x, param_y, &fonts[text_font], text, 3);
+            }
+        }
+        API_END();
+        API_RESTORE_CONTEXT();
     }
 }
 
@@ -1011,6 +1100,8 @@ void cTracker::notes()
         offset_x = rightOffset + oneParamsOffset[0];
     else if (paramCount == 2)
         offset_x = rightOffset + twoParamsOffsetFirst[0];
+    else if (paramCount == 6)
+        offset_x = rightOffset + sixParamsOffset[0];
 
     int8_t mark = -1;
     if ((tracks->selectedParam == 0 /*|| tracks->selectedParam == 4*/) && tracks->selectState)
@@ -1067,6 +1158,8 @@ void cTracker::instruments()
     else if (paramCount == 2)
         offset_x = (displayMode & 1) ? rightOffset + twoParamsOffsetSecond[1]
                                      : rightOffset + twoParamsOffsetFirst[1];
+    else if (paramCount == 6)
+        offset_x = rightOffset + sixParamsOffset[1];
 
     int8_t mark = -1;
     if ((tracks->selectedParam == 1 /*|| tracks->selectedParam == 4*/) && tracks->selectState)
@@ -1134,9 +1227,11 @@ void cTracker::fxes1()
     else if (paramCount == 2)
         offset_x = (displayMode & 8) ? rightOffset + twoParamsOffsetFirst[2]
                                      : rightOffset + twoParamsOffsetSecond[2];
+    else if (paramCount == 6)
+        offset_x = rightOffset + sixParamsOffset[4];
 
     int8_t mark = -1;
-    if ((tracks->selectedParam == 2 /*|| tracks->selectedParam == 4*/) && tracks->selectState)
+    if ((paramCount == 6 ? mpdjSixParam() == 4 : tracks->selectedParam == 2) && tracks->selectState)
     {
         mark = tracks->actualTrack - tracks->firstVisibleTrack;
     }
@@ -1186,9 +1281,11 @@ void cTracker::fxes2()
         offset_x = rightOffset + oneParamsOffset[3];
     else if (paramCount == 2)
         offset_x = rightOffset + twoParamsOffsetSecond[3];
+    else if (paramCount == 6)
+        offset_x = rightOffset + sixParamsOffset[5];
 
     int8_t mark = -1;
-    if ((tracks->selectedParam == 3 /*|| tracks->selectedParam == 4*/) && tracks->selectState)
+    if ((paramCount == 6 ? mpdjSixParam() == 5 : tracks->selectedParam == 3) && tracks->selectState)
     {
         mark = tracks->actualTrack - tracks->firstVisibleTrack;
     }

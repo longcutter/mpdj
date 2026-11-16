@@ -1604,6 +1604,22 @@ int MpcInput::divideQLink(int knob, int steps, int divIdx)
 void MpcInput::stepEditParam(int steps)
 {
     cPatternEditor& pe = patternEditor;
+    if (pe.mpdjSixView)
+    {
+        // six-column view: walk the columns as drawn, Note, Program, Volume,
+        // Micromove, FX1, FX2 (Volume = the Mic/Vol view's second column)
+        using PE = cPatternEditor;
+        static const int kParam[6] = { PE::EditNote, PE::EditInstr, PE::EditFx2, PE::EditFx1, PE::EditFx1, PE::EditFx2 };
+        static const bool kMicVol[6] = { false, false, true, true, false, false };
+        int pos = pe.editParam < PE::EditFx1 ? pe.editParam
+                  : pe.isMicVolView          ? (pe.editParam == PE::EditFx2 ? 2 : 3)
+                                             : (pe.editParam == PE::EditFx1 ? 4 : 5);
+        int p = pos + steps;
+        p = p < 0 ? 0 : p > 5 ? 5 : p;
+        if (p != pos)
+            setEditColumn(kParam[p], p < 2 ? pe.isMicVolView : kMicVol[p]);
+        return;
+    }
     constexpr int kLast = (int)cPatternEditor::EditFx2 + 2;
     int pos = (int)pe.editParam + (pe.isMicVolView && pe.editParam >= cPatternEditor::EditFx1 ? 2 : 0);
     int p = pos + steps;
@@ -1626,6 +1642,7 @@ void MpcInput::setEditColumn(int param, bool micVol)
         pe.previousEditParam = pe.editParam;
     pe.editParam = (uint8_t)param;
     pe.trackerPattern.selectedParam = (uint8_t)param;
+    pe.trackerPattern.mpdjMicVol = micVol;
     if (viewChanged)
         pe.refreshPattern();
     display.refreshControl(pe.patternControl);
@@ -1633,12 +1650,32 @@ void MpcInput::setEditColumn(int param, bool micVol)
     pe.focusOnPattern();
 }
 
-// SHIFT + touch Q-Link 3 on the Pattern screen: flip FX <-> Mic/Vol view; the
-// cursor stays in the same place (an FX column becomes the Mic/Vol column there).
+// SHIFT + touch Q-Link 3 on the Pattern screen: FX view > Mic/Vol view > all six
+// columns (3 tracks; 2026-11-15) > FX view. FX <-> Mic/Vol: the cursor stays in
+// the same place (an FX column becomes the Mic/Vol column there); into and out
+// of the six-column view it stays on the same cell.
 void MpcInput::flipMicVolView()
 {
     cPatternEditor& pe = patternEditor;
     releaseCoreShift(); // not a Tracker Shift combo (Shift alone shows the mute buttons)
+    if (pe.patternViewMode == 0 && !pe.mpdjSixView && pe.isMicVolView)
+    {
+        pe.mpdjSixView = true;
+        pe.focusOnActual();
+        pe.refreshPattern();
+        display.refreshControl(pe.patternControl);
+        mtPopups.show(0, "View: all six columns");
+        return;
+    }
+    if (pe.mpdjSixView)
+    {
+        pe.mpdjSixView = false;
+        pe.focusOnActual();
+        setEditColumn(pe.editParam, false);
+        pe.refreshPattern();
+        mtPopups.show(0, "View: FX");
+        return;
+    }
     setEditColumn(pe.editParam, !pe.isMicVolView);
     mtPopups.show(0, pe.isMicVolView ? "View: Micromove / Volume" : "View: FX");
 }
@@ -2457,7 +2494,8 @@ void MpcInput::tapPatternCell(float x, float y)
     if (y < top || row < 0 || row > 14 || tp.track[0].row[row].note[0] == 0)
         return; // above the grid, or past the pattern's end
     const int view = pe.patternViewMode;
-    const int trackW = (800 - 2 * kGridSide) / (view ? 8 : 4), cols = view ? 8 : 4;
+    const bool six = pe.mpdjSixView && !view;
+    const int cols = six ? 3 : view ? 8 : 4, trackW = (800 - 2 * kGridSide) / cols;
     int col = (int)((x - kGridSide) / trackW);
     if (x < kGridSide || col < 0 || col >= cols)
         return; // row numbers
@@ -2466,7 +2504,14 @@ void MpcInput::tapPatternCell(float x, float y)
         return;
     float rel = x - kGridSide - col * trackW;
     int param;
-    if (!view)
+    int sixCol = -1;
+    if (six) // tracker.cpp sixParamsSelOffset: Note, Program, Volume, Micromove, FX1, FX2
+    {
+        sixCol = rel < 41 ? 0 : rel < 71 ? 1 : rel < 109 ? 2 : rel < 149 ? 3 : rel < 197 ? 4 : 5;
+        static const int kParam[6] = { 0, 1, 3, 2, 2, 3 };
+        param = kParam[sixCol];
+    }
+    else if (!view)
         param = rel < 43 ? 0 : rel < 77 ? 1 : rel < 131 ? 2 : 3; // fourParamsSelOffset
     else
     {
@@ -2481,7 +2526,10 @@ void MpcInput::tapPatternCell(float x, float y)
         dt > 0 ? pe.nextTrack() : pe.previousTrack();
     for (int dr = row - 7; dr; dr += dr > 0 ? -1 : 1)
         dr > 0 ? pe.nextStep() : pe.previousStep(); // does nothing while playing outside edit mode
-    setEditParam(param);
+    if (six)
+        setEditColumn(param, sixCol < 2 ? pe.isMicVolView : sixCol < 4);
+    else
+        setEditParam(param);
     if (qlinkMode == 2 || qlinkMode == 3)
         setQLinkMode(1, true); // mode 4 stays: tap a cell, then turn a quick control
     if (trace)
