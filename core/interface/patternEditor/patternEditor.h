@@ -324,6 +324,12 @@ class cPatternEditor : public ModuleBase
     bool isMicVolView = false;
 #ifdef PLATFORM_MPC
     bool mpdjSixView = false; // MPDJ: Note, Program, Volume, Micromove, FX1, FX2 for 3 tracks
+    // MPDJ views (Config > General > Pattern view, SHIFT + touch Q-Link 3): 0 FX, 1 Mic / Vol,
+    // 2 all six columns (3 tracks), 3 eight tracks of Program + one column (Config "8-track column")
+    enum { kViewFx, kViewMicVol, kViewSix, kViewEight, kViewCount };
+    uint8_t mpdjView() const;
+    void mpdjSetView(uint8_t view);   // and redraw
+    void mpdjApplyView(uint8_t view); // flags only
 #endif
     bool toggledMicVolOnPress = false;
 

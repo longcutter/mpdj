@@ -156,6 +156,7 @@ class cTracker : public cDisplayControl
     void fxes1();
     void fxes2();
     void mpdjVolMic(); // six-column view
+    const char* mpdjTrackLabel(int trackIdx); // a track's header text (8-track views: its number)
     uint8_t mpdjSixParam(); // the cursor's column 0-5 in the six-column view
 
     uint8_t displayMode;

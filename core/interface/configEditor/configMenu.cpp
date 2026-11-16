@@ -25,7 +25,7 @@ constexpr uint8_t generalMenuGroupCount = 9;
 #elif defined(PLATFORM_MPC) // no USB group (USB storage / USB audio are Tracker+ hardware)
 constexpr uint8_t baseMenuGroupCount = MPDJ_QLINK_MODE4 ? 7 : 6; // + Q-Links (2026-11-15) while mode 4 is on
 constexpr uint8_t projectMenuGroupCount = 10;
-constexpr uint8_t generalMenuGroupCount = 21; // MPC list: 21 items (no Radio region / Pads brightness since the Config clean-up; + Pattern view 2026-11-16); must equal the items below, extra items are silently dropped
+constexpr uint8_t generalMenuGroupCount = 22; // MPC list: 22 items (no Radio region / Pads brightness since the Config clean-up; + Pattern view, 8-track column 2026-11-16); must equal the items below, extra items are silently dropped
 #elif defined(PLATFORM_IMX)
 constexpr uint8_t baseMenuGroupCount = 7;
 constexpr uint8_t projectMenuGroupCount = 10;
@@ -192,8 +192,10 @@ cMenuItem melPopupTime(menuGeneral, "Popup time", popupTimeDesc, menuTypeItemLis
 #endif
 #ifdef PLATFORM_MPC
 // MPDJ (2026-11-16): the view the Pattern screen starts in (SHIFT + touch Q-Link 3 still cycles them)
-const strItemTypeListText setupPatternView{ &mtConfig.general.patternDefaultView, 3, patternViewTexts };
+const strItemTypeListText setupPatternView{ &mtConfig.general.patternDefaultView, 4, patternViewTexts };
 cMenuItem melPatternView(menuGeneral, "Pattern view", patternViewDesc, menuTypeItemListText, &setupPatternView);
+const strItemTypeListText setupEightColumn{ &mtConfig.general.eightViewColumn, 5, eightColumnTexts };
+cMenuItem melEightColumn(menuGeneral, "8-track column", eightColumnDesc, menuTypeItemListText, &setupEightColumn);
 #endif
 #if defined(PLATFORM_MPC) && MPDJ_QLINK_MODE4
 // MPDJ (Q-Link mode 4): the effect on each Q-Link

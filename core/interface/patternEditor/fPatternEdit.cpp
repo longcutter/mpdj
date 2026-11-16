@@ -312,12 +312,13 @@ void cPatternEditor::start(uint32_t options)
 #ifdef PLATFORM_MPC
     // MPDJ: Config > General > Pattern view sets the view at start-up and whenever the
     // setting changes; SHIFT + touch Q-Link 3 changes it for the session in between
-    static uint8_t appliedView = 0xFF;
-    if (mtConfig.general.patternDefaultView != appliedView)
+    static uint8_t appliedView = 0xFF, appliedColumn = 0xFF;
+    if (mtConfig.general.patternDefaultView != appliedView ||
+        (appliedView == kViewEight && mtConfig.general.eightViewColumn != appliedColumn))
     {
         appliedView = mtConfig.general.patternDefaultView;
-        isMicVolView = appliedView == 1;
-        mpdjSixView = appliedView == 2;
+        appliedColumn = mtConfig.general.eightViewColumn;
+        mpdjApplyView(appliedView); // flags only: the controls are built from them below
     }
 #endif
 
@@ -515,6 +516,7 @@ void cPatternEditor::refreshPattern()
 #ifdef PLATFORM_MPC
     trackerPattern.mpdjSix = mpdjSixView && patternViewMode == 0;
     trackerPattern.mpdjMicVol = isMicVolView;
+    display.setControlValue(patternControl, patternViewMode); // the grid follows Config's view too
 #endif
 
     //----------------------------------------------------------------------------
@@ -5330,5 +5332,50 @@ void cPatternEditor::mpdjQuickControl(uint8_t knob, int steps, const char** line
         snprintf(l2, sizeof l2, "%s", p);
     }
     refreshPattern();
+}
+#endif
+
+#ifdef PLATFORM_MPC
+// MPDJ views: 0 FX, 1 Mic / Vol, 2 all six columns, 3 eight tracks (patternViewMode, the
+// Tracker's own 1-2 column layout for 8 tracks: Program + Config's "8-track column")
+uint8_t cPatternEditor::mpdjView() const
+{
+    if (patternViewMode > 0)
+        return kViewEight;
+    if (mpdjSixView)
+        return kViewSix;
+    return isMicVolView ? kViewMicVol : kViewFx;
+}
+
+void cPatternEditor::mpdjApplyView(uint8_t view)
+{
+    mpdjSixView = view == kViewSix;
+    patternViewMode = 0;
+    if (view == kViewEight)
+    {
+        // Note, Volume (the FX2 slot in Mic / Vol), Micromove (FX1 slot in Mic / Vol), FX1, FX2
+        static const uint8_t kMask[5] = { 1, 8, 4, 4, 8 };
+        uint8_t col = mtConfig.general.eightViewColumn > 4 ? 0 : mtConfig.general.eightViewColumn;
+        isMicVolView = col == 1 || col == 2;
+        patternViewMode = (uint8_t)(2 | kMask[col]);
+        if (!(patternViewMode & (1 << editParam)))
+            editParam = EditInstr;
+    }
+    else
+    {
+        isMicVolView = view == kViewMicVol;
+    }
+    trackerPattern.selectedParam = editParam;
+    trackerPattern.mpdjMicVol = isMicVolView;
+}
+
+void cPatternEditor::mpdjSetView(uint8_t view)
+{
+    mpdjApplyView(view);
+    display.setControlValue(patternControl, patternViewMode);
+    focusOnActual();
+    refreshPattern();
+    display.refreshControl(patternControl);
+    showActualParamOnBar();
 }
 #endif

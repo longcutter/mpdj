@@ -1206,6 +1206,9 @@ struct strMtConfig
         uint8_t quickControl[4] = { 0, 1, 2, 3 };
         // MPDJ (2026-11-16): the Pattern screen's starting view: 0 FX, 1 Mic / Vol, 2 all six columns
         uint8_t patternDefaultView = 0;
+        // MPDJ (2026-11-16): the 8-track view's second column next to Program: 0 Note, 1 Volume,
+        // 2 Micromove, 3 FX1, 4 FX2
+        uint8_t eightViewColumn = 0;
 #endif
     } general;
 

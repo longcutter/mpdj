@@ -1003,6 +1003,18 @@ void cTracker::drawRowNumbers(uint16_t* rowNumbers, bool showTrackEndLines)
 
 //-------------------------------------------------------------------------------------
 // tracks numbers
+// MPDJ: the 8-track views have no room for names: the header says the track's number
+const char* cTracker::mpdjTrackLabel(int trackIdx)
+{
+    static char numbers[16][4];
+    if (trackIdx < 0 || trackIdx >= tracks->kTrackCount)
+        return "";
+    if (paramCount > 2)
+        return tracks->tracksNames[trackIdx];
+    snprintf(numbers[trackIdx & 15], sizeof numbers[0], "%d", trackIdx + 1);
+    return numbers[trackIdx & 15];
+}
+
 void cTracker::tracksNumbers()
 {
     if (!tracks->showTrackNames)
@@ -1032,7 +1044,7 @@ void cTracker::tracksNumbers()
             API_COLOR(colors[19]);
 
         int trackIdx = tracks->firstVisibleTrack + i;
-        const char* text = trackIdx < tracks->kTrackCount ? tracks->tracksNames[trackIdx] : "";
+        const char* text = mpdjTrackLabel(trackIdx);
         int letersCount = strlen(text);
         w = getTextWidth((strFont*)font, text, letersCount);
 
@@ -1073,7 +1085,7 @@ void cTracker::tracksNumbers()
     {
         x = rightOffset + (i * tracksWidth) + 4;
         int trackIdx = tracks->firstVisibleTrack + i;
-        const char* trackName = trackIdx < tracks->kTrackCount ? tracks->tracksNames[trackIdx] : "";
+        const char* trackName = mpdjTrackLabel(trackIdx);
         string2Bitmaps(x, y, trackName, textLetersCount[i], false); //, tracksWidth-fonts[3].width
     }
 
