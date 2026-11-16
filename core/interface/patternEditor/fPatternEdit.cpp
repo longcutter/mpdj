@@ -1636,6 +1636,12 @@ void cPatternEditor::changeFillData(int16_t value, bool rollListOver)
             ptrVal = &fillData[fillIdx].density[fillData[fillIdx].fillStep];
             min = 1;
             max = Sequencer::MAX_FILL_DENSITY;
+            if (mpdjEditingRotate())
+            {
+                ptrVal = &mpdjEuclidRot[fillIdx];
+                min = 0;
+                max = Sequencer::MAX_FILL_DENSITY - 1;
+            }
             break;
 
         default: return;
@@ -1782,6 +1788,15 @@ void cPatternEditor::changeFillDataByActionButton(uint8_t place)
     if (place > 5)
         return;
 
+    if (place != fillPlace)
+        mpdjRotEdit = false;
+    if (place == 1 && place == fillPlace &&
+        fillData[getFillDataIdx()].fillStep == Sequencer::fillStepEuclidean)
+    {
+        mpdjRotEdit = !mpdjRotEdit; // MPDJ: Events <-> Rotate
+        refreshFillDensity();
+        return;
+    }
     if (place == fillPlace && (place < 4 || editParam == EditInstr || editParam == EditNote))
     {
         changeFillData(1, true);
@@ -3496,6 +3511,7 @@ static void functFillApply()
         //--------------------------------------------------------
         // TU
         sendSelection();
+        sequencer.mpdjEuclidRotate = PTE->mpdjEuclidRot[PTE->getFillDataIdx()];
         switch (PTE->editParam)
         {
             case cPatternEditor::EditNote:
@@ -3642,6 +3658,7 @@ static void functFillApply()
         }
 
         //--------------------------------------------------------
+        sequencer.mpdjEuclidRotate = 0;
         functFillCancel();
         newFileManager.setActualPatternStructChanged();
     }

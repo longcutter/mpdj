@@ -1076,8 +1076,19 @@ void cPatternEditor::refreshFillDensity()
             labelText = "Events";
             value = fillData[fillIdx].density[fillData[fillIdx].fillStep] * 100 /
                     Sequencer::MAX_FILL_DENSITY;
-            sprintf(
-              fillTextDensity, "%d", fillData[fillIdx].density[fillData[fillIdx].fillStep]);
+            // MPDJ (2026-11-16): the rotation (label pressed again edits it)
+            if (mpdjEditingRotate())
+            {
+                labelText = "Rotate";
+                value = mpdjEuclidRot[fillIdx] * 100 / Sequencer::MAX_FILL_DENSITY;
+                sprintf(fillTextDensity, "%d", mpdjEuclidRot[fillIdx]);
+            }
+            else if (mpdjEuclidRot[fillIdx])
+                sprintf(fillTextDensity, "%d  r%d",
+                        fillData[fillIdx].density[fillData[fillIdx].fillStep], mpdjEuclidRot[fillIdx]);
+            else
+                sprintf(
+                  fillTextDensity, "%d", fillData[fillIdx].density[fillData[fillIdx].fillStep]);
             break;
         default: break;
     }

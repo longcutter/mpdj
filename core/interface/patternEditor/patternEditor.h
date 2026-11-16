@@ -302,7 +302,7 @@ class cPatternEditor : public ModuleBase
     static constexpr int fillTextLen = 10;
     char fillText1[fillTextLen];
     char fillText2[fillTextLen];
-    char fillTextDensity[10];
+    char fillTextDensity[16];
     char fxTypeText[2];
     //
     struct strFill
@@ -315,6 +315,14 @@ class cPatternEditor : public ModuleBase
         int16_t density[Sequencer::fillStepEnd__];
     };
     static strFill fillData[6];
+    // MPDJ (2026-11-16): Euclidean rotation per fill kind; label 2 pressed again flips
+    // its value between Events and Rotate
+    int16_t mpdjEuclidRot[6] = {};
+    bool mpdjRotEdit = false;
+    bool mpdjEditingRotate()
+    {
+        return mpdjRotEdit && fillData[getFillDataIdx()].fillStep == Sequencer::fillStepEuclidean;
+    }
     uint8_t getFillDataIdx() const
     {
         return (isMicVolView && editParam >= EditFx1) ? (editParam + 2) : editParam;
