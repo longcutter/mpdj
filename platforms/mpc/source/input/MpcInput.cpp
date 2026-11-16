@@ -2653,6 +2653,9 @@ bool MpcInput::tapListRow(float x, float y)
         cSongPlayer* sp = (cSongPlayer*)display.mpdjControl(songEditor.songPlayerControl);
         if (sp && (r = sp->mpdjRowAt((int)x, (int)y)) >= 0)
             return songEditor.mpdjTapListRow(r), true;
+        int slot, track;
+        if (sp && sp->mpdjCellAt((int)x, (int)y, &slot, &track))
+            return songEditor.mpdjTapGridCell(slot, track), true;
     }
     else if (mtInterface.isConfigScreenActive())
     {

@@ -905,3 +905,22 @@ int cSongPlayer::mpdjRowAt(int x, int y) const
         return -1;
     return textListPos + row;
 }
+
+// MPDJ (touch, 2026-11-16): the block grid as update3() draws it (rows of 23 + 4 from
+// y + 64, columns of blockWidth + 4 from x + 5); the spacing counts with the cell before it
+bool cSongPlayer::mpdjCellAt(int x, int y, int* slot, int* track) const
+{
+    if (controlData == nullptr || !(style & controlStyleShow))
+        return false;
+    int gx = x - (posX + BLOCKS_MARGIN), gy = y - (posY + 64);
+    if (gx < 0 || gy < 0)
+        return false;
+    int t = gx / (blockWidth + BLOCK_SPACING), r = gy / (BLOCK_HEIGHT + BLOCK_SPACING);
+    int tracks = controlData->normalTracksCount + controlData->midiTracksCount;
+    int visible = std::min<int>(std::max<int>(controlData->songLength - (int)textListPos, 0), MAX_PATTERNS_VISIBLE);
+    if (t >= tracks || r >= visible)
+        return false;
+    *slot = textListPos + r;
+    *track = t;
+    return true;
+}
