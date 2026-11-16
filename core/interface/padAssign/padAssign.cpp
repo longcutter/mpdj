@@ -18,10 +18,14 @@ static cPadAssign* PA = &padAssign;
 
 namespace
 {
-const char* const kParamNames[cPadAssign::ParamCount] = { "Program", "Track", "Tune", "Level",
-                                                          "Mode",    "Choke", "Cut",  "Color" };
-const char* const kListNames[cPadAssign::ParamCount] = { "Program", "Track",       "Tune",           "Level",
-                                                         "Mode",    "Choke group", "Cut on release", "Color" };
+const char* const kParamNames[cPadAssign::ParamCount] = { "Program", "Track", "Tune",  "Level",   "Mode",
+                                                          "Choke",   "Cut",   "Color", "Dynamics", "Curve" };
+const char* const kListNames[cPadAssign::ParamCount] = { "Program",        "Track", "Tune",     "Level",
+                                                         "Mode",           "Choke group",
+                                                         "Cut on release", "Color", "Dynamics", "Velocity curve" };
+
+// 8 screen labels for 10 settings: they show 1-8, or 3-10 while Dynamics / Curve is selected
+int labelBase(int param) { return param >= 8 ? cPadAssign::ParamCount - 8 : 0; }
 
 uint32_t rgb(const uint8_t* c)
 {
@@ -167,8 +171,8 @@ void functActionButton(uint8_t button, uint8_t state)
     if (state != buttonPress)
         return;
     int b = button - interfaceButton0;
-    if (b >= 0 && b < cPadAssign::ParamCount)
-        PA->selectParam(b);
+    if (b >= 0 && b < 8)
+        PA->selectParam(labelBase(PA->selectedParam()) + b);
 }
 } // namespace
 
@@ -380,6 +384,8 @@ bool cPadAssign::applyValue(int steps)
     case ParamChoke: setPadGroup(selPad, (uint8_t)clampInt(padGroupOf(p.mode) + steps, 0, kPadGroups)); break;
     case ParamCut: setPadCutOnRelease(selPad, dir > 0); break;
     case ParamColor: setPadColor(selPad, padColorStep(padColor(selPad), dir, false)); break;
+    case ParamDynamics: setPadDynamics(selPad, padDynamics(selPad) + 5 * steps); break;
+    case ParamCurve: setPadCurveSetting(selPad, clampInt(padCurveSetting(selPad) + dir, 0, kPadCurveSettings - 1)); break;
     default: return false;
     }
     newFileManager.setProjectStructChanged();
@@ -721,6 +727,18 @@ void cPadAssign::fillValues()
     snprintf(labelValues[ParamChoke], sizeof labelValues[0], "%s", g ? paramValues[ParamChoke] : "Off");
     snprintf(labelValues[ParamCut], sizeof labelValues[0], "%s", paramValues[ParamCut]);
     snprintf(labelValues[ParamColor], sizeof labelValues[0], "%s", c ? kPadColorNames[c] : "Auto");
+    uint8_t dyn = padDynamics(selPad), cs = padCurveSetting(selPad);
+    snprintf(paramValues[ParamDynamics], sizeof paramValues[0], "%u%%", dyn);
+    snprintf(labelValues[ParamDynamics], sizeof labelValues[0], "%u%%", dyn);
+#ifdef PLATFORM_MPC
+    static const char* const kGlobalCurve[3] = { "Soft", "Normal", "Hard" };
+    if (cs == 0)
+        snprintf(paramValues[ParamCurve], sizeof paramValues[0], "Global (%s)",
+                 kGlobalCurve[mtConfig.general.padCurve < 3 ? mtConfig.general.padCurve : 1]);
+    else
+#endif
+        snprintf(paramValues[ParamCurve], sizeof paramValues[0], "%s", padCurveName(cs));
+    snprintf(labelValues[ParamCurve], sizeof labelValues[0], "%s", padCurveName(cs));
 }
 
 void cPadAssign::refresh()
@@ -759,11 +777,13 @@ void cPadAssign::refresh()
     display.setControlValue(list, param);
     display.refreshControl(list);
 
+    int base = labelBase(param);
     for (int i = 0; i < 8; i++)
     {
-        display.setControlText2(label[i], labelValues[i]);
-        display.setControlColors(label[i], i == param ? display.getTheme().highlightedButtonLabelsColors
-                                                      : display.getTheme().activeLabelsColors);
+        display.setControlText(label[i], (char*)kParamNames[base + i]);
+        display.setControlText2(label[i], labelValues[base + i]);
+        display.setControlColors(label[i], base + i == param ? display.getTheme().highlightedButtonLabelsColors
+                                                             : display.getTheme().activeLabelsColors);
         display.refreshControl(label[i]);
     }
 

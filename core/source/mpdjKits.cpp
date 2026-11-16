@@ -83,10 +83,14 @@ int applyPadSettings(const char* folderPath, int baseSlot, int count)
             line++;
         if (!isdigit((unsigned char)*line))
             continue;
-        int pos = 0, group = 0, cut = 0, color = 0;
-        char word[16] = { 0 };
-        if (sscanf(line, "%d %15s %d %d %d", &pos, word, &group, &cut, &color) < 2)
+        int pos = 0, group = 0, cut = 0, color = 0, dyn = 100;
+        char word[16] = { 0 }, curveWord[16] = { 0 };
+        if (sscanf(line, "%d %15s %d %d %d %d %15s", &pos, word, &group, &cut, &color, &dyn, curveWord) < 2)
             continue;
+        int curve = 0;
+        for (int c = 0; c < kPadCurveSettings; c++)
+            if (strcasecmp(curveWord, padCurveName((uint8_t)c)) == 0)
+                curve = c;
         if (pos < 1 || pos > count)
             continue;
         int mode = kPadModeAuto;
@@ -104,6 +108,8 @@ int applyPadSettings(const char* folderPath, int baseSlot, int count)
                 continue;
             mtProject.pads.pad[p].mode = padModeByte(PadMode(mode), (uint8_t)group, cut != 0);
             mtProject.pads.color[p] = (uint8_t)color;
+            setPadDynamics(p, dyn);
+            setPadCurveSetting(p, curve);
             changed++;
         }
     }
@@ -154,7 +160,8 @@ int saveBank(int bank, const char* name, char* msg, int msgSize)
     static char info[4096];
     int len = snprintf(info, sizeof info,
                        "MPDJ kit 1\n# NN mode group cut color (mode auto / oneshot / gate, "
-                       "choke group 0-31, cut on release 0 / 1, color 0 = Auto, 1-16, 17 = Red)\n");
+                       "choke group 0-31, cut on release 0 / 1, color 0 = Auto, 1-16, 17 = Red,\n"
+                       "# dynamics 0-100 %%, curve global / soft / normal / hard; the last two may be left out)\n");
     int saved = 0;
     for (int i = 0; i < kPadsPerBank; i++)
     {
@@ -182,9 +189,14 @@ int saveBank(int bank, const char* name, char* msg, int msgSize)
                 pad = p;
         uint8_t mode = pad >= 0 ? mtProject.pads.pad[pad].mode : 0;
         uint8_t color = pad >= 0 ? mtProject.pads.color[pad] : 0;
-        len += snprintf(info + len, sizeof info - len, "%02d %s %d %d %d\n", saved,
+        char curve[16];
+        snprintf(curve, sizeof curve, "%s", padCurveName(pad >= 0 ? padCurveSetting(pad) : 0));
+        for (char* c = curve; *c; c++)
+            *c = (char)tolower((unsigned char)*c);
+        len += snprintf(info + len, sizeof info - len, "%02d %s %d %d %d %d %s\n", saved,
                         kModeWord[padModeOf(mode) < kPadModeCount ? padModeOf(mode) : 0],
-                        padGroupOf(mode), (mode & kPadCutOnRelease) ? 1 : 0, color);
+                        padGroupOf(mode), (mode & kPadCutOnRelease) ? 1 : 0, color,
+                        pad >= 0 ? padDynamics(pad) : 100, curve);
     }
     if (!saved)
     {

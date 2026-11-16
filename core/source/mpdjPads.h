@@ -78,8 +78,13 @@ struct strPadMap
 {
     strPadSlot pad[kPads]; // index = bank * 16 + (pad number - 1)
     uint8_t color[kPads]; // 5c-2: 0 = Auto, 1-16 = kPadPalette entry + 1
+    // 2026-11-16 (Mike: pad dynamics per pad, as Ableton's / the MPC's): 100 - Dynamics %
+    // (0 = full range, so zero-filled older data means the default) and the velocity curve
+    // (0 Global = Config's, 1 Soft, 2 Normal, 3 Hard)
+    uint8_t dynLoss[kPads];
+    uint8_t curve[kPads];
 
-    constexpr strPadMap() : pad{}, color{} { setDefault(); }
+    constexpr strPadMap() : pad{}, color{}, dynLoss{}, curve{} { setDefault(); }
 
     // Pad N -> program N -> track N, no choke group, no cut on release, Auto
     // colors. (5d-5, Mike 2026-11-14: the hats' built-in group 1 + cut is
@@ -90,6 +95,8 @@ struct strPadMap
         {
             pad[i] = { uint8_t(i), uint8_t(i % kPadsPerBank), kPadNoteDefault, kPadModeAuto };
             color[i] = 0;
+            dynLoss[i] = 0;
+            curve[i] = 0;
         }
     }
 };
@@ -261,6 +268,8 @@ bool padIsGate(int pad);
 // A pad's velocity 1-127 scaled for its program: a full hit = the program's
 // own volume (velocity setting for MIDI). The pad plays and records this.
 uint8_t padVelocity(uint8_t program, uint8_t velocity);
+// dynamics 0-100: 100 = x as the curve gives it, 0 = every hit at the top
+uint8_t padVelocityScaleDyn(uint8_t velocity, uint8_t programVelo, uint8_t curve, int topPercent, int dynamics);
 // The track a program plays on outside the pattern (5g fix): the first pad in bank
 // order with that program, else program % 16; a muted track gives way to the first
 // unmuted one (auditions on Sample Playback must be heard)
@@ -279,6 +288,18 @@ void padsWrite(strPadSlot* out);
 void padsRead(const strPadSlot* in); // nullptr = default map (older files)
 void padColorsWrite(uint8_t* out);   // 5c-2, block version 4
 void padColorsRead(const uint8_t* in); // nullptr = all Auto (older files)
+// Per-pad dynamics (2026-11-16, block version 8)
+static constexpr int kPadCurveSettings = 4; // Global, Soft, Normal, Hard
+uint8_t padDynamics(int pad);             // 0-100 %, 100 = the whole velocity range
+void setPadDynamics(int pad, int percent);
+uint8_t padCurveSetting(int pad);         // 0 Global .. 3 Hard
+void setPadCurveSetting(int pad, int setting);
+const char* padCurveName(uint8_t setting); // "Global", "Soft", ...
+void padDynamicsWrite(uint8_t* dynLoss, uint8_t* curve);
+void padDynamicsRead(const uint8_t* dynLoss, const uint8_t* curve); // nullptr = defaults
+// The pad's own hit: its curve (or Config's) and dynamics; a pad index < 0 = Config only
+uint8_t padVelocityFor(int pad, uint8_t program, uint8_t velocity);
+int dynamicsPad(int pad); // the pad whose dynamics a press uses (slice layer / Notes: the source pad)
 
 // MPDJ_PADS_TEST=1: checks the default map, the file round trip and older
 // files, prints the map and exits. Returns the exit code, or -1 when unset.

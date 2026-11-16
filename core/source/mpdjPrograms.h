@@ -83,14 +83,19 @@ struct strMpdjProjectData
     uint8_t reservedTracks[24];
     // version 3 (step 5b-1): the pad map, mpdjPads.h
     strPadSlot pads[kPads];
-    // version 4 (step 5c-2): pad colors (0 = Auto, 1-16 palette)
+    // version 4 (step 5c-2): pad colors (0 = Auto, 1-16 palette; 17 Red since 2026-11-16)
     uint8_t padColor[kPads];
+    // version 8 (2026-11-16): per-pad dynamics (100 - %, 0 = full range) and curve
+    // (0 Global, 1 Soft, 2 Normal, 3 Hard)
+    uint8_t padDynLoss[kPads];
+    uint8_t padCurve[kPads];
 };
 static constexpr size_t kMpdjProjectDataV1Size = 8 + 4 * kProgramSlots; // version 1 ended here
 static constexpr size_t kMpdjProjectDataV2Size = kMpdjProjectDataV1Size + 32; // version 2 ended here
 static constexpr size_t kMpdjProjectDataV3Size = kMpdjProjectDataV2Size + 4 * kPads; // version 3 ended here
-static_assert(sizeof(strMpdjProjectData) == kMpdjProjectDataV3Size + kPads);
-static constexpr uint8_t kMpdjProjectDataVersion = 7; // 5 (5f-1): flags in the header; 6 (5g-6): loopSync in the slots; 7: swing; same size
+static constexpr size_t kMpdjProjectDataV4Size = kMpdjProjectDataV3Size + kPads; // versions 4-7 ended here
+static_assert(sizeof(strMpdjProjectData) == kMpdjProjectDataV4Size + 2 * kPads);
+static constexpr uint8_t kMpdjProjectDataVersion = 8; // 5 (5f-1): flags in the header; 6 (5g-6): loopSync in the slots; 7: swing (same size); 8: pad dynamics + curve (+128 bytes)
 static constexpr uint8_t kSwingMin = 50, kSwingMax = 75; // project swing, % (50 = straight)
 
 // Slot types for the current project (mtProject.programs)
