@@ -330,6 +330,22 @@ const char* mpdjPadPress(int pad, uint8_t velocity)
     return padPress(pad, &slot, velocity);
 }
 
+uint8_t mpdjProgramTrack(uint8_t program)
+{
+    int track = program % kAllTracks;
+    for (int i = 0; i < kPads; i++)
+        if (padSlot(i)->program == program)
+        {
+            track = padSlot(i)->track;
+            break;
+        }
+    if (trackMuteRef(track))
+        for (int t = 0; t < kAllTracks; t++)
+            if (!trackMuteRef(t))
+                return (uint8_t)t;
+    return (uint8_t)track;
+}
+
 // ---------------------------------------------------------------- slice layer (5g-4)
 void mpdjSliceLayerSet(bool on)
 {

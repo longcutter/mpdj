@@ -13,6 +13,7 @@
 #include "mtConfig.h"
 #include "mtSliceManager.h"
 #include "mpdjSlices.h"
+#include "mpdjPads.h"
 #include "mpdjLoopSync.h"
 #include "mpdjPrograms.h"
 #include "mtSliceDetector.h"
@@ -3754,23 +3755,37 @@ void cSamplePlayback::mpdjSliceTapWave(int x)
     mpdjSliceSelect(mpdjSliceAt(editorInstrument, (uint16_t)(pos < 0 ? 0 : pos > MAX_16BIT ? MAX_16BIT : pos)));
 }
 
-// A pad: select the slice and play it (Slice: note 60 plays the selected slice;
-// Beat Slice: the note picks the slice). Release ends it (Gate-style audition)
-void cSamplePlayback::mpdjSlicePad(int slice, bool down)
+// A pad: select the slice and play it on the program's track (mpdjProgramTrack),
+// one voice: a new press restarts the voice instead of starting another (Mike
+// 2026-11-15: auditions through the Tracker's preview took a new track per press
+// and, in Manual where nothing is released, ran out of tracks). Slice mode: note
+// 60 + the Slice FX; Beat Slice: note 24 + slice. Release ends it except in Manual
+// (one shot). Velocity as on the Pattern screen (padVelocity)
+static constexpr int16_t kSliceAuditionSource = 300; // + slice (pads 200+, MIDI keys 100+)
+
+void cSamplePlayback::mpdjSlicePad(int slice, bool down, uint8_t velocity)
 {
     if (!mpdjSliceUi() || (down && mpdjPopupOpen))
         return;
-    bool beat = editorInstrument->playMode == playModeBeatSlice;
     strInstrument* ins = editorInstrument;
+    uint8_t program = (uint8_t)mtProject.values.lastUsedInstrument;
+    bool beat = ins->playMode == playModeBeatSlice;
     bool manual = mpdjSliceMethod == kSliceManual;
-    if (!down && manual)
-        return; // Manual: pads play one shot, so slices can be tapped while the sample runs
-    if (down && manual && ins->sliceNumber == 0 && slice == 0)
+    if (!down)
+    {
+        if (!manual && mpdjPadSlice == slice && mpdjPadVoice >= 0)
+        {
+            sequencer.mpdjPadNoteOff((uint8_t)mpdjPadVoice, kSliceAuditionSource + slice, true);
+            mpdjPadSlice = -1;
+        }
+        return;
+    }
+    if (manual && ins->sliceNumber == 0 && slice == 0)
     {
         mpdjSliceEnsureOne(ins); // pad 1 plays the whole sample from Start
         mpdjSliceChanged(true);
     }
-    else if (down && manual && slice == ins->sliceNumber && ins->sliceNumber < MAX_SLICE_NUMBER)
+    else if (manual && slice == ins->sliceNumber && ins->sliceNumber < MAX_SLICE_NUMBER)
     {
         // the next unused pad while the last slice plays: a new slice at the playhead,
         // where it was heard (minus the output buffer); the sound keeps playing
@@ -3789,25 +3804,19 @@ void cSamplePlayback::mpdjSlicePad(int slice, bool down)
         mpdjSliceChanged(true);
         return;
     }
-    if (!down)
-    {
-        if (mpdjPadSlice == slice)
-        {
-            uint8_t note = beat ? FIRST_BEAT_SLICE_NOTE + slice : 60;
-            noteOffHandle(Sequencer::GRID_OUTSIDE_PATTERN, note, 0, slice);
-            mpdjPadSlice = -1;
-        }
-        return;
-    }
-    if (slice >= editorInstrument->sliceNumber)
-        return; // no slice there (5g-3: Manual slicing adds one)
-    if (mpdjPadSlice >= 0)
-        mpdjSlicePad(mpdjPadSlice, false);
+    if (slice >= ins->sliceNumber)
+        return; // no slice there
     mpdjSliceSelect(slice);
-    uint8_t note = beat ? FIRST_BEAT_SLICE_NOTE + slice : 60;
-    noteOnHandle(Sequencer::GRID_OUTSIDE_PATTERN, note, 127, slice);
+    uint8_t track = mpdjProgramTrack(program);
+    uint8_t note = beat ? FIRST_BEAT_SLICE_NOTE + slice : Sequencer::STEP_NOTE_DEFAULT;
+    sequencer.mpdjPadNoteOn(track, program, note, padVelocity(program, velocity), kSliceAuditionSource + slice,
+                            beat ? -1 : slice);
+    // the playhead follows this voice
+    displayedTrack = (int8_t)track;
+    instrumentPlayer[track].setTrackIsDisplayed();
+    instrumentPlayer[track].clearEndDisplayTrackFlag();
     mpdjPadSlice = slice;
-    mpdjPadVoice = (int8_t)engine.getLastUsedVoice();
+    mpdjPadVoice = (int8_t)track;
 }
 
 void cSamplePlayback::mpdjSliceRemove(int slice)

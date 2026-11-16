@@ -1368,7 +1368,7 @@ void MpcInput::onPad(uint8_t note, bool down, uint8_t velocity)
             if (down && noteDown[kNoteErase])
                 samplePlayback.mpdjSliceRemove(slice); // 5g-3: ERASE + pad removes that slice
             else
-                samplePlayback.mpdjSlicePad(slice, down);
+                samplePlayback.mpdjSlicePad(slice, down, velocity);
         }
         return;
     }

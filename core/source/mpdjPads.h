@@ -254,6 +254,10 @@ bool padIsGate(int pad);
 // A pad's velocity 1-127 scaled for its program: a full hit = the program's
 // own volume (velocity setting for MIDI). The pad plays and records this.
 uint8_t padVelocity(uint8_t program, uint8_t velocity);
+// The track a program plays on outside the pattern (5g fix): the first pad in bank
+// order with that program, else program % 16; a muted track gives way to the first
+// unmuted one (auditions on Sample Playback must be heard)
+uint8_t mpdjProgramTrack(uint8_t program);
 // The scaling behind it (Config: curve 0 Soft / 1 Normal / 2 Hard, top %)
 uint8_t padVelocityScale(uint8_t velocity, uint8_t programVelo, uint8_t curve, int topPercent);
 // Config "Pad vel to volume": recording writes the velocity into the volume column

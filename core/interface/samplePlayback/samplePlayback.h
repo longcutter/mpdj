@@ -172,7 +172,7 @@ class cSamplePlayback : public ModuleBase
     bool mpdjApplyPending = false;          // Evenly / Beats / Clear waiting for the overwrite popup
     bool mpdjPendingClear = false;          // the popup is for Clear (Manual's Apply, SHIFT+ERASE)
     bool mpdjPopupOpen = false;             // the overwrite popup is up: knobs, pads and touch wait
-    int8_t mpdjPadVoice = -1;               // voice the pad audition started
+    int8_t mpdjPadVoice = -1;               // track / voice the pad audition plays on
     void mpdjSliceRemove(int slice);        // ERASE + pad
     void mpdjAskClear();                    // SHIFT+ERASE
     int mpdjPadLight(int slice) const;      // 0 dark, 1 slice, 2 selected, 3 playing, 4 next (Manual)
@@ -211,7 +211,7 @@ class cSamplePlayback : public ModuleBase
     void mpdjSliceTurn(int knob, int32_t eighths); // Q-Link point knob, 1/8 screen pixels
     void mpdjSliceTouchKnob(int knob);
     void mpdjSliceZoom(int16_t value);
-    void mpdjSlicePad(int slice, bool down);
+    void mpdjSlicePad(int slice, bool down, uint8_t velocity = 127);
     void mpdjSliceTapWave(int x);
     void mpdjSliceChanged(bool all);
     void mpdjSliceSelect(int slice);
