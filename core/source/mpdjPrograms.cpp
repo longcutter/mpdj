@@ -129,6 +129,8 @@ void programsWriteToFile(strMpdjProjectData& out)
     memcpy(out.trackVolumeHi, mtProject.trackVolumeHi, sizeof(out.trackVolumeHi));
     out.flags = mtProject.mpdjFullLevel ? 1 : 0;
     out.swing = mtProject.mpdjSwing;
+    out.reservedTracks[0] = (uint8_t)(mtProject.mpdjSwingOff & 0xFF); // version 10
+    out.reservedTracks[1] = (uint8_t)(mtProject.mpdjSwingOff >> 8);
     padsWrite(out.pads);
     padColorsWrite(out.padColor);
     padDynamicsWrite(out.padDynLoss, out.padCurve);
@@ -167,6 +169,7 @@ bool programsReadFromFile(const strMpdjProjectData& in)
         padSlicesRead(nullptr);
         mtProject.mpdjFullLevel = fullLevelDefault();
         mtProject.mpdjSwing = kSwingMin;
+        mtProject.mpdjSwingOff = 0;
         s_importNotice = true;
         return false;
     }
@@ -174,6 +177,7 @@ bool programsReadFromFile(const strMpdjProjectData& in)
     mtProject.mpdjFullLevel = in.version >= 5 ? (in.flags & 1) : fullLevelDefault();
     // project swing: saved since version 7; older files are straight
     mtProject.mpdjSwing = (in.version >= 7 && in.swing >= kSwingMin && in.swing <= kSwingMax) ? in.swing : kSwingMin;
+    mtProject.mpdjSwingOff = in.version >= 10 ? (uint16_t)(in.reservedTracks[0] | in.reservedTracks[1] << 8) : 0;
     tracksReadFromFile(in.version >= 2 ? &in : nullptr);
     padsRead(in.version >= 3 ? in.pads : nullptr);
     padColorsRead(in.version >= 4 ? in.padColor : nullptr);

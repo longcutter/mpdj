@@ -63,6 +63,13 @@ void functMode(uint8_t button, uint8_t state)
         TM->toggleMode();
 }
 
+void functSwingEdit(uint8_t button, uint8_t state)
+{
+    (void)button;
+    if (state == buttonPress)
+        TM->toggleSwingEdit();
+}
+
 void functTiming(uint8_t button, uint8_t state)
 {
     (void)button;
@@ -70,7 +77,7 @@ void functTiming(uint8_t button, uint8_t state)
         TM->cycleTiming();
 }
 
-const char* const kLabels[8] = { "Unmute all", "", "", "", "", "", "Timing", "Pads" };
+const char* const kLabels[8] = { "Unmute all", "Swing", "", "", "", "", "Timing", "Pads" };
 const char* const kTimingNames[3] = { "Now", "Next bar", "Pattern" };
 const char* const kTimingShort[3] = { "", "next bar", "@ pattern" };
 } // namespace
@@ -96,7 +103,7 @@ void cTrackMute::initDisplayControls()
         p.w = 800 / 8 - 6;
         p.y = 424;
         p.h = 55;
-        p.value = i >= 6 ? 1 : 0; // the Timing and Pads labels have two lines
+        p.value = (i >= 6 || i == 1) ? 1 : 0; // Swing, Timing and Pads have two lines
         label[i] = display.createControl<cLabel>(&p);
     }
     strControlProperties pb;
@@ -133,6 +140,7 @@ void cTrackMute::start(uint32_t options)
                        interfaceButtonSong, interfaceButtonPattern })
         ip->setButtonObj(b, buttonPress, functSwitchModule);
     ip->setButtonObj(interfaceButton0, functUnmuteAll);
+    ip->setButtonObj(interfaceButton1, functSwingEdit);
     ip->setButtonObj(interfaceButton6, functTiming);
     ip->setButtonObj(interfaceButton7, functMode);
     ip->setButtonObj(interfaceButtonPlay, buttonPress, functPlayAction);
@@ -149,7 +157,17 @@ void cTrackMute::start(uint32_t options)
     refresh();
 }
 
-void cTrackMute::stop() { moduleRefresh = 0; }
+void cTrackMute::stop()
+{
+    moduleRefresh = 0;
+    swingEdit = false;
+}
+
+void cTrackMute::toggleSwingEdit()
+{
+    swingEdit = !swingEdit;
+    refresh();
+}
 
 void cTrackMute::flip(int track, bool queueable)
 {
@@ -163,7 +181,19 @@ void cTrackMute::flip(int track, bool queueable)
         refresh();
 }
 
-void cTrackMute::toggle(int track) { flip(track, true); }
+void cTrackMute::toggle(int track)
+{
+    if (swingEdit)
+    {
+        if (track < 0 || track >= kAllTracks)
+            return;
+        mtProject.mpdjSwingOff ^= (uint16_t)(1u << track);
+        newFileManager.setProjectStructChanged();
+        refresh();
+        return;
+    }
+    flip(track, true);
+}
 
 void cTrackMute::cycleTiming()
 {
@@ -202,6 +232,11 @@ void cTrackMute::padDown(int track)
 {
     if (track < 0 || track >= kAllTracks)
         return;
+    if (swingEdit)
+    {
+        toggle(track); // swing on / off (no momentary)
+        return;
+    }
     bool momentary = mtConfig.general.trackMuteMode == 1;
     flip(track, !momentary); // Momentary is always immediate
     held[track] = momentary;
@@ -259,14 +294,20 @@ void cTrackMute::refresh()
         muted += m;
         snprintf(c.name, sizeof c.name, "T%d", t + 1);
         snprintf(c.program, sizeof c.program, "%s", trackNameRef(t));
-        if (mpdjMutePending() & (1u << t))
+        bool straight = mtProject.mpdjSwingOff & (1u << t);
+        if (swingEdit)
+            snprintf(c.marks, sizeof c.marks, "%s", straight ? "STRAIGHT" : "SWING");
+        else if (mpdjMutePending() & (1u << t))
             snprintf(c.marks, sizeof c.marks, "%s %s", m ? "PLAY" : "MUTE", kTimingShort[mtConfig.general.trackMuteTiming]);
         else
-            snprintf(c.marks, sizeof c.marks, "%s", m ? "MUTED" : "");
-        c.color = m ? 0 : rgb(kPadPalette[t % kPadColors]);
-        c.empty = m;
+            snprintf(c.marks, sizeof c.marks, "%s%s", m ? "MUTED" : "", straight && !m ? "straight" : "");
+        c.color = (swingEdit ? straight : m) ? 0 : rgb(kPadPalette[t % kPadColors]);
+        c.empty = swingEdit ? straight : m;
     }
     gridData.selected = -1;
+    snprintf(swingText, sizeof swingText, "%s", swingEdit ? "Editing" : (mtProject.mpdjSwingOff ? "Some" : "All"));
+    display.setControlText2(label[1], swingText);
+    display.refreshControl(label[1]);
     snprintf(modeText, sizeof modeText, "%s", mtConfig.general.trackMuteMode ? "Momentary" : "Latch");
     display.setControlText2(label[7], modeText);
     display.refreshControl(label[7]);
@@ -276,9 +317,13 @@ void cTrackMute::refresh()
     display.setControlData(grid, &gridData);
     display.refreshControl(grid);
 
-    snprintf(title, sizeof title, "Track Mute");
+    snprintf(title, sizeof title, swingEdit ? "Track Swing" : "Track Mute");
     titleBar->setTitle(title);
-    snprintf(rightLabel, sizeof rightLabel, muted ? "%d muted" : "none muted", muted);
+    if (swingEdit)
+        snprintf(rightLabel, sizeof rightLabel, "Swing %d%%, %d straight", mtProject.mpdjSwing,
+                 __builtin_popcount(mtProject.mpdjSwingOff));
+    else
+        snprintf(rightLabel, sizeof rightLabel, muted ? "%d muted" : "none muted", muted);
     titleBar->setRightLabel(rightLabel);
     titleBar->showRightLabel(true);
 }

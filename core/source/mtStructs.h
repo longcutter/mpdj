@@ -1051,6 +1051,9 @@ struct strMtProject
     // level, velocity ignored; not 16 Levels); saved in the MPDJ block (v5)
     uint8_t mpdjFullLevel = 0;
     uint8_t mpdjSwing = 50; // MPDJ: project swing 50 (none) .. 75 %, MPDJ block version 7
+    // MPDJ (2026-11-16): tracks the project swing leaves straight (bit t = track t + 1),
+    // MPDJ block version 10 (reservedTracks[0..1])
+    uint16_t mpdjSwingOff = 0;
 
     // MPDJ (step 5b-1): pad -> program -> track, saved in the MPDJ block; mpdjPads.h
     strPadMap pads;
