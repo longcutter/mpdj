@@ -1209,6 +1209,12 @@ struct strMtConfig
         // MPDJ (2026-11-16): the 8-track view's second column next to Program: 0 Note, 1 Volume,
         // 2 Micromove, 3 FX1, 4 FX2
         uint8_t eightViewColumn = 0;
+        // MPDJ (2026-11-16): Config > Display: screensaver on / off, after 1, 2, 5, 10, 15, 30
+        // minutes without a control touched, which visual (Logo, Starfield), backlight dimmed
+        uint8_t screensaver = 1;
+        uint8_t screensaverTime = 2; // 5 minutes
+        uint8_t screensaverKind = 0;
+        uint8_t screensaverDim = 1;
 #endif
     } general;
 

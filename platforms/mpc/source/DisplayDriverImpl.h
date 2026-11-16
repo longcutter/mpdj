@@ -5,6 +5,7 @@
 #include "DisplayDriver.h"
 #include "eve/FbOutput.h"
 #include "eve/Overlay.h"
+#include "eve/Visuals.h"
 #include "eve/eve.h"
 
 #include <condition_variable>
@@ -22,6 +23,9 @@ class DisplayDriverImpl : public DisplayDriver
 
     FbOutput& output() { return fb; }
     Overlay& overlay() { return marks; }
+    Visuals& visuals() { return vis; } // the screensaver (drawn instead of the tracker's frame)
+    // the screensaver's backlight dimming: on = a quarter of the set brightness, off = back
+    void dim(bool on);
     void requestRedraw() { frameDirty = true; } // main thread: redraw the last frame (overlay changed)
     // Sideloads: stop drawing (waits for a frame in progress) so another program
     // owns the panel; resume() repaints the whole screen.
@@ -74,6 +78,9 @@ class DisplayDriverImpl : public DisplayDriver
     bool jobReady = false, rendering = false, quitRender = false, threaded = false;
     FbOutput fb;
     Overlay marks;
+    Visuals vis;
+    int brightness = 128; // the last value the Tracker set (0-128)
+    bool dimmed = false;
     bool frameDirty = false;
     bool powered = true;
     bool suspended = false;

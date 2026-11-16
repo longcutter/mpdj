@@ -100,6 +100,8 @@ void DisplayDriverImpl::resume()
 
 void DisplayDriverImpl::service(uint32_t nowMs)
 {
+    if (vis.active() && nowMs - lastRenderMs >= 33)
+        frameDirty = true; // the screensaver animates at ~30 frames a second
     if (!frameDirty || !powered || suspended || nowMs - lastRenderMs < 16)
         return;
     if (threaded)
@@ -129,9 +131,16 @@ void DisplayDriverImpl::renderOne()
 {
     uint32_t t0 = microsNow();
     fb.beginFrame();
-    renderChip.renderer.render(
-      renderChip.front, (int)renderChip.frontWords, &fb.target(), renderChip.frontHandles);
-    marks.draw(fb.target());
+    if (vis.active())
+    {
+        vis.draw(fb.target()); // the screensaver instead of the tracker's frame
+    }
+    else
+    {
+        renderChip.renderer.render(
+          renderChip.front, (int)renderChip.frontWords, &fb.target(), renderChip.frontHandles);
+        marks.draw(fb.target());
+    }
     uint32_t t1 = microsNow();
     fb.present();
     uint32_t t2 = microsNow();
@@ -170,8 +179,20 @@ void DisplayDriverImpl::setPowerState(bool state)
     powered = state;
 }
 
+void DisplayDriverImpl::dim(bool on)
+{
+    if (on == dimmed)
+        return;
+    int keep = brightness;
+    setBrightness(on ? keep / 4 : keep);
+    brightness = keep; // the Tracker's value stays the one to come back to
+    dimmed = on;
+}
+
 void DisplayDriverImpl::setBrightness(int value)
 {
+    if (!dimmed)
+        brightness = value > 128 ? 128 : value;
     // The Tracker drives REG_PWM_DUTY (0-128). Map it onto the MPC backlight, never fully dark.
     if (getenv("MPDJ_NO_BACKLIGHT"))
         return;
@@ -180,7 +201,13 @@ void DisplayDriverImpl::setBrightness(int value)
     snprintf(path, sizeof path, "%s/max_brightness", dir);
     FILE* f = fopen(path, "r");
     if (!f)
+    {
+        static bool said = false; // MPDJ: so we learn whether the panel has this control
+        if (!said)
+            printf("display: no backlight control at %s (brightness and dimming do nothing)\n", dir);
+        said = true;
         return;
+    }
     int maxB = 0;
     if (fscanf(f, "%d", &maxB) != 1)
         maxB = 0;

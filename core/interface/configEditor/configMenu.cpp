@@ -23,7 +23,7 @@ constexpr uint8_t baseMenuGroupCount = 8;
 constexpr uint8_t projectMenuGroupCount = 10;
 constexpr uint8_t generalMenuGroupCount = 9;
 #elif defined(PLATFORM_MPC) // no USB group (USB storage / USB audio are Tracker+ hardware)
-constexpr uint8_t baseMenuGroupCount = MPDJ_QLINK_MODE4 ? 7 : 6; // + Q-Links (2026-11-15) while mode 4 is on
+constexpr uint8_t baseMenuGroupCount = MPDJ_QLINK_MODE4 ? 8 : 7; // + Display (2026-11-16), + Q-Links while mode 4 is on
 constexpr uint8_t projectMenuGroupCount = 10;
 constexpr uint8_t generalMenuGroupCount = 22; // MPC list: 22 items (no Radio region / Pads brightness since the Config clean-up; + Pattern view, 8-track column 2026-11-16); must equal the items below, extra items are silently dropped
 #elif defined(PLATFORM_IMX)
@@ -48,6 +48,9 @@ cMenuGroup menuBase(menuBase, 0, baseMenuGroupCount);
 
 cMenuGroup menuProject(menuBase, "Project Settings", projectMenuGroupCount);
 cMenuGroup menuGeneral(menuBase, "General", generalMenuGroupCount);
+#ifdef PLATFORM_MPC
+cMenuGroup menuDisplay(menuBase, "Display", 4); // MPDJ: the screensaver (2026-11-16)
+#endif
 #if defined(PLATFORM_MPC) && MPDJ_QLINK_MODE4
 cMenuGroup menuQLinks(menuBase, "Q-Links", mpdjQuick::kKnobs);
 #endif
@@ -196,6 +199,14 @@ const strItemTypeListText setupPatternView{ &mtConfig.general.patternDefaultView
 cMenuItem melPatternView(menuGeneral, "Pattern view", patternViewDesc, menuTypeItemListText, &setupPatternView);
 const strItemTypeListText setupEightColumn{ &mtConfig.general.eightViewColumn, 5, eightColumnTexts };
 cMenuItem melEightColumn(menuGeneral, "8-track column", eightColumnDesc, menuTypeItemListText, &setupEightColumn);
+const strItemTypeListText setupSaverOn{ &mtConfig.general.screensaver, 2, mpdjOffOnTexts };
+cMenuItem melSaverOn(menuDisplay, "Screensaver", screensaverDesc, menuTypeItemListText, &setupSaverOn);
+const strItemTypeListText setupSaverTime{ &mtConfig.general.screensaverTime, 6, screensaverTimeTexts };
+cMenuItem melSaverTime(menuDisplay, "Screensaver after", screensaverTimeDesc, menuTypeItemListText, &setupSaverTime);
+const strItemTypeListText setupSaverKind{ &mtConfig.general.screensaverKind, 2, screensaverKindTexts };
+cMenuItem melSaverKind(menuDisplay, "Screensaver shows", screensaverKindDesc, menuTypeItemListText, &setupSaverKind);
+const strItemTypeListText setupSaverDim{ &mtConfig.general.screensaverDim, 2, mpdjOffOnTexts };
+cMenuItem melSaverDim(menuDisplay, "Dim the backlight", screensaverDimDesc, menuTypeItemListText, &setupSaverDim);
 #endif
 #if defined(PLATFORM_MPC) && MPDJ_QLINK_MODE4
 // MPDJ (Q-Link mode 4): the effect on each Q-Link

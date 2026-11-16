@@ -219,12 +219,54 @@ void MpcInput::poll()
     loopSyncPollAll(platform.getTimer()->millis()); // Loop Sync follows tempo / Tune (5g-6)
     pollLevels();
     pollPadLights();
+    pollSaver();
     if (sideloadComboMs && mpcShift &&
         platform.getTimer()->millis() - sideloadComboMs >= Sideload::kComboHoldMs)
     {
         sideloadComboMs = 0;
         Sideload::request();
     }
+}
+
+// The screensaver (2026-11-16): after Config's time with no control touched, the
+// display shows Visuals instead of the tracker's frame (and the backlight dims);
+// MPDJ_SCREENSAVER_SECONDS sets the time in seconds (testing)
+bool MpcInput::wake()
+{
+    lastInputMs = platform.getTimer()->millis();
+    if (!saverOn)
+        return false;
+    saverOn = false;
+    if (disp)
+    {
+        disp->visuals().stop();
+        disp->dim(false);
+        disp->requestRedraw();
+    }
+    if (trace)
+        printf("input: screensaver off\n");
+    return true;
+}
+
+void MpcInput::pollSaver()
+{
+    uint32_t now = platform.getTimer()->millis();
+    if (!lastInputMs)
+        lastInputMs = now;
+    if (saverOn || !disp || !mtConfig.general.screensaver)
+        return;
+    static const uint32_t kMinutes[6] = { 1, 2, 5, 10, 15, 30 };
+    uint32_t ms = kMinutes[mtConfig.general.screensaverTime < 6 ? mtConfig.general.screensaverTime : 2] * 60000u;
+    if (const char* s = getenv("MPDJ_SCREENSAVER_SECONDS"))
+        ms = (uint32_t)atoi(s) * 1000u;
+    if (now - lastInputMs < ms)
+        return;
+    saverOn = true;
+    disp->visuals().start(mtConfig.general.screensaverKind);
+    if (mtConfig.general.screensaverDim)
+        disp->dim(true);
+    if (trace)
+        printf("input: screensaver on (%s)\n", Visuals::name(mtConfig.general.screensaverKind));
 }
 
 void MpcInput::suspend()
@@ -676,6 +718,26 @@ void MpcInput::onMidi(uint8_t status, uint8_t d1, uint8_t d2)
 
     bool noteOn = type == 0x90 && d2 > 0;
     bool noteOff = type == 0x80 || (type == 0x90 && d2 == 0);
+
+    // the screensaver: pads wake it and still play; anything else only wakes it
+    if (ch == 9)
+        wake();
+    else if (ch == 0)
+    {
+        if (noteOff && swallowNote[d1])
+        {
+            swallowNote[d1] = false;
+            return;
+        }
+        // controls only: Q-Links (CC 16-19) and the main encoder (CC 100), not LED echoes
+        bool knob = type == 0xB0 && (d1 == 100 || (d1 >= 16 && d1 <= 19));
+        if ((noteOn || knob) && wake())
+        {
+            if (noteOn)
+                swallowNote[d1] = true;
+            return;
+        }
+    }
 
     if (ch == 9) // pads
     {
@@ -2856,6 +2918,16 @@ void MpcInput::onTouchFrame()
     bool down = touching && !wasTouching;
     bool up = !touching && wasTouching;
     wasTouching = touching;
+    if (up && swallowTouch) // the touch that ended the screensaver
+    {
+        swallowTouch = false;
+        return;
+    }
+    if (down && wake())
+    {
+        swallowTouch = true;
+        return;
+    }
 
     if (up)
     {

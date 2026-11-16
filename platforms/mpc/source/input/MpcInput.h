@@ -73,6 +73,14 @@ class MpcInput
     void pollTapHold();
     int divideQLink(int knob, int steps, int divIdx = -1);
     bool quickControlsHere();
+    // the screensaver (Config > Display): any control ends it; that press does nothing
+    // else (pads still play); its release is swallowed too
+    bool wake();
+    void pollSaver();
+    uint32_t lastInputMs = 0;
+    bool saverOn = false;
+    bool swallowNote[128] = {};
+    bool swallowTouch = false;
     void quickControlTurn(int knob, int steps);
     void songJumpArea(int steps);
     void stepEditParam(int steps);
