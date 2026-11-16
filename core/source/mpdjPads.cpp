@@ -1357,9 +1357,11 @@ static std::atomic<uint32_t> s_erase[kPads];
 static bool s_eraseUndoStored = false;
 static char s_eraseMsg[40];
 
-static uint32_t erasePack(const strPadSlot& s, bool withNote)
+// bits: 31 set, 24-30 slice + 1 (0 = any), 16-23 track, 8-15 program, 0-7 note + 1 (0 = any)
+static uint32_t erasePack(const strPadSlot& s, bool withNote, int slice = -1)
 {
-    return 0x80000000u | (uint32_t)s.track << 16 | (uint32_t)s.program << 8 |
+    return 0x80000000u | (uint32_t)(slice >= 0 ? (slice + 1) & 0x7F : 0) << 24 |
+           (uint32_t)s.track << 16 | (uint32_t)s.program << 8 |
            (uint32_t)(withNote && s.note >= 0 ? s.note + 1 : 0);
 }
 
@@ -1372,9 +1374,16 @@ const char* mpdjErasePadDown(int pad)
     const char* msg;
     if (s_levelsMode || !resolvePad(pad, &slot, &vel, &msg) || slot.program == kPadNoProgram)
         return nullptr;
-    int note = s_notesMode ? slot.note : -1;
-    char name[4];
-    padName(pad, name);
+    // slice layer (2026-11-16, Mike): only that slice's hits (Slice: its Slice FX;
+    // Beat Slice: its note)
+    int slice = s_sliceMode ? s_resolvedSlice : -1;
+    bool withNote = s_notesMode || (s_sliceMode && slice < 0);
+    int note = withNote ? slot.note : -1;
+    char name[12];
+    if (s_sliceMode)
+        snprintf(name, sizeof name, "Slice %d", pad + 1);
+    else
+        padName(pad, name);
     if (sequencer.isPlay())
     {
         if (!s_eraseUndoStored)
@@ -1382,7 +1391,7 @@ const char* mpdjErasePadDown(int pad)
             newFileManager.storePatternUndoRevision();
             s_eraseUndoStored = true;
         }
-        s_erase[pad].store(erasePack(slot, s_notesMode));
+        s_erase[pad].store(erasePack(slot, withNote, slice));
         snprintf(s_eraseMsg, sizeof s_eraseMsg, "Erasing %s", name);
         return s_eraseMsg;
     }
@@ -1390,7 +1399,7 @@ const char* mpdjErasePadDown(int pad)
     Sequencer::strPattern* pt = sequencer.getPatternToUI();
     int n = 0;
     for (int row = 0; row <= pt->track[0].length; row++)
-        n += sequencer.mpdjEraseHit(pt, slot.track, row, slot.program, note);
+        n += sequencer.mpdjEraseHit(pt, slot.track, row, slot.program, note, slice);
     if (n)
         newFileManager.setActualPatternStructChanged();
     snprintf(s_eraseMsg, sizeof s_eraseMsg, n == 1 ? "%s: 1 hit erased" : "%s: %d hits erased", name, n);
@@ -1418,7 +1427,8 @@ void mpdjEraseTick(int row)
         if (!e)
             continue;
         int track = (e >> 16) & 0xFF, program = (e >> 8) & 0xFF, note = (int)(e & 0xFF) - 1;
-        if (sequencer.mpdjEraseHit(sequencer.getPatternToUI(), track, row, program, note))
+        int slice = (int)((e >> 24) & 0x7F) - 1;
+        if (sequencer.mpdjEraseHit(sequencer.getPatternToUI(), track, row, program, note, slice))
             s_odErased.store(true); // the UI marks the pattern changed (mpdjOverdubPoll)
     }
 }
