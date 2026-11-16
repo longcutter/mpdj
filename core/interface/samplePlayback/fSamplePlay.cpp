@@ -149,6 +149,7 @@ void cSamplePlayback::update()
     currentAutoSlice = sliceManager.getAutoSliceState();
     if ((currentAutoSlice == 0) && (currentAutoSlice != lastAutoSlice))
     {
+        sliceManager.mpdjAutoSliceDone(); // MPDJ: back from the Start..End range
         if (isSampleInstrument(mtProject.values.lastUsedInstrument) &&
             mtProject.sampleMemory[mtProject.values.lastUsedInstrument].isStreamed)
         {

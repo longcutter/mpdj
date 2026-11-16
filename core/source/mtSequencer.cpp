@@ -3402,13 +3402,22 @@ void Sequencer::mpdjOverdubErase(int row)
     }
 }
 
-int Sequencer::mpdjEraseHit(strPattern* pattern, int track, int row, int program, int note)
+int Sequencer::mpdjEraseHit(strPattern* pattern, int track, int row, int program, int note, int slice)
 {
     if (!pattern || track < 0 || track >= kAllTracks || row < 0 || row > pattern->track[0].length)
         return 0;
     strPattern::strTrack::strStep& s = pattern->track[track].step[row];
     if (s.note < 0 || s.instrument != program || (note >= 0 && s.note != note))
         return 0;
+    if (slice >= 0)
+    {
+        bool match = false;
+        for (auto& f : s.fx)
+            if (f.type == fx.FX_TYPE_SAMPLE_SLICE && f.value == slice)
+                match = true;
+        if (!match)
+            return 0;
+    }
     s.note = STEP_NOTE_EMPTY;
     s.instrument = 0;
     s.volume = -1;
