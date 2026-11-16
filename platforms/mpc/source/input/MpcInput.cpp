@@ -1204,6 +1204,17 @@ void MpcInput::onButton(uint8_t note, bool down)
             break;
 
         case Act::Overdub:
+            if (mpcShift)
+            {
+                // SHIFT + OVER DUB = Capture (2026-11-16): the last pattern-length of
+                // unrecorded pad playing into the pattern
+                releaseCoreShift();
+                const char* msg = mpdjCapture();
+                mtPopups.show(0, msg);
+                if (trace)
+                    printf("input: %s\n", msg);
+                break;
+            }
             mpdjOverdubSet(!mpdjOverdubOn());
             mtPopups.show(0, mpdjOverdubOn() ? "Over Dub on: replace" : "Over Dub off: add");
             break;

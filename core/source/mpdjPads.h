@@ -296,6 +296,11 @@ void padColorsRead(const uint8_t* in); // nullptr = all Auto (older files)
 static constexpr int kPadCurveSettings = 4; // Global, Soft, Normal, Hard
 uint8_t padDynamics(int pad);             // 0-100 %, 100 = the whole velocity range
 void setPadDynamics(int pad, int percent);
+// Capture (2026-11-16, like Live's Capture MIDI): pad presses that weren't recorded
+// while the pattern played are kept (the latest 1024); mpdjCapture() writes the last
+// pattern-length of them into the pattern (nearest row, adds only, one UNDO) and
+// returns the popup text
+const char* mpdjCapture();
 // Slice layer to bank (2026-11-16): the slice a pad plays (-1 = none), set / clear it
 int padSlice(int pad);
 void setPadSlice(int pad, int slice);

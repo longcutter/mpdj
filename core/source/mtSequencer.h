@@ -973,6 +973,18 @@ class Sequencer
     // cleared; FX columns stay). Returns the volume written.
     int8_t mpdjPadStepWrite(uint8_t track, uint8_t row, uint8_t instrument, uint8_t note,
                             uint8_t velocity, bool writeVolume);
+    // MPDJ (Capture, 2026-11-16): where a track's playhead is: its pass, row, microstep
+    // (0-47) and the pattern's last row index
+    void mpdjPlayhead(uint8_t track, uint32_t* pass, int* row, int* uStep, int* lastRow)
+    {
+        *pass = player.track[track].passCount;
+        *row = player.track[track].actual_pos;
+        *uStep = player.track[track].uStep;
+        *lastRow = getActualPattern()->track[0].length;
+    }
+    // MPDJ (Capture): add a hit at a row without its own undo revision (the caller
+    // stores one); false if the row has a note (adds only, as plain REC)
+    bool mpdjAddHit(uint8_t track, uint8_t row, uint8_t instrument, uint8_t note, int8_t volume);
     void updateTrackLengths(strPattern* pattern);
 
     uint8_t noMoreRecOpen();
