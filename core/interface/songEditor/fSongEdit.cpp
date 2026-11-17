@@ -603,7 +603,7 @@ void cSongEditor::tapTempo_set(float value)
 {
     if (tempoLocked)
     {
-        mtPopups.show(0, "Tempo locked (SHIFT+TAP TEMPO)");
+        mtPopups.show(0, "Tempo locked (hold TAP TEMPO)");
         return;
     }
     if (value > Sequencer::MAX_TEMPO)
@@ -1091,7 +1091,7 @@ void cSongEditor::changeGlobalTempo(float value)
 {
     if (tempoLocked)
     {
-        mtPopups.show(0, "Tempo locked (SHIFT+TAP TEMPO)");
+        mtPopups.show(0, "Tempo locked (hold TAP TEMPO)");
         return;
     }
     //	nie zmieniaj jak external clock
@@ -1123,7 +1123,7 @@ void cSongEditor::setDefaultGlobalTempo()
 {
     if (tempoLocked)
     {
-        mtPopups.show(0, "Tempo locked (SHIFT+TAP TEMPO)");
+        mtPopups.show(0, "Tempo locked (hold TAP TEMPO)");
         return;
     }
     //	nie zmieniaj jak external clock
