@@ -172,15 +172,10 @@ void RecordingSave::prepareInstrumentStruct(int idx, char* name)
     }
     mtProject.instrument[idx].setStreamPreferred(false);
 
-    mtProject.instrument[idx].sample.length = recorder.getLength();
+    // MPDJ: the sound saveRecordedSound was given (the recorder passes its own buffer)
+    mtProject.instrument[idx].sample.length = instrumentSaveContext.length;
     strncpy(mtProject.instrument[idx].sample.file_name, name, SAMPLE_NAME_SIZE);
     mtProject.instrument[idx].sample.file_name[SAMPLE_NAME_SIZE] = 0;
-
-    instrumentSaveContext.memoryAddressL =
-      (uint8_t*)recorder.getAddress(AudioInput::InputChannels::kLeft);
-    instrumentSaveContext.memoryAddressR =
-      (uint8_t*)recorder.getAddress(AudioInput::InputChannels::kRight);
-    instrumentSaveContext.channelDataSizeBytes = recorder.getLength() * sizeof(int16_t);
 }
 
 bool RecordingSave::saveStereoDataToWorkspace(int idx,
@@ -222,6 +217,14 @@ bool RecordingSave::saveStereoDataToWorkspace(int idx,
 
 void RecordingSave::saveRecordingFinish()
 {
+    // MPDJ fix (2026-11-16): the slot's program file is written but its sound isn't in
+    // sample memory until the caller reloads the samples (reloadSamplesFromWorkspace, as
+    // the Sample Recorder does); keep the slot inactive until then so nothing plays it
+    // from an address it doesn't have yet (the reload sets it active again)
+    if (newFileManager.getStatus() == fmSavingImportingRecordedSound)
+    {
+        mtProject.instrument[instrumentSaveContext.importInstrumentIdx].isActive = 0;
+    }
     newFileManager.setStatus(fmSaveRecordedSoundEnd);
     newFileManager.setCurrentOperation(fmNoOperation);
 }
@@ -296,6 +299,13 @@ bool RecordingSave::saveRecordedSound(char* filePath,
         strncpy(recordedFileName, fileName, SAMPLE_NAME_SIZE);
         recordedFileName[SAMPLE_NAME_SIZE] = 0;
         instrumentSaveContext.importInstrumentIdx = instrIdx.value();
+        // MPDJ fix (2026-11-16): the program gets the sound passed in here; this used to
+        // take the Sample Recorder's buffer, so Chop and skip-back wrote the wrong audio
+        // (or none) into the slot's program file
+        instrumentSaveContext.memoryAddressL = (uint8_t*)leftChannelAddress;
+        instrumentSaveContext.memoryAddressR = (uint8_t*)rightChannelAddress;
+        instrumentSaveContext.length = length;
+        instrumentSaveContext.channelDataSizeBytes = length * sizeof(int16_t);
         newFileManager.setStatus(fmSavingImportingRecordedSound);
         newFileManager.setCurrentOperation(fmSaveRecordedSound);
     }

@@ -171,6 +171,7 @@ class cSamplePlayback : public ModuleBase
     struct ChopRun
     {
         bool active = false;
+        bool reloading = false; // all saved: the samples are being reloaded into memory
         int8_t source = -1;
         uint8_t count = 0, done = 0;
         uint8_t slots[MAX_SLICE_NUMBER] = {};

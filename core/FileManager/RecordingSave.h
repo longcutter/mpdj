@@ -45,6 +45,7 @@ class RecordingSave : public FileManagerOperation
         uint8_t* memoryAddressR;
         uint8_t* memoryAddressL;
         uint32_t channelDataSizeBytes;
+        uint32_t length; // MPDJ: frames of the sound being saved (was the recorder's own)
     };
 
     bool saveRecording();

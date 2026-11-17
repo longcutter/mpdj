@@ -16,6 +16,7 @@
 #include "mpdjPads.h"
 #include "mpdjLoopSync.h"
 #include "mpdjPrograms.h"
+#include "mpdjSkipBack.h"
 #include "mtSliceDetector.h"
 #include "VoiceStreamManager.h"
 #include <cmath>
@@ -4209,6 +4210,7 @@ void cSamplePlayback::mpdjChopStart()
     mpdjChop.count = ins->sliceNumber;
     mpdjChop.done = 0;
     mpdjChop.active = true;
+    mpdjChop.reloading = false;
     ip->blockAllInputs();
     if (!mpdjChopNext())
     {
@@ -4246,12 +4248,27 @@ void cSamplePlayback::mpdjChopPoll()
     if (!mpdjChop.active)
         return;
     uint8_t status = newFileManager.getStatus();
-    if (status == fmSaveRecordedSoundEnd)
+    if (status == fmSaveRecordedSoundEnd && !mpdjChop.reloading)
     {
         newFileManager.clearStatus();
         mpdjChop.done++;
         if (mpdjChop.done < mpdjChop.count && mpdjChopNext())
             return;
+        // fix 2026-11-16: the chops' sounds go into sample memory through the Tracker's
+        // reload (they were active slots without memory before: lit, silent, and the next
+        // import crashed on their address)
+        if (mpdjChop.done > 0 && mpdjReloadSamples())
+        {
+            mpdjChop.reloading = true;
+            mtPopups.show(0, "Chop: loading");
+            return;
+        }
+    }
+    if ((status == fmSaveRecordedSoundEnd && !mpdjChop.reloading) ||
+        (status == fmReloadSamplesEnd && mpdjChop.reloading))
+    {
+        newFileManager.clearStatus();
+        mpdjChop.reloading = false;
         bool all = mpdjChop.done >= mpdjChop.count;
         mpdjChop.active = false;
         ip->unblockAllInputs();
@@ -4279,7 +4296,11 @@ void cSamplePlayback::mpdjChopPoll()
         newFileManager.clearStatus();
         mpdjChop.active = false;
         ip->unblockAllInputs();
-        snprintf(mpdjPopupText, sizeof mpdjPopupText, "Chop failed at %d", mpdjChop.done + 1);
+        if (mpdjChop.reloading)
+            snprintf(mpdjPopupText, sizeof mpdjPopupText, "Chop: loading the samples failed");
+        else
+            snprintf(mpdjPopupText, sizeof mpdjPopupText, "Chop failed at %d", mpdjChop.done + 1);
+        mpdjChop.reloading = false;
         mtPopups.show(0, mpdjPopupText);
     }
 }
