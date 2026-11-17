@@ -445,6 +445,10 @@ void checkConfig()
         mtConfig.general.brightness = 9;
     if (mtConfig.general.captureTo > 1)
         mtConfig.general.captureTo = 0;
+    if (mtConfig.general.padColorMode > 2)
+        mtConfig.general.padColorMode = 0;
+    if (mtConfig.general.padDefaultColor > 17)
+        mtConfig.general.padDefaultColor = 17;
 #endif
     if (mtConfig.general.performanceSource > 1)
         mtConfig.general.performanceSource = 0;
@@ -627,6 +631,8 @@ void resetConfig()
     mtConfig.general.screensaverDim = 1;
     mtConfig.general.brightness = 9;
     mtConfig.general.captureTo = 0;
+    mtConfig.general.padColorMode = 0;
+    mtConfig.general.padDefaultColor = 17; // Light gray
 #endif
 
     // interface ----------------------------------------

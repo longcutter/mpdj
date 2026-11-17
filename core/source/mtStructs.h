@@ -1234,6 +1234,10 @@ struct strMtConfig
         uint8_t brightness = 9;
         // MPDJ (2026-11-16): Capture writes onto 0 = each pad's own track, 1 = the cursor's track
         uint8_t captureTo = 0;
+        // MPDJ (2026-11-16): what a pad's Auto color is: 0 One color (padDefaultColor, a pad
+        // palette index, default Light gray), 1 Rainbow, 2 Track (each pad's track color)
+        uint8_t padColorMode = 0;
+        uint8_t padDefaultColor = 17;
 #endif
     } general;
 

@@ -748,8 +748,7 @@ void cPadAssign::fillValues()
     if (c)
         snprintf(paramValues[ParamColor], sizeof paramValues[0], "%s", kPadColorNames[c]);
     else
-        snprintf(paramValues[ParamColor], sizeof paramValues[0], "Auto (%s)",
-                 kPadColorNames[p->track % kPadColors + 1]);
+        snprintf(paramValues[ParamColor], sizeof paramValues[0], "Auto (%s)", padAutoColorName(p->track));
 
     // the labels' short values
     if (p->program == kPadNoProgram)
