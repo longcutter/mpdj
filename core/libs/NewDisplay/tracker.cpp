@@ -1012,7 +1012,8 @@ const char* cTracker::mpdjTrackLabel(int trackIdx)
     const char* name = tracks->tracksNames[trackIdx];
     // six columns: a default name ("Track 3") gives way to the number, custom names stay
     bool defaultName = name && strncmp(name, "Track ", 6) == 0 && atoi(name + 6) == trackIdx + 1;
-    if (paramCount > 2 && !(paramCount == 6 && defaultName))
+    // (and in the 4-column views since 2026-11-16, which have headings now too)
+    if (paramCount > 2 && !((paramCount == 6 || paramCount == 4) && defaultName))
         return name;
     snprintf(numbers[trackIdx & 15], sizeof numbers[0], "%d", trackIdx + 1);
     return numbers[trackIdx & 15];
@@ -1052,7 +1053,9 @@ void cTracker::tracksNumbers()
         w = getTextWidth((strFont*)font, text, letersCount);
 
         // MPDJ: in the six-column view the name stops before the column headings
-        int maxW = paramCount == 6 ? sixParamsOffset[2] - 8 : tracksWidth - 2;
+        int maxW = paramCount == 6   ? sixParamsOffset[2] - 8
+                   : paramCount == 4 ? fourParamsOffset[2] - 8
+                                     : tracksWidth - 2;
         while (w > maxW)
         {
             if (letersCount > 1)
@@ -1107,6 +1110,16 @@ void cTracker::tracksNumbers()
             headX[k] = sixParamsOffset[2 + k];
         }
         heads_n = 4;
+    }
+    else if (paramCount == 4)
+    {
+        // the 4-column views (Mike 2026-11-16): FX1 / FX2, or Mic / Vol in the Mic/Vol view
+        // (its third column is the micromove, the fourth the volume)
+        heads[0] = tracks->mpdjMicVol ? "Mic" : "FX1";
+        heads[1] = tracks->mpdjMicVol ? "Vol" : "FX2";
+        headX[0] = fourParamsOffset[2];
+        headX[1] = fourParamsOffset[3];
+        heads_n = 2;
     }
     if (heads_n)
     {
