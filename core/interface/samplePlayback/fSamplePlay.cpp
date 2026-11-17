@@ -4297,12 +4297,39 @@ void cSamplePlayback::mpdjChopPoll()
         bool all = mpdjChop.done >= mpdjChop.count;
         mpdjChop.active = false;
         ip->unblockAllInputs();
+        // Mike (2026-11-16): the chops' pads share the next free choke group, so one chop
+        // cuts the last (pads whose program is one of the new slots; Pad Assign changes it)
+        uint8_t group = 0;
+        int choked = 0;
+        if (mpdjChop.done > 0)
+        {
+            bool used[kPadGroups + 1] = {};
+            for (int p = 0; p < kPads; p++)
+                used[padGroup(p)] = true;
+            for (int g = 1; g <= kPadGroups && !group; g++)
+                if (!used[g])
+                    group = (uint8_t)g;
+            for (int p = 0; p < kPads && group; p++)
+                for (int i = 0; i < mpdjChop.done; i++)
+                    if (mtProject.pads.pad[p].program == mpdjChop.slots[i])
+                    {
+                        setPadGroup(p, group);
+                        choked++;
+                        break;
+                    }
+            if (!choked)
+                group = 0;
+        }
+        char chokeText[32] = "";
+        if (group)
+            snprintf(chokeText, sizeof chokeText, ", choke group %u", group);
         if (all)
-            snprintf(mpdjPopupText, sizeof mpdjPopupText, "Chopped %d: slots %d-%d", mpdjChop.count,
-                     mpdjChop.slots[0] + 1, mpdjChop.slots[mpdjChop.count - 1] + 1);
+            snprintf(mpdjPopupText, sizeof mpdjPopupText, "Chopped %d: slots %d-%d%s", mpdjChop.count,
+                     mpdjChop.slots[0] + 1, mpdjChop.slots[mpdjChop.count - 1] + 1, chokeText);
         else
             snprintf(mpdjPopupText, sizeof mpdjPopupText, "Chop stopped after %d", mpdjChop.done);
         mtPopups.show(0, mpdjPopupText);
+        printf("chop: pads on the new slots: %d, choke group %u\n", choked, group);
         printf("chop: %s -> %d of %d slices, %s (source program %d keeps %d slices; editor on %d, last used %d)\n",
                mpdjChop.base, mpdjChop.done, mpdjChop.count, mpdjChop.dir, mpdjChop.source + 1,
                mtProject.instrument[mpdjChop.source].sliceNumber,
