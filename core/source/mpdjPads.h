@@ -66,7 +66,7 @@ static constexpr int kPadColorChoices = 18; // stored pad colors 1-18: + Red, + 
 static constexpr uint8_t kPadPalette[kPadColorChoices][3] = { // 0-127 per channel
     { 127, 24, 0 },  { 127, 64, 0 },  { 127, 112, 0 }, { 64, 127, 0 },  { 0, 127, 24 },   { 0, 127, 90 },
     { 0, 110, 127 }, { 0, 52, 127 },  { 24, 0, 127 },  { 72, 0, 127 },  { 127, 0, 127 },  { 127, 0, 64 },
-    { 127, 64, 64 }, { 64, 127, 96 }, { 96, 96, 127 }, { 110, 110, 110 }, { 127, 0, 0 }, { 40, 40, 40 },
+    { 127, 64, 64 }, { 64, 127, 96 }, { 96, 96, 127 }, { 110, 110, 110 }, { 127, 0, 0 }, { 72, 72, 72 },
 };
 static constexpr const char* kPadColorNames[kPadColorChoices + 1] = {
     "Auto", "Red-orange", "Orange", "Yellow", "Lime", "Green", "Teal", "Cyan", "Sky",
