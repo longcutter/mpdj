@@ -3623,6 +3623,8 @@ void cSamplePlayback::mpdjSliceValues()
             int want = ins->sliceNumber, got = mpdjChopSlots(slots, want);
             if (want <= 0)
                 strcpy(mpdjSliceText[4], "no slices");
+            else if (got == 0)
+                strcpy(mpdjSliceText[4], "none free");
             else if (got < want)
                 snprintf(mpdjSliceText[4], sizeof(mpdjSliceText[4]), "%d free", got);
             else
@@ -3929,6 +3931,8 @@ bool cSamplePlayback::mpdjSliceEncoder(int16_t value)
                 mpdjAutoSens = (uint8_t)(mpdjAutoSens + d < 0 ? 0 : (mpdjAutoSens + d > 2 ? 2 : mpdjAutoSens + d));
             else if (mpdjSliceMethod == kSliceBeats)
                 mpdjBeatDiv = (uint8_t)(mpdjBeatDiv + d < 0 ? 0 : (mpdjBeatDiv + d > 4 ? 4 : mpdjBeatDiv + d));
+            else if (mpdjSliceMethod == kSliceChop)
+                mpdjChopMoveFrom(d);
             mpdjSliceValues();
             break;
         }
@@ -4157,11 +4161,31 @@ void cSamplePlayback::mpdjLoopSyncTurn(int16_t value)
 
 int cSamplePlayback::mpdjChopSlots(uint8_t* out, int want) const
 {
+    // the empty slots from mpdjChopFrom up (2026-11-16: To slots turns pick where they start)
     int n = 0;
-    for (int i = 0; i < kSampleInstrumentsCount && n < want; i++)
+    for (int i = mpdjChopFrom; i < kSampleInstrumentsCount && n < want; i++)
         if (!mtProject.instrument[i].isActive && programType(i) == kProgramEmpty)
             out[n++] = (uint8_t)i;
     return n;
+}
+
+// To slots turned: the chops start at the next / previous empty slot (Mike's test 2026-11-16)
+void cSamplePlayback::mpdjChopMoveFrom(int dir)
+{
+    auto empty = [](int i) { return !mtProject.instrument[i].isActive && programType(i) == kProgramEmpty; };
+    int at = mpdjChopFrom;
+    if (at >= kSampleInstrumentsCount || !empty(at))
+    {
+        // start from the first empty slot the chops would use now
+        uint8_t first;
+        at = mpdjChopSlots(&first, 1) ? first : 0;
+    }
+    for (int i = at + dir; i >= 0 && i < kSampleInstrumentsCount; i += dir)
+        if (empty(i))
+        {
+            mpdjChopFrom = (uint8_t)i;
+            return;
+        }
 }
 
 void cSamplePlayback::mpdjChopStart()
@@ -4184,7 +4208,8 @@ void cSamplePlayback::mpdjChopStart()
     int got = mpdjChopSlots(mpdjChop.slots, ins->sliceNumber);
     if (got < ins->sliceNumber)
     {
-        snprintf(mpdjPopupText, sizeof mpdjPopupText, "%d slices, %d empty slots", ins->sliceNumber, got);
+        snprintf(mpdjPopupText, sizeof mpdjPopupText, "%d slices, %d empty slots from %d", ins->sliceNumber, got,
+                 mpdjChopFrom + 1);
         mtPopups.show(0, mpdjPopupText);
         return;
     }
