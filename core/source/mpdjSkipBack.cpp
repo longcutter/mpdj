@@ -19,6 +19,7 @@ std::atomic<uint32_t> s_write{ 0 }; // frames written in all (wraps the ring)
 // the saved copy, as the file manager wants it (separate channels, kept until it's done)
 int16_t s_left[kFrames], s_right[kFrames];
 bool s_saving = false;
+bool s_reloading = false; // saved into a slot: the samples are being reloaded
 char s_msg[64];
 char s_dir[] = "/Samples/SkipBack";
 char s_name[32];
@@ -106,11 +107,34 @@ const char* mpdjSkipBackSave()
     return s_msg;
 }
 
+bool mpdjReloadSamples()
+{
+    for (int i = 0; i < kSampleInstrumentsCount; i++)
+        newFileManager.saveInstrumentStructToWorkspace(i); // only those marked changed
+    return newFileManager.reloadSamplesFromWorkspace();
+}
+
 const char* mpdjSkipBackPoll()
 {
     if (!s_saving)
         return nullptr;
     uint8_t st = newFileManager.getStatus();
+    if (s_reloading)
+    {
+        // the slot's sound goes into sample memory (fix 2026-11-16); the screen on show
+        // may take the End status, so anything but "reloading" means it's over
+        if (st == fmReloadingSamples)
+            return nullptr;
+        if (st == fmReloadSamplesEnd || st >= fmError)
+            newFileManager.clearStatus();
+        s_reloading = false;
+        s_saving = false;
+        if (st >= fmError)
+            snprintf(s_msg, sizeof s_msg, "%s saved, loading it failed", s_name);
+        else
+            snprintf(s_msg, sizeof s_msg, "%s (%.1f s) -> program %d", s_name, s_seconds, s_slot + 1);
+        return s_msg;
+    }
     if (st == fmSavingRecordedSound || st == fmSavingImportingRecordedSound)
         return nullptr; // still going
     // ended (the screen on show may have taken the End status already)
@@ -118,6 +142,12 @@ const char* mpdjSkipBackPoll()
     {
         if (st == fmSaveRecordedSoundEnd)
             newFileManager.clearStatus();
+        if (s_slot >= 0 && mpdjReloadSamples())
+        {
+            s_reloading = true;
+            snprintf(s_msg, sizeof s_msg, "%s: loading into program %d", s_name, s_slot + 1);
+            return s_msg;
+        }
         s_saving = false;
         if (s_slot >= 0)
             snprintf(s_msg, sizeof s_msg, "%s (%.1f s) -> program %d", s_name, s_seconds, s_slot + 1);

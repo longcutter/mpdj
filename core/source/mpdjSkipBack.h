@@ -13,5 +13,11 @@ const char* mpdjSkipBackSave();
 // UI thread, every poll: finishes a save (file manager status); returns a popup text
 // when it ended, else nullptr
 const char* mpdjSkipBackPoll();
+
+// Saves the programs changed since the last save (their settings) to the workspace and
+// starts the Tracker's sample reload, which loads every slot's sound into sample memory
+// (after a sound was written into a slot through saveRecordedSound). False if the file
+// manager is busy. Ends with fmReloadSamplesEnd (screens may take that status).
+bool mpdjReloadSamples();
 // for the self-test: where the sound starts and ends in a buffer (frames), false if silent
 bool mpdjSkipBackTrim(const int16_t* l, const int16_t* r, uint32_t frames, uint32_t* from, uint32_t* to);
