@@ -178,6 +178,8 @@ class cSamplePlayback : public ModuleBase
         char dir[96] = {}, base[28] = {};
     } mpdjChop;
     int mpdjChopSlots(uint8_t* out, int want) const; // the empty slots the chops would fill
+    uint8_t mpdjChopFrom = 0;          // they're looked for from this slot up (To slots; session only)
+    void mpdjChopMoveFrom(int dir);    // To slots turned: start at the next / previous empty slot
     void mpdjChopStart();
     bool mpdjChopNext();
     void mpdjChopPoll();
