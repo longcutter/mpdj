@@ -60,17 +60,24 @@ constexpr uint8_t padModeByte(PadMode mode, uint8_t group, bool cut = false)
 
 // Pad colors (5c-2): 0 = Auto (the pad's track color), 1-16 = kPadPalette
 static constexpr int kPadColors = 16;      // the track colors (palette entries 1-16)
-static constexpr int kPadColorChoices = 17; // stored pad colors 1-17: + Red (Mike 2026-11-16), kept
-                                            // last so saved projects and kits keep their colors
+static constexpr int kPadColorChoices = 18; // stored pad colors 1-18: + Red, + Light gray (Mike
+                                            // 2026-11-16), kept last so saved projects and kits keep
+                                            // their colors
 static constexpr uint8_t kPadPalette[kPadColorChoices][3] = { // 0-127 per channel
     { 127, 24, 0 },  { 127, 64, 0 },  { 127, 112, 0 }, { 64, 127, 0 },  { 0, 127, 24 },   { 0, 127, 90 },
     { 0, 110, 127 }, { 0, 52, 127 },  { 24, 0, 127 },  { 72, 0, 127 },  { 127, 0, 127 },  { 127, 0, 64 },
-    { 127, 64, 64 }, { 64, 127, 96 }, { 96, 96, 127 }, { 110, 110, 110 }, { 127, 0, 0 },
+    { 127, 64, 64 }, { 64, 127, 96 }, { 96, 96, 127 }, { 110, 110, 110 }, { 127, 0, 0 }, { 40, 40, 40 },
 };
 static constexpr const char* kPadColorNames[kPadColorChoices + 1] = {
     "Auto", "Red-orange", "Orange", "Yellow", "Lime", "Green", "Teal", "Cyan", "Sky",
-    "Blue", "Violet", "Magenta", "Pink", "Salmon", "Mint", "Lavender", "White", "Red",
+    "Blue", "Violet", "Magenta", "Pink", "Salmon", "Mint", "Lavender", "White", "Red", "Light gray",
 };
+// Auto (a pad without its own color) follows Config > General "Pad colors" (2026-11-16):
+// 0 One color (Config "Pad default color", a kPadPalette index; default Light gray),
+// 1 Rainbow (a diagonal gradient across the 16 pads, the same on every bank), 2 Track (the
+// pad's track color, as before)
+enum PadAutoColor : uint8_t { kPadAutoOne = 0, kPadAutoRainbow = 1, kPadAutoTrack = 2 };
+static constexpr uint8_t kPadDefaultColor = 17; // Light gray (palette index)
 // the order the color setting steps through: Auto, Red, Red-orange .. White
 uint8_t padColorStep(uint8_t color, int dir, bool wrap);
 
@@ -127,6 +134,10 @@ bool padCutOnRelease(int pad);             // 5b-6a
 uint8_t padColor(int pad);
 void setPadColor(int pad, uint8_t color);
 const uint8_t* padColorRgb(int pad, uint8_t track);
+// what Auto gives on that pad and track, and its name for Pad Assign ("Light gray",
+// "Rainbow", "Teal")
+const uint8_t* padAutoColorRgb(int pad, uint8_t track);
+const char* padAutoColorName(uint8_t track);
 void setPadCutOnRelease(int pad, bool cut);
 // The group a (program, track) plays in, for notes that don't come from a
 // pad (pattern playback): the first pad in bank order A01 -> D16 with that

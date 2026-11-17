@@ -1232,7 +1232,7 @@ void setPadColor(int pad, uint8_t color)
 
 uint8_t padColorStep(uint8_t color, int dir, bool wrap)
 {
-    static const uint8_t kOrder[kPadColorChoices + 1] = { 0, 17, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
+    static const uint8_t kOrder[kPadColorChoices + 1] = { 0, 17, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18 };
     constexpr int n = kPadColorChoices + 1;
     int pos = 0;
     for (int i = 0; i < n; i++)
@@ -1249,7 +1249,41 @@ uint8_t padColorStep(uint8_t color, int dir, bool wrap)
 const uint8_t* padColorRgb(int pad, uint8_t track)
 {
     uint8_t c = padColor(pad);
-    return c ? kPadPalette[c - 1] : kPadPalette[track % kPadColors];
+    return c ? kPadPalette[c - 1] : padAutoColorRgb(pad, track);
+}
+
+const uint8_t* padAutoColorRgb(int pad, uint8_t track)
+{
+    // the rainbow: pad 1 (bottom left) red .. pad 16 (top right) violet, one hue per diagonal
+    static const uint8_t kRainbow[7][3] = {
+        { 127, 0, 0 }, { 127, 60, 0 }, { 120, 120, 0 }, { 0, 127, 20 },
+        { 0, 100, 127 }, { 20, 20, 127 }, { 100, 0, 127 },
+    };
+    switch (mtConfig.general.padColorMode)
+    {
+        case kPadAutoRainbow:
+        {
+            int n = (pad < 0 ? 0 : pad) % 16; // row from the bottom = n / 4, column = n % 4
+            return kRainbow[n / 4 + n % 4];
+        }
+        case kPadAutoTrack: return kPadPalette[track % kPadColors];
+        default:
+            return kPadPalette[mtConfig.general.padDefaultColor < kPadColorChoices ? mtConfig.general.padDefaultColor
+                                                                                   : kPadDefaultColor];
+    }
+}
+
+const char* padAutoColorName(uint8_t track)
+{
+    switch (mtConfig.general.padColorMode)
+    {
+        case kPadAutoRainbow: return "Rainbow";
+        case kPadAutoTrack: return kPadColorNames[track % kPadColors + 1];
+        default:
+            return kPadColorNames[(mtConfig.general.padDefaultColor < kPadColorChoices ? mtConfig.general.padDefaultColor
+                                                                                        : kPadDefaultColor) +
+                                  1];
+    }
 }
 
 void padsRead(const strPadSlot* in)
@@ -1386,18 +1420,35 @@ int padsSelfTest()
 
     // 2c. Pad colors (5c-2): round trip; a version 3 block or bad values -> Auto
     mtProject.pads = def;
-    check(padColor(5) == 0 && padColorRgb(5, 3) == kPadPalette[3], "Auto = the track's color", 5);
+    // Auto follows Config "Pad colors" (2026-11-16): One color (Light gray by default), Rainbow, Track
+    uint8_t keepMode = mtConfig.general.padColorMode, keepDefault = mtConfig.general.padDefaultColor;
+    mtConfig.general.padColorMode = kPadAutoOne;
+    mtConfig.general.padDefaultColor = kPadDefaultColor;
+    check(padColor(5) == 0 && padColorRgb(5, 3) == kPadPalette[17] && padColorRgb(40, 9) == kPadPalette[17],
+          "Auto = One color, Light gray", 5);
+    mtConfig.general.padDefaultColor = 6;
+    check(padColorRgb(5, 3) == kPadPalette[6], "One color follows Pad default color", 5);
+    mtConfig.general.padColorMode = kPadAutoRainbow;
+    check(padColorRgb(0, 3)[0] == 127 && padColorRgb(0, 3)[1] == 0 && padColorRgb(15, 3)[2] == 127 &&
+            padColorRgb(3, 0) == padColorRgb(12, 0) && padColorRgb(16, 0) == padColorRgb(0, 0) &&
+            padColorRgb(1, 0) != padColorRgb(0, 0),
+          "Rainbow: red bottom left, violet top right, one hue per diagonal, every bank alike", 5);
+    mtConfig.general.padColorMode = kPadAutoTrack;
+    check(padColorRgb(5, 3) == kPadPalette[3], "Track: the track's color", 5);
+    mtConfig.general.padColorMode = keepMode;
+    mtConfig.general.padDefaultColor = keepDefault;
     setPadColor(5, 7);
     setPadColor(63, 16);
-    setPadColor(6, 18); // out of range: ignored
+    setPadColor(6, 19); // out of range: ignored
     check(padColor(5) == 7 && padColorRgb(5, 3) == kPadPalette[6] && padColor(6) == 0, "set color", 5);
     setPadColor(7, 17); // Red (2026-11-16)
     check(padColor(7) == 17 && padColorRgb(7, 0)[0] == 127 && padColorRgb(7, 0)[1] == 0 &&
             padColorRgb(7, 0)[2] == 0,
           "Red", 7);
     check(padColorStep(0, 1, false) == 17 && padColorStep(17, 1, false) == 1 && padColorStep(1, -1, false) == 17 &&
-            padColorStep(16, 1, false) == 16 && padColorStep(16, 1, true) == 0 && padColorStep(0, -1, true) == 16,
-          "color order Auto, Red, Red-orange .. White", 7);
+            padColorStep(16, 1, false) == 18 && padColorStep(18, 1, false) == 18 && padColorStep(18, 1, true) == 0 &&
+            padColorStep(0, -1, true) == 18,
+          "color order Auto, Red, Red-orange .. White, Light gray", 7);
     setPadColor(7, 0);
     // per-pad dynamics + curve (2026-11-16)
     check(padDynamics(9) == 100 && padCurveSetting(9) == 0, "dynamics default 100 %, Global", 9);

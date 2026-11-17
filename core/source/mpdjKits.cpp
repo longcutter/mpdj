@@ -160,7 +160,7 @@ int saveBank(int bank, const char* name, char* msg, int msgSize)
     static char info[4096];
     int len = snprintf(info, sizeof info,
                        "MPDJ kit 1\n# NN mode group cut color (mode auto / oneshot / gate, "
-                       "choke group 0-31, cut on release 0 / 1, color 0 = Auto, 1-16, 17 = Red,\n"
+                       "choke group 0-31, cut on release 0 / 1, color 0 = Auto, 1-16, 17 = Red, 18 = Light gray,\n"
                        "# dynamics 0-100 %%, curve global / soft / normal / hard; the last two may be left out)\n");
     int saved = 0;
     for (int i = 0; i < kPadsPerBank; i++)

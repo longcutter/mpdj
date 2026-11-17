@@ -25,7 +25,7 @@ constexpr uint8_t generalMenuGroupCount = 9;
 #elif defined(PLATFORM_MPC) // no USB group (USB storage / USB audio are Tracker+ hardware)
 constexpr uint8_t baseMenuGroupCount = MPDJ_QLINK_MODE4 ? 8 : 7; // + Display (2026-11-16), + Q-Links while mode 4 is on
 constexpr uint8_t projectMenuGroupCount = 10;
-constexpr uint8_t generalMenuGroupCount = 22; // MPC list: 22 items (+ Capture to 2026-11-16) (Display brightness moved to Display 2026-11-16) (no Radio region / Pads brightness since the Config clean-up; + Pattern view, 8-track column 2026-11-16); must equal the items below, extra items are silently dropped
+constexpr uint8_t generalMenuGroupCount = 24; // MPC list: 24 items (+ Pad colors, Pad default color 2026-11-16) (+ Capture to 2026-11-16) (Display brightness moved to Display 2026-11-16) (no Radio region / Pads brightness since the Config clean-up; + Pattern view, 8-track column 2026-11-16); must equal the items below, extra items are silently dropped
 #elif defined(PLATFORM_IMX)
 constexpr uint8_t baseMenuGroupCount = 7;
 constexpr uint8_t projectMenuGroupCount = 10;
@@ -190,6 +190,10 @@ const strItemTypeListText setupTcDefault{ &mtConfig.general.tcDefault, 2, tcDefa
 cMenuItem melTcDefault(menuGeneral, "Timing correct", tcDefaultDesc, menuTypeItemListText, &setupTcDefault);
 const strItemTypeListText setupPadLights{ &mtConfig.general.padLights, 3, padLightsTexts };
 cMenuItem melPadLights(menuGeneral, "Pad lights", padLightsDesc, menuTypeItemListText, &setupPadLights);
+const strItemTypeListText setupPadColorMode{ &mtConfig.general.padColorMode, 3, padColorModeTexts };
+cMenuItem melPadColorMode(menuGeneral, "Pad colors", padColorModeDesc, menuTypeItemListText, &setupPadColorMode);
+const strItemTypeListText setupPadDefaultColor{ &mtConfig.general.padDefaultColor, 18, padDefaultColorTexts };
+cMenuItem melPadDefaultColor(menuGeneral, "Pad default color", padDefaultColorDesc, menuTypeItemListText, &setupPadDefaultColor);
 const strItemTypeListText setupFullLevel{ &mtConfig.general.fullLevelDefault, 2, fullLevelTexts };
 cMenuItem melFullLevel(menuGeneral, "Full level default", fullLevelDesc, menuTypeItemListText, &setupFullLevel);
 const strItemTypeListText setupPopupTime{ &mtConfig.general.popupTime, 7, popupTimeTexts };
