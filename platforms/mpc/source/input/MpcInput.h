@@ -88,6 +88,12 @@ class MpcInput
     bool visualsOnDemand = false;
     bool swallowNote[128] = {};
     bool swallowTouch = false;
+    // + and - (notes 54 / 55; 2026-11-16): held together ~1.5 s = the System menu. A press
+    // waits kPlusMinusWaitMs for the other before doing its own job (insert / remove)
+    void plusMinus(uint8_t note, bool down);
+    void pollPlusMinus(uint32_t now);
+    uint32_t pmDownMs[2] = {}, pmComboMs = 0;
+    bool pmHeld[2] = {}, pmPending[2] = {}, pmCombo = false, pmMenuDone = false;
     void quickControlTurn(int knob, int steps);
     void songJumpArea(int steps);
     void stepEditParam(int steps);

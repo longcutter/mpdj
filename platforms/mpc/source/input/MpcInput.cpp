@@ -17,6 +17,7 @@
 #include "mtConfig.h"
 #include "mtAudioEngine.h"
 #include "core/interfacePopups.h"
+#include "SystemMenu.h"
 #include "fileManager.h"
 #include "mtSequencer.h"
 #include "mtStructs.h"
@@ -228,6 +229,8 @@ void MpcInput::poll()
     pollQLinks();
     pollButtonLeds();
     pollTapHold();
+    pollPlusMinus(platform.getTimer()->millis());
+    SystemMenu::poll(platform.getTimer()->millis());
     mpdjPadsPoll(); // Note Repeat hits to record (5b-7c)
     trackMute.syncQueued(); // Track Mute changes applied at the bar / pattern (5e-3)
     mpdjOverdubPoll();      // OVER DUB: erased rows -> save flag; pass ends with REC (5f-2)
@@ -811,6 +814,32 @@ void MpcInput::onMidi(uint8_t status, uint8_t d1, uint8_t d2)
         }
     }
 
+    // the System menu (+ and - held, 2026-11-16): the main encoder chooses, ENCODER PUSH does
+    // it, any other button closes it (and does nothing else); the knobs wait
+    if (ch == 0 && SystemMenu::isOpen())
+    {
+        if (type == 0xB0)
+        {
+            if (d1 == 100 && d2)
+                SystemMenu::turn(d2 < 64 ? 1 : -1);
+            return;
+        }
+        if (noteOn)
+        {
+            swallowNote[d1] = true;
+            if (d1 == 111)
+                SystemMenu::push();
+            else
+                SystemMenu::close();
+            return;
+        }
+    }
+    if (ch == 0 && (noteOn || noteOff) && (d1 == 54 || d1 == 55))
+    {
+        plusMinus(d1, noteOn);
+        return;
+    }
+
     if (ch == 9) // pads
     {
         if (noteOn || noteOff)
@@ -830,6 +859,70 @@ void MpcInput::onMidi(uint8_t status, uint8_t d1, uint8_t d2)
             return;
         }
         onButton(d1, noteOn);
+    }
+}
+
+// + and - (2026-11-16): a press waits a moment for the other one; together and held
+// ~1.5 s they open the System menu, and neither does its own job. Alone, + / - work as
+// before (the press goes on after the wait, or at once when let go sooner).
+static constexpr uint32_t kPlusMinusWaitMs = 150, kPlusMinusHoldMs = 1500;
+
+void MpcInput::plusMinus(uint8_t note, bool down)
+{
+    int i = note - 54, other = 1 - i;
+    uint32_t now = platform.getTimer()->millis();
+    if (down)
+    {
+        pmHeld[i] = true;
+        pmDownMs[i] = now;
+        if (pmHeld[other])
+        {
+            // the second of the pair: neither does its own job. If the first one's wait
+            // already ran out, its press went through: let it go now so it doesn't repeat
+            // (at most one row inserted / removed, which UNDO takes back)
+            if (!pmPending[other] && !pmCombo)
+                onButton((uint8_t)(54 + other), false);
+            pmPending[other] = false;
+            pmCombo = true;
+            pmComboMs = now;
+            pmMenuDone = false;
+            return;
+        }
+        if (pmCombo)
+            return;
+        pmPending[i] = true;
+        return;
+    }
+    pmHeld[i] = false;
+    if (pmCombo)
+    {
+        if (!pmHeld[other])
+            pmCombo = false; // both let go
+        return;
+    }
+    if (pmPending[i])
+    {
+        pmPending[i] = false;
+        onButton(note, true); // a quick tap: its press now, then the release
+    }
+    onButton(note, false);
+}
+
+void MpcInput::pollPlusMinus(uint32_t now)
+{
+    for (int i = 0; i < 2; i++)
+        if (pmPending[i] && now - pmDownMs[i] >= kPlusMinusWaitMs)
+        {
+            pmPending[i] = false;
+            onButton((uint8_t)(54 + i), true); // alone: + / - as before
+        }
+    if (pmCombo && pmHeld[0] && pmHeld[1] && !pmMenuDone && now - pmComboMs >= kPlusMinusHoldMs)
+    {
+        pmMenuDone = true;
+        wake();
+        SystemMenu::open();
+        if (trace)
+            printf("input: System menu\n");
     }
 }
 
@@ -3187,6 +3280,12 @@ void MpcInput::onTouchFrame()
     }
     if (down && wake())
     {
+        swallowTouch = true;
+        return;
+    }
+    if (down && SystemMenu::isOpen()) // a touch closes the System menu (and does nothing else)
+    {
+        SystemMenu::close();
         swallowTouch = true;
         return;
     }

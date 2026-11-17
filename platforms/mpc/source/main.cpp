@@ -6,6 +6,8 @@
 #include "mpdjBatchTest.h"
 #include "mpdjFeatures.h"
 #include "Recovery.h"
+#include "input/SystemMenu.h"
+#include "fileManager.h"
 #include "audio/AudioProbe.h"
 #include "audio/MpcAudio.h"
 #include "input/LedProbe.h"
@@ -87,8 +89,16 @@ static void installCrashReport()
         sigaction(sig, &sa, nullptr);
 }
 
-int main()
+int main(int argc, char** argv)
 {
+    (void)argc;
+    {
+        // the System menu's Restart runs this file again (2026-11-16)
+        char exe[256];
+        ssize_t n = readlink("/proc/self/exe", exe, sizeof exe - 1);
+        exe[n > 0 ? n : 0] = 0;
+        SystemMenu::setExecutable(n > 0 ? exe : argv[0], argv);
+    }
     signal(SIGINT, onSignal);
     signal(SIGTERM, onSignal);
     installCrashReport();
@@ -148,8 +158,13 @@ int main()
     }
     MpcAudio::stop();
     EngineHost::stop();
+    // the newest changes into the workspace before quitting (it's otherwise saved now and then)
+    if (newFileManager.flushWorkspaceSave())
+        printf("workspace saved\n");
     platform.input.close(); // controller LEDs off
     Recovery::atCleanExit();
     printf("Bye.\n");
+    if (SystemMenu::requested() != SystemMenu::Exit::None)
+        return SystemMenu::finish(); // Restart / Switch to the MPC app / Power off
     return 0;
 }
