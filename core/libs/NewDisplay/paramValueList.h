@@ -35,6 +35,9 @@ class cParamValueList : public cDisplayControl
     virtual void setData(void* data);
     // MPDJ (touch, 2026-11-16): the row under (x, y), or -1
     int mpdjRowAt(int x, int y) const;
+    // touch scrolling (mpdjListView.h): the scrolled view's first row, -1 = follow the selection
+    int16_t mpdjViewTop = -1, mpdjViewSel = -1;
+    void mpdjScroll(int rows);
 
     uint16_t textStyle;
     const strFont* font;

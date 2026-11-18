@@ -2781,27 +2781,30 @@ static int keyboardKeyAt(float x, float y)
 // (file / slot lists), the File screen (browser / recent) and Config (groups,
 // items, an item's values). The screens' own selection functions do the moving.
 // delta 0: select the row under (x, y). delta != 0 (a drag, 2026-11-17): the list under
-// (x, y) moves its selection by delta rows (clamped). dry: only say whether a list row
-// is there, change nothing.
+// (x, y) scrolls its view by delta rows; the selection stays (mpdjListView.h). dry: only
+// say whether a list row is there, change nothing.
 bool MpcInput::tapListRow(float x, float y, int delta, bool dry)
 {
     if (!mpdjOn(MpdjFeature::TapLists))
         return false;
-    auto pick = [&](auto* l) {
+    auto pick = [&](hControl h, auto* l) {
         if (!l || !l->list)
             return -1;
         int r = l->mpdjRowAt((int)x, (int)y);
-        if (r < 0 || dry)
-            return dry && r >= 0 ? -2 : r; // -2: there's a row (dry run)
+        if (r < 0)
+            return -1;
+        if (dry)
+            return -2; // there's a row
         if (delta)
         {
-            r = l->list->start + delta;
-            r = r < 0 ? 0 : (r >= l->list->length ? l->list->length - 1 : r);
+            l->mpdjScroll(delta); // the view only
+            display.refreshControl(h);
+            return -2;
         }
         return r;
     };
-    auto rowIn = [&](hControl h) { return pick((cList*)display.mpdjControl(h)); };
-    // dry: a row is there; any other (r >= 0): do it
+    auto rowIn = [&](hControl h) { return pick(h, (cList*)display.mpdjControl(h)); };
+    // -2 (dry run or a drag): done, nothing to select; r >= 0: select that row
 #define MPDJ_ROW(expr) ((r = (expr)) == -2 ? true : r >= 0)
     int r;
     // a program list popup (the step popup's program list, SHIFT held on program screens)
@@ -2810,7 +2813,7 @@ bool MpcInput::tapListRow(float x, float y, int delta, bool dry)
     {
         if (MPDJ_ROW(rowIn(mtPopups.mpdjStepPopupList())))
         {
-            if (dry)
+            if (dry || delta)
                 return true;
             mtPopups.setStepPopupValue(r);
             if (trace)
@@ -2826,22 +2829,22 @@ bool MpcInput::tapListRow(float x, float y, int delta, bool dry)
                                     pe.intstrumentsToPopupListControl };
         for (uint8_t place = 0; place < 6; place++)
             if (lists[place] >= 0 && MPDJ_ROW(rowIn(lists[place])))
-                return dry || (pe.mpdjTapFillList(place, r), true);
+                return dry || delta || (pe.mpdjTapFillList(place, r), true);
         return false;
     }
     if (mtInterface.isSampleLoaderScreenActive())
     {
         if (MPDJ_ROW(rowIn(sampleImporter.explorerListControl)))
-            return dry || (sampleImporter.mpdjTapList(0, r), true);
+            return dry || delta || (sampleImporter.mpdjTapList(0, r), true);
         if (MPDJ_ROW(rowIn(sampleImporter.instrumentListControl)))
-            return dry || (sampleImporter.mpdjTapList(1, r), true);
+            return dry || delta || (sampleImporter.mpdjTapList(1, r), true);
     }
     else if (mtInterface.isFileScreenActive())
     {
         if (MPDJ_ROW(rowIn(projectEditor.fileListControl)))
-            return dry || (projectEditor.mpdjTapList(0, r), true);
+            return dry || delta || (projectEditor.mpdjTapList(0, r), true);
         if (MPDJ_ROW(rowIn(projectEditor.recentListControl)))
-            return dry || (projectEditor.mpdjTapList(1, r), true);
+            return dry || delta || (projectEditor.mpdjTapList(1, r), true);
     }
     else if (mtInterface.isSongScreenActive())
     {
@@ -2857,12 +2860,12 @@ bool MpcInput::tapListRow(float x, float y, int delta, bool dry)
     else if (mtInterface.isConfigScreenActive())
     {
         if (MPDJ_ROW(rowIn(configEditor.configListControl)))
-            return dry || (configEditor.mpdjTapList(2, r), true);
+            return dry || delta || (configEditor.mpdjTapList(2, r), true);
         cParamValueList* sub = (cParamValueList*)display.mpdjControl(configEditor.configSubmenuListControl);
-        if (MPDJ_ROW(pick(sub)))
-            return dry || (configEditor.mpdjTapList(1, r), true);
+        if (MPDJ_ROW(pick(configEditor.configSubmenuListControl, sub)))
+            return dry || delta || (configEditor.mpdjTapList(1, r), true);
         if (MPDJ_ROW(rowIn(configEditor.configBasemenuListControl)))
-            return dry || (configEditor.mpdjTapList(0, r), true);
+            return dry || delta || (configEditor.mpdjTapList(0, r), true);
     }
     return false;
 }
@@ -3324,9 +3327,7 @@ void MpcInput::onTouchFrame()
         if (listTouch)
         {
             listTouch = false;
-            if (!listDragging)
-                tapListRow(listStartX, listStartY); // it was a tap: select that row
-            else
+            if (listDragging)
             {
                 // a flick glides on: rows per second from the last moves (finger up = +)
                 flingRowsPerSec = 0;
@@ -3368,9 +3369,11 @@ void MpcInput::onTouchFrame()
         printf("touch: tracker (%.0f, %.0f) -> button %d\n", nx, ny, target);
     if (target < 0 && nx >= 0 && nx < 800 && ny >= 0 && ny < kScreenButtonTop)
     {
-        // on a list row: wait to see whether it's a tap (on release) or a drag
+        // on a list row: select it now (Mike: the box on the touched row); moving the
+        // finger then scrolls the list under it, the box riding along with its row
         if (!cPatternEditor::keyboardManager.getState() && tapListRow(nx, ny, 0, true))
         {
+            tapListRow(nx, ny);
             listTouch = true;
             listDragging = false;
             listStartX = nx;
@@ -3402,7 +3405,8 @@ void MpcInput::onListDrag(float ny, uint32_t now)
         listDragging = true;
         listStepY = ny;
     }
-    // a row height of finger travel = one row; finger up shows later rows
+    // a row height of finger travel = one row; finger up = the list moves up (later rows
+    // come into view), the selection stays on its row (2026-11-17, Mike: like a phone)
     int rows = (int)((listStepY - ny) / kListRow);
     if (rows)
     {

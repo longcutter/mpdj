@@ -1,3 +1,4 @@
+#include "mpdjListView.h"
 #include "FT812.h"
 #include <stdio.h>
 
@@ -213,6 +214,7 @@ void cList::update()
         API_BLEND_FUNC(SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
     }
 
+    bool mpdjHideBar = mpdjListView(this); // touch scrolling (2026-11-17)
     posY += 4; // top margin
 
     if (list->start == listPosition)
@@ -222,7 +224,7 @@ void cList::update()
         autoRefresh = false;
         highPrioRefresh = false;
 
-        if (!disableBar)
+        if (!disableBar && !mpdjHideBar)
         {
             x_pos = posX + 3;
             y_pos = posY + (barPos * h_row);
@@ -707,3 +709,5 @@ int cList::mpdjRowAt(int x, int y) const
         return -1;
     return textListPos + row;
 }
+
+void cList::mpdjScroll(int rows) { mpdjListScroll(this, rows); }
