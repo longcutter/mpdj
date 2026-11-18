@@ -447,6 +447,8 @@ void checkConfig()
         mtConfig.general.captureTo = 0;
     if (mtConfig.general.padColorMode > 2)
         mtConfig.general.padColorMode = 0;
+    if (mtConfig.general.columnHeadings > 2)
+        mtConfig.general.columnHeadings = 0;
     if (mtConfig.general.padDefaultColor > 17)
         mtConfig.general.padDefaultColor = 17;
 #endif
@@ -633,6 +635,7 @@ void resetConfig()
     mtConfig.general.captureTo = 0;
     mtConfig.general.padColorMode = 0;
     mtConfig.general.padDefaultColor = 17; // Light gray
+    mtConfig.general.columnHeadings = 0;
 #endif
 
     // interface ----------------------------------------

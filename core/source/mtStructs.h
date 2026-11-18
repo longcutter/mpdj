@@ -1238,6 +1238,10 @@ struct strMtConfig
         // palette index, default Light gray), 1 Rainbow, 2 Track (each pad's track color)
         uint8_t padColorMode = 0;
         uint8_t padDefaultColor = 17;
+        // MPDJ (Mike 2026-11-18): Pattern screen track header: 0 = Track name (the Tracker's own:
+        // the name over the grid's top row), 1 = Name + headings (FX1 / FX2 ... beside it, as
+        // 2026-11-16), 2 = Own row (the top row becomes a header: name + every column's heading)
+        uint8_t columnHeadings = 0;
 #endif
     } general;
 

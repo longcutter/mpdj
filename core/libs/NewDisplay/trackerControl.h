@@ -64,6 +64,10 @@ struct strTrackerPattern
     // tells whether 2 / 3 mean Micromove / Volume (the editor's Mic/Vol state)
     uint8_t mpdjSix;
     uint8_t mpdjMicVol;
+    // MPDJ (2026-11-18): Config's track header (0 name, 1 name + headings, 2 own row) and, per
+    // track, whether the own row's Note heading says Slice (a Beat Slice program)
+    uint8_t mpdjHeadRow;
+    uint16_t mpdjSliceHead;
 
     void init()
     {
@@ -109,6 +113,8 @@ struct strTrackerPattern
         showTrackNames = false;
         mpdjSix = 0;
         mpdjMicVol = 0;
+        mpdjHeadRow = 0;
+        mpdjSliceHead = 0;
     }
 };
 
@@ -150,6 +156,7 @@ class cTracker : public cDisplayControl
     void selection();
     void drawRowNumbers(uint16_t* rowNumbers, bool showTrackEndLines);
     void tracksNumbers();
+    void mpdjHeaderRow(); // MPDJ: Config "Track header" Own row
 
     void notes();
     void instruments();
