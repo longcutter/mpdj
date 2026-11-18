@@ -79,7 +79,20 @@ class MpcInput
   public:
     void showVisuals(int kind = -1); // -1: Config's "Screensaver shows"
   private:
-    bool tapListRow(float x, float y);
+    bool tapListRow(float x, float y, int delta = 0, bool dry = false);
+    // touch scrolling (Mike 2026-11-17): a touch that starts on a list row is a tap when it
+    // ends without moving, else a drag: the list follows the finger a row per row height
+    // (finger up = later rows), and a flick glides on and slows down
+    bool touchToTracker(float& nx, float& ny);
+    void onListDrag(float ny, uint32_t now);
+    void pollFling(uint32_t now);
+    bool listTouch = false, listDragging = false;
+    float listStartX = 0, listStartY = 0, listStepY = 0;
+    float flingRowsPerSec = 0, flingAcc = 0;
+    uint32_t flingLastMs = 0;
+    float dragHistY[4] = {};
+    uint32_t dragHistMs[4] = {};
+    int dragHistN = 0;
     void toggleMetronome();
     bool metroPress = false, metroTurned = false; // SHIFT+TAP TEMPO held (2026-11-16)
     void pollSaver();

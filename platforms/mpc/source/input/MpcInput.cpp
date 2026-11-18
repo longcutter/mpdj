@@ -230,6 +230,7 @@ void MpcInput::poll()
     pollButtonLeds();
     pollTapHold();
     pollPlusMinus(platform.getTimer()->millis());
+    pollFling(platform.getTimer()->millis());
     SystemMenu::poll(platform.getTimer()->millis());
     mpdjPadsPoll(); // Note Repeat hits to record (5b-7c)
     trackMute.syncQueued(); // Track Mute changes applied at the bar / pattern (5e-3)
@@ -2779,26 +2780,43 @@ static int keyboardKeyAt(float x, float y)
 // Touch, 2026-11-16 (Mike): a tap on a list row selects it, on the Program Loader
 // (file / slot lists), the File screen (browser / recent) and Config (groups,
 // items, an item's values). The screens' own selection functions do the moving.
-bool MpcInput::tapListRow(float x, float y)
+// delta 0: select the row under (x, y). delta != 0 (a drag, 2026-11-17): the list under
+// (x, y) moves its selection by delta rows (clamped). dry: only say whether a list row
+// is there, change nothing.
+bool MpcInput::tapListRow(float x, float y, int delta, bool dry)
 {
     if (!mpdjOn(MpdjFeature::TapLists))
         return false;
-    auto rowIn = [&](hControl h) {
-        cList* l = (cList*)display.mpdjControl(h);
-        return l ? l->mpdjRowAt((int)x, (int)y) : -1;
+    auto pick = [&](auto* l) {
+        if (!l || !l->list)
+            return -1;
+        int r = l->mpdjRowAt((int)x, (int)y);
+        if (r < 0 || dry)
+            return dry && r >= 0 ? -2 : r; // -2: there's a row (dry run)
+        if (delta)
+        {
+            r = l->list->start + delta;
+            r = r < 0 ? 0 : (r >= l->list->length ? l->list->length - 1 : r);
+        }
+        return r;
     };
+    auto rowIn = [&](hControl h) { return pick((cList*)display.mpdjControl(h)); };
+    // dry: a row is there; any other (r >= 0): do it
+#define MPDJ_ROW(expr) ((r = (expr)) == -2 ? true : r >= 0)
     int r;
     // a program list popup (the step popup's program list, SHIFT held on program screens)
     enumStepPopups sp = mtPopups.getStepPopupState();
     if (sp == stepPopupInstr || sp == stepPopupOnlyMidiInstr || sp == stepPopupOnlySynthAndMidiInstr)
     {
-        if ((r = rowIn(mtPopups.mpdjStepPopupList())) >= 0)
+        if (MPDJ_ROW(rowIn(mtPopups.mpdjStepPopupList())))
         {
+            if (dry)
+                return true;
             mtPopups.setStepPopupValue(r);
             if (trace)
                 printf("input: program list row %d\n", r);
         }
-        return true; // taps elsewhere do nothing while it's up
+        return !dry; // taps elsewhere do nothing while it's up
     }
     cPatternEditor& pe = patternEditor;
     if (mtInterface.isPatternScreenActive() && pe.fillState)
@@ -2807,26 +2825,28 @@ bool MpcInput::tapListRow(float x, float y)
                                     pe.param1PopupListControl, pe.intstrumentsFromPopupListControl,
                                     pe.intstrumentsToPopupListControl };
         for (uint8_t place = 0; place < 6; place++)
-            if (lists[place] >= 0 && (r = rowIn(lists[place])) >= 0)
-                return pe.mpdjTapFillList(place, r), true;
+            if (lists[place] >= 0 && MPDJ_ROW(rowIn(lists[place])))
+                return dry || (pe.mpdjTapFillList(place, r), true);
         return false;
     }
     if (mtInterface.isSampleLoaderScreenActive())
     {
-        if ((r = rowIn(sampleImporter.explorerListControl)) >= 0)
-            return sampleImporter.mpdjTapList(0, r), true;
-        if ((r = rowIn(sampleImporter.instrumentListControl)) >= 0)
-            return sampleImporter.mpdjTapList(1, r), true;
+        if (MPDJ_ROW(rowIn(sampleImporter.explorerListControl)))
+            return dry || (sampleImporter.mpdjTapList(0, r), true);
+        if (MPDJ_ROW(rowIn(sampleImporter.instrumentListControl)))
+            return dry || (sampleImporter.mpdjTapList(1, r), true);
     }
     else if (mtInterface.isFileScreenActive())
     {
-        if ((r = rowIn(projectEditor.fileListControl)) >= 0)
-            return projectEditor.mpdjTapList(0, r), true;
-        if ((r = rowIn(projectEditor.recentListControl)) >= 0)
-            return projectEditor.mpdjTapList(1, r), true;
+        if (MPDJ_ROW(rowIn(projectEditor.fileListControl)))
+            return dry || (projectEditor.mpdjTapList(0, r), true);
+        if (MPDJ_ROW(rowIn(projectEditor.recentListControl)))
+            return dry || (projectEditor.mpdjTapList(1, r), true);
     }
     else if (mtInterface.isSongScreenActive())
     {
+        if (dry || delta)
+            return false; // the Song screen: taps only, no drag (it keeps its own layout)
         cSongPlayer* sp = (cSongPlayer*)display.mpdjControl(songEditor.songPlayerControl);
         if (sp && (r = sp->mpdjRowAt((int)x, (int)y)) >= 0)
             return songEditor.mpdjTapListRow(r), true;
@@ -2836,16 +2856,17 @@ bool MpcInput::tapListRow(float x, float y)
     }
     else if (mtInterface.isConfigScreenActive())
     {
-        if ((r = rowIn(configEditor.configListControl)) >= 0)
-            return configEditor.mpdjTapList(2, r), true;
+        if (MPDJ_ROW(rowIn(configEditor.configListControl)))
+            return dry || (configEditor.mpdjTapList(2, r), true);
         cParamValueList* sub = (cParamValueList*)display.mpdjControl(configEditor.configSubmenuListControl);
-        if (sub && (r = sub->mpdjRowAt((int)x, (int)y)) >= 0)
-            return configEditor.mpdjTapList(1, r), true;
-        if ((r = rowIn(configEditor.configBasemenuListControl)) >= 0)
-            return configEditor.mpdjTapList(0, r), true;
+        if (MPDJ_ROW(pick(sub)))
+            return dry || (configEditor.mpdjTapList(1, r), true);
+        if (MPDJ_ROW(rowIn(configEditor.configBasemenuListControl)))
+            return dry || (configEditor.mpdjTapList(0, r), true);
     }
     return false;
 }
+#undef MPDJ_ROW
 
 void MpcInput::onScreenTap(float x, float y)
 {
@@ -3292,6 +3313,7 @@ void MpcInput::onTouchFrame()
         return;
     }
 
+    uint32_t now = platform.getTimer()->millis();
     if (up)
     {
         if (trace)
@@ -3299,11 +3321,123 @@ void MpcInput::onTouchFrame()
         if (touchedButton >= 0)
             buttons->release(touchedButton);
         touchedButton = -1;
+        if (listTouch)
+        {
+            listTouch = false;
+            if (!listDragging)
+                tapListRow(listStartX, listStartY); // it was a tap: select that row
+            else
+            {
+                // a flick glides on: rows per second from the last moves (finger up = +)
+                flingRowsPerSec = 0;
+                if (dragHistN >= 2)
+                {
+                    int a = (dragHistN - 1) % 4, b = (dragHistN >= 4 ? dragHistN - 4 : 0) % 4;
+                    uint32_t dt = dragHistMs[a] - dragHistMs[b];
+                    if (dt > 0 && now - dragHistMs[a] < 80)
+                        flingRowsPerSec = (dragHistY[b] - dragHistY[a]) / (float)kListRow * 1000.0f / dt;
+                }
+                if (flingRowsPerSec > -6 && flingRowsPerSec < 6)
+                    flingRowsPerSec = 0; // a slow drag just stops
+                flingAcc = 0;
+                flingLastMs = now;
+            }
+            listDragging = false;
+        }
         return;
     }
-    if (!down || !fb || rawMaxX <= rawMinX || rawMaxY <= rawMinY)
+    if (touching && !down && listTouch) // the finger moves on a list
+    {
+        float nx, ny;
+        if (touchToTracker(nx, ny))
+            onListDrag(ny, now);
         return;
+    }
+    if (!down)
+        return;
+    float nx, ny;
+    if (!touchToTracker(nx, ny))
+        return;
+    flingRowsPerSec = 0; // a new touch stops a glide
 
+    int target = -1;
+    if (nx >= 0 && nx < 800 && ny >= kScreenButtonTop && ny < 480)
+        target = interfaceButton0 + (int)(nx / 100.0f);
+
+    if (trace)
+        printf("touch: tracker (%.0f, %.0f) -> button %d\n", nx, ny, target);
+    if (target < 0 && nx >= 0 && nx < 800 && ny >= 0 && ny < kScreenButtonTop)
+    {
+        // on a list row: wait to see whether it's a tap (on release) or a drag
+        if (!cPatternEditor::keyboardManager.getState() && tapListRow(nx, ny, 0, true))
+        {
+            listTouch = true;
+            listDragging = false;
+            listStartX = nx;
+            listStartY = listStepY = ny;
+            dragHistN = 0;
+            return;
+        }
+        onScreenTap(nx, ny);
+        return;
+    }
+    if (target >= 0 && fxListOpen())
+        closeFxList(true); // a screen button while the effect list is open: keep the pick
+    if (target >= 0)
+    {
+        touchedButton = target;
+        buttons->press(target);
+    }
+}
+
+void MpcInput::onListDrag(float ny, uint32_t now)
+{
+    int i = dragHistN++ % 4;
+    dragHistY[i] = ny;
+    dragHistMs[i] = now;
+    if (!listDragging)
+    {
+        if (ny - listStartY < 10 && listStartY - ny < 10)
+            return; // still a tap
+        listDragging = true;
+        listStepY = ny;
+    }
+    // a row height of finger travel = one row; finger up shows later rows
+    int rows = (int)((listStepY - ny) / kListRow);
+    if (rows)
+    {
+        listStepY -= rows * kListRow;
+        tapListRow(listStartX, listStartY, rows);
+        if (trace)
+            printf("touch: list drag %+d\n", rows);
+    }
+}
+
+void MpcInput::pollFling(uint32_t now)
+{
+    if (flingRowsPerSec == 0 || listTouch)
+        return;
+    uint32_t dt = now - flingLastMs;
+    if (dt < 15)
+        return;
+    flingLastMs = now;
+    flingAcc += flingRowsPerSec * dt / 1000.0f;
+    int rows = (int)flingAcc;
+    if (rows)
+    {
+        flingAcc -= rows;
+        tapListRow(listStartX, listStartY, rows);
+    }
+    // slows to a stop in about a second
+    flingRowsPerSec *= (float)__builtin_exp(-3.0 * dt / 1000.0);
+    if (flingRowsPerSec > -1.5f && flingRowsPerSec < 1.5f)
+        flingRowsPerSec = 0;
+}
+
+bool MpcInput::touchToTracker(float& nx, float& ny)
+{
+    if (!fb || rawMaxX <= rawMinX || rawMaxY <= rawMinY)
+        return false;
     // raw -> panel pixels (portrait panel) -> landscape screen -> Tracker 800x480
     float u = (float)(rawX - rawMinX) / (float)(rawMaxX - rawMinX);
     float v = (float)(rawY - rawMinY) / (float)(rawMaxY - rawMinY);
@@ -3319,30 +3453,12 @@ void MpcInput::onTouchFrame()
         v = 1.0f - v;
     int pw = fb->panelWidth(), ph = fb->panelHeight();
     if (pw <= 0 || ph <= 0)
-        return;
+        return false;
     int px = (int)(u * (pw - 1) + 0.5f), py = (int)(v * (ph - 1) + 0.5f);
     int sx, sy;
     fb->panelToScreen(px, py, sx, sy);
-    float nx, ny;
     fb->toNative((float)sx, (float)sy, nx, ny);
-
-    int target = -1;
-    if (nx >= 0 && nx < 800 && ny >= kScreenButtonTop && ny < 480)
-        target = interfaceButton0 + (int)(nx / 100.0f);
-
     if (trace)
-        printf("touch: raw (%d, %d) panel (%d, %d) screen (%d, %d) tracker (%.0f, %.0f) -> button %d\n",
-               rawX, rawY, px, py, sx, sy, nx, ny, target);
-    if (target < 0 && nx >= 0 && nx < 800 && ny >= 0 && ny < kScreenButtonTop)
-    {
-        onScreenTap(nx, ny);
-        return;
-    }
-    if (target >= 0 && fxListOpen())
-        closeFxList(true); // a screen button while the effect list is open: keep the pick
-    if (target >= 0)
-    {
-        touchedButton = target;
-        buttons->press(target);
-    }
+        printf("touch: raw (%d, %d) panel (%d, %d) screen (%d, %d)\n", rawX, rawY, px, py, sx, sy);
+    return true;
 }
