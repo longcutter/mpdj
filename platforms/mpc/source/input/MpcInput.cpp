@@ -724,7 +724,9 @@ void MpcInput::pollPadLights()
         float k = base + (top - base) * level;
         // Notes mode: roots red, the other notes white, not the pad's color;
         // 16 Levels: the source's track color (Mike 2026-11-14)
-        const uint8_t* c = notes ? kNoteWhite : levels ? kPadPalette[t & 15] : padColorRgb(pad, t);
+        // the slice layer: every pad in the source pad's color (Mike's test 2026-11-17)
+        int colorPad = slices && mpdjSliceLayerPad() >= 0 ? mpdjSliceLayerPad() : pad;
+        const uint8_t* c = notes ? kNoteWhite : levels ? kPadPalette[t & 15] : padColorRgb(colorPad, t);
         if (notes && slot.note >= 0 && slot.note % 12 == rootPc)
             c = kRootRed;
         if (levels && level == 0)
