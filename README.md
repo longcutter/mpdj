@@ -35,12 +35,12 @@
     <td width="50%"><img src="docs/images/track-mute.png" alt="Track Mute screen"></td>
   </tr>
   <tr>
-    <td align="center"><sub>MPC-style slicing: a loop cut into 16 slices, played from the pads</sub></td>
+    <td align="center"><sub>Manual slicing: a keys phrase sliced on the pads while it plays</sub></td>
     <td align="center"><sub>Track Mute: 16 tracks on the 16 pads</sub></td>
   </tr>
 </table>
 
-<sub>Screenshots from MPDJ's own renderer at the MPC's 1280x800 resolution, with the MPDJ Kit and a drum loop made from it.</sub>
+<sub>Screenshots from MPDJ's own renderer at the MPC's 1280x800 resolution, with the MPDJ Kit and a keys phrase.</sub>
 
 ## Status
 
