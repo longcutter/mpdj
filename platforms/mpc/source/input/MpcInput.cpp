@@ -231,6 +231,7 @@ void MpcInput::poll()
     pollTapHold();
     pollPlusMinus(platform.getTimer()->millis());
     pollFling(platform.getTimer()->millis());
+    pollPowerButton();
     SystemMenu::poll(platform.getTimer()->millis());
     mpdjPadsPoll(); // Note Repeat hits to record (5b-7c)
     trackMute.syncQueued(); // Track Mute changes applied at the bar / pattern (5e-3)
@@ -3230,6 +3231,38 @@ void MpcInput::pollButtonLeds()
     // dark when empty (Mike 2026-11-12)
     set(12, mpdjTcOn() ? Lit::Active : Lit::NotAvailable); // TC: lit while on, dark when off
     set(41, stepSeq ? Lit::Active : (mtInterface.isPatternScreenActive() ? Lit::Available : Lit::NotAvailable)); // STEP SEQ (5f-4)
+}
+
+// ---------------------------------------------------------------- power button
+// The MPC's power button is gpio-keys KEY_POWER on /dev/input/event1 (MPC Linux notes).
+// With MPDJ started at boot instead of the MPC app (2026-11-17) it opens the System menu
+// on Power off: ENCODER PUSH or the power button again turns the MPC off.
+void MpcInput::pollPowerButton()
+{
+    if (powerFd == -2)
+    {
+        const char* dev = envStr("MPDJ_POWER_DEV", "/dev/input/event1");
+        powerFd = dev[0] == '0' ? -1 : ::open(dev, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+        if (powerFd >= 0)
+            printf("input: power button on %s\n", dev);
+    }
+    if (powerFd < 0)
+        return;
+    input_event ev[8];
+    for (;;)
+    {
+        ssize_t n = read(powerFd, ev, sizeof ev);
+        if (n <= 0)
+            break;
+        for (int i = 0; i < (int)(n / (ssize_t)sizeof(input_event)); i++)
+            if (ev[i].type == EV_KEY && ev[i].code == KEY_POWER && ev[i].value == 1)
+            {
+                wake();
+                SystemMenu::powerButton();
+                if (trace)
+                    printf("input: power button\n");
+            }
+    }
 }
 
 // ---------------------------------------------------------------- touchscreen
