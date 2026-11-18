@@ -537,7 +537,24 @@ void MpcInput::openPadLeds()
     if (ctl >= 0)
         ::close(ctl);
     if (padLedFd < 0)
+    {
         printf("input: pad lights: can't open %s (Public): %s\n", dev, strerror(errno));
+        return;
+    }
+    // At power-on the controller is in Public mode: only PLAY reaches the
+    // Private port. The MPC app switches it to Private mode at launch; when
+    // MPDJ starts at boot the app is stopped before it does, so MPDJ sends the
+    // switch itself (harmless when it's already Private). Confirmed by Mike
+    // 2026-11-17 (the Studio Black doc lists 61 for its Private mode; the
+    // One+ takes 65, as the MPC Live in TheKikGen's dump). MPDJ_PRIVATE_MODE=0 skips it
+    if (envStr("MPDJ_PRIVATE_MODE", "1")[0] != '0')
+    {
+        const uint8_t m[] = { 0xF0, 0x47, 0x7F, 0x56, 0x62, 0x00, 0x01, 0x65, 0xF7 };
+        if (write(padLedFd, m, sizeof m) == (ssize_t)sizeof m)
+            printf("input: controller set to Private mode\n");
+        else
+            printf("input: Private mode SysEx failed: %s\n", strerror(errno));
+    }
 }
 
 void MpcInput::setPadLed(int pad, uint8_t r, uint8_t g, uint8_t b)
