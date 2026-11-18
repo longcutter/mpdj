@@ -1,10 +1,46 @@
-<p align="center"><img src="docs/mpdj-logo.png" alt="MPDJ logo" width="320"></p>
+<p align="center"><img src="docs/mpdj-logo.png" alt="MPDJ" width="320"></p>
 
-# MPDJ
+<p align="center"><b>A tracker that runs natively on the Akai MPC One+</b></p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/hardware-MPC%20One%2B-4a4a4a?style=flat-square" alt="Hardware: MPC One+">
+  <img src="https://img.shields.io/badge/MPC%20firmware-2.14-4a4a4a?style=flat-square" alt="MPC firmware 2.14">
+  <img src="https://img.shields.io/badge/status-early%20development-4a4a4a?style=flat-square" alt="Status: early development">
+  <img src="https://img.shields.io/badge/price-free-4a4a4a?style=flat-square" alt="Free">
+</p>
+
+<p align="center">
+  <a href="#status">Status</a> ·
+  <a href="#requirements">Requirements</a> ·
+  <a href="#build">Build</a> ·
+  <a href="#install-and-run">Install</a> ·
+  <a href="#license">License</a>
+</p>
 
 **MPDJ** (MPDJ Tracker) runs a tracker natively on the **Akai MPC One+**, in place of the MPC app. It is a port of [Polyend Tracker Community Edition](https://github.com/polyend/tracker-ce) to the MPC's Linux system: the tracker's sequencer, sample engine and screens, driven by the MPC's pads, Q-Link knobs, buttons, touchscreen and audio interface.
 
 > **Unofficial and free.** MPDJ is a hobby project. It is not made, endorsed or supported by Polyend, Akai Professional or inMusic. "Polyend" and "Polyend Tracker" are Polyend's trademarks; "MPC" and "Akai Professional" belong to inMusic Brands. MPDJ is free and will never be sold (see [License](#license)).
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/pattern.png" alt="Pattern screen in the six-column view"></td>
+    <td width="50%"><img src="docs/images/pad-assign.png" alt="Pad Assign screen"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>The Pattern screen: note, program, volume, micromove and two effects per track</sub></td>
+    <td align="center"><sub>Pad Assign: each pad's program, track, mode, choke group and color</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/slicing.png" alt="Slicing a drum loop on the Sample Playback screen"></td>
+    <td width="50%"><img src="docs/images/track-mute.png" alt="Track Mute screen"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>MPC-style slicing: a loop cut into 16 slices, played from the pads</sub></td>
+    <td align="center"><sub>Track Mute: 16 tracks on the 16 pads</sub></td>
+  </tr>
+</table>
+
+<sub>Screenshots from MPDJ's own renderer at the MPC's 1280x800 resolution, with the MPDJ Kit and a drum loop made from it.</sub>
 
 ## Status
 
