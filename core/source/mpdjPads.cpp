@@ -987,6 +987,28 @@ const char* mpdjCapture()
 
 static char s_toBankMsg[40];
 
+int mpdjSliceLayerToBankConflicts(int layerBank, int bank)
+{
+    if (!s_sliceMode || s_slicePad < 0 || bank < 0 || bank >= kPads / kPadsPerBank)
+        return 0;
+    const strPadSlot src = *padSlot(s_slicePad);
+    if (src.program >= kProgramSlots)
+        return 0;
+    int first = layerBank * kPadsPerBank, n = 0;
+    for (int i = 0; i < kPadsPerBank && first + i < mtProject.instrument[src.program].sliceNumber; i++)
+    {
+        int dst = bank * kPadsPerBank + i;
+        if (dst == s_slicePad)
+            n++; // the source pad itself would change
+        else if (const strPadSlot* p = padSlot(dst))
+            if (p->program != kPadNoProgram && p->program < kProgramSlots &&
+                programType(p->program) != kProgramEmpty &&
+                !(p->program == src.program && padSlice(dst) == first + i))
+                n++;
+    }
+    return n;
+}
+
 const char* mpdjSliceLayerToBank(int layerBank, int bank)
 {
     if (!s_sliceMode || s_slicePad < 0 || bank < 0 || bank >= kPads / kPadsPerBank)

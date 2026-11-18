@@ -1016,7 +1016,23 @@ void MpcInput::onButton(uint8_t note, bool down)
         mtInterface.isPatternScreenActive())
     {
         // COPY + BANK in the slice layer (2026-11-16): the shown 16 slices onto that bank
-        // as pads with the source pad's settings; the layer ends on that bank
+        // as pads with the source pad's settings; the layer ends on that bank. Pads there
+        // with other programs: the first press asks, a second one within 4 s does it (Mike
+        // 2026-11-17: no warning before)
+        int bank = note - kNoteBankA;
+        uint32_t now = platform.getTimer()->millis();
+        int conflicts = mpdjSliceLayerToBankConflicts(padBank, bank);
+        if (conflicts && !(toBankAsked == bank && now - toBankAskedMs < 4000))
+        {
+            static char ask[64];
+            snprintf(ask, sizeof ask, "%d pad%s on bank %c have programs", conflicts, conflicts == 1 ? "" : "s",
+                     'A' + bank);
+            mtPopups.show(0, ask, "COPY + BANK again to replace them", 4);
+            toBankAsked = bank;
+            toBankAskedMs = now;
+            return;
+        }
+        toBankAsked = -1;
         strPadMap before = mtProject.pads;
         if (const char* msg = mpdjSliceLayerToBank(padBank, note - kNoteBankA))
         {

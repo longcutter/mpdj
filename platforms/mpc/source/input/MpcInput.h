@@ -101,6 +101,8 @@ class MpcInput
     bool visualsOnDemand = false;
     bool swallowNote[128] = {};
     bool swallowTouch = false;
+    int toBankAsked = -1; // slice layer COPY + BANK: the bank asked about (second press does it)
+    uint32_t toBankAskedMs = 0;
     // + and - (notes 54 / 55; 2026-11-16): held together ~1.5 s = the System menu. A press
     // waits kPlusMinusWaitMs for the other before doing its own job (insert / remove)
     void plusMinus(uint8_t note, bool down);
