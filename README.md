@@ -12,11 +12,16 @@ Early and in active development. On an MPC One+ it currently:
 
 - boots the tracker full screen (1280x800, the Tracker's UI scaled up), on the MPC's own sound card at 44.1 kHz with ~7 ms round trip
 - plays and edits patterns and songs, loads and plays samples from the SD card (including long streamed ones), takes audio from the MPC's inputs
-- maps the MPC's controls: pads, transport and mode buttons, the four Q-Links (navigation and value modes, per-screen knobs on Sample Playback and the Sample Editor), the main encoder and the touchscreen, with Q-Link LEDs following the mode
+- has 64 program slots (sample or MIDI) and 16 equal tracks, each with its own sample voice
+- plays MPC-style pads: 4 banks of 16 pads, each mapped to a program and a track, velocity-sensitive with pad lights and colors; live and step recording, OVER DUB, ERASE + pad, Note Repeat, 16 Levels, Notes mode, Full Level, timing correct, choke groups, STEP SEQ
+- has its own screens for Pad Assign and Track Mute, MPC-style slicing (manual, auto, evenly, by beats) with a slice layer on the pads, Loop Sync, kits (load and save a bank's sounds and pad settings), global swing and a six-column Pattern view
+- maps the MPC's controls: transport and mode buttons with LEDs, the four Q-Links (navigation and value modes, per-screen knobs on waveform screens), the main encoder and the touchscreen
 
-Planned: MPC-style pads mapped to tracks, open-source synth engines, insert effects, recording while the pattern plays, external resampling through pedals, USB audio to a computer, and "sideloads" (separate programs such as norns started from MPDJ). MPDJ still uses the Tracker's project format, so Tracker and Tracker+ projects should open as they are (not widely tested yet); as MPDJ's own format grows it will keep a one-way import.
+Planned: open-source synth engines, insert effects, recording while the pattern plays, external resampling through pedals, USB audio to a computer, starting at power-on, and "sideloads" (separate programs started from MPDJ).
 
-Polyend's factory synth engines are closed binaries for the Tracker's chip and are not part of MPDJ, so tracks using them stay silent; sample and MIDI tracks work.
+MPDJ saves projects in its own format. Tracker and Tracker+ projects can be opened (a one-way import: samples go to program slots 1-48, MIDI instruments to 49-64), but projects saved by MPDJ don't open on a Tracker.
+
+Polyend's factory synth engines are closed binaries for the Tracker's chip and are not part of MPDJ.
 
 ## Requirements
 
@@ -56,7 +61,11 @@ Ctrl+C quits. Start the MPC app again with `ssh mpc 'systemctl start inmusic-mpc
 
 - `mpc-port` (default branch): MPDJ. The MPC platform layer is in `platforms/mpc/`; changes to the shared tracker code are kept small and marked `MPDJ` or `PLATFORM_MPC`
 - `main`: Polyend's Tracker CE as forked; upstream changes are reviewed and merged into `mpc-port` by hand
-- Polyend's original README: [`docs/README-tracker-ce.md`](docs/README-tracker-ce.md); the Tracker CE developer docs are in `docs/`
+- Polyend's original README and changelog: [`docs/README-tracker-ce.md`](docs/README-tracker-ce.md), [`docs/CHANGELOG-tracker-ce.md`](docs/CHANGELOG-tracker-ce.md); the Tracker CE developer docs are in `docs/`
+
+## Feedback and contributing
+
+Found a bug? Open an [issue](../../issues/new/choose) with the bug template. Questions, ideas and show-and-tell go to [Discussions](../../discussions). MPDJ is a one-person hobby project, so replies can take a while; see [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a pull request.
 
 ## License
 

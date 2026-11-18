@@ -2,7 +2,7 @@
 
 Welcome to the official documentation for **Polyend Tracker Community Edition (CE)** (`1.0.0`), covering the **Original Polyend Tracker** (`MK66`), **Polyend Tracker+** and **Polyend Tracker Mini** (`IMX`).
 
-* **[Release Changelog (`CHANGELOG.md`)](../CHANGELOG.md)** - Full list of new features, improvements, and fixes in each release.
+* **[Release Changelog (`CHANGELOG.md`)](CHANGELOG-tracker-ce.md)** - Full list of new features, improvements, and fixes in each release.
 
 ---
 

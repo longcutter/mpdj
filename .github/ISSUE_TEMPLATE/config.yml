@@ -1,14 +1,8 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Feature Requests & Ideas
-    url: https://github.com/polyend/tracker-ce/discussions/categories/feature-requests-ideas
-    about: Propose and discuss new features, workflow enhancements, synth engines, or .ptfx effects in GitHub Discussions.
-  - name: Polyend Backstage Community Forum
-    url: https://backstage.polyend.com/
-    about: Discuss Tracker CE workflows, share custom themes/fonts/.ptfx plugins, and ask general questions on Polyend Backstage.
-  - name: The Tracker Overflow (Unofficial Discord)
-    url: https://discord.com/invite/uEPTnwckJV
-    about: Join the unofficial Polyend Tracker Discord where users and developers can connect and find like-minded people.
-  - name: Developer Documentation & Hardware Limits
-    url: https://github.com/polyend/tracker-ce#documentation--developer-guides
-    about: Read the Memory Budget, Open Synth SDK, and .ptfx Plugin documentation in README.md and docs/.
+  - name: Questions, ideas and feature requests
+    url: https://github.com/longcutter/mpdj/discussions
+    about: Ask a question, suggest a feature or share what you made in MPDJ's Discussions.
+  - name: MPC Linux notes
+    url: https://github.com/longcutter/mpc-linux-notes
+    about: What's known about the MPC One+'s hardware and system (audio, controller MIDI, LEDs, display, USB).

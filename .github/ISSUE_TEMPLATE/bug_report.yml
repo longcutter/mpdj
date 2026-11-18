@@ -1,57 +1,60 @@
-name: Bug Report
-description: Report a reproducible bug on Original Tracker, Tracker+, or Tracker Mini
+name: Bug report
+description: Something in MPDJ doesn't work as it should, and you can make it happen again
 title: "[Bug]: "
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting an issue in **Polyend Tracker CE**! Please fill out the details below so contributors can reproduce and fix it.
-
-  - type: checkboxes
-    id: devices
-    attributes:
-      label: Affected Device(s)
-      description: On which hardware device(s) did you observe this bug?
-      options:
-        - label: Original Polyend Tracker (MK66)
-        - label: Polyend Tracker+ (IMX)
-        - label: Polyend Tracker Mini (IMX)
-    validations:
-      required: true
+        Thanks for the report. MPDJ is a one-person hobby project, so a fix may take a while.
+        Questions and ideas go to [Discussions](https://github.com/longcutter/mpdj/discussions) instead.
 
   - type: input
     id: version
     attributes:
-      label: Firmware Version & Build
-      description: Check **Config > Firmware** on your device (e.g. `CE 1.0.0`, Build `7f3a9c1`).
-      placeholder: "CE 1.0.0 (Build 7f3a9c1)"
+      label: MPDJ version
+      description: The commit or branch you built, or the sha256 of the binary (`shasum -a 256 tracker-mpc` on a Mac, `sha256sum tracker-mpc` on Linux).
+      placeholder: "mpc-port 3a62bf1"
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: MPC model and firmware
+      placeholder: "MPC One+, firmware 2.14"
     validations:
       required: true
 
   - type: textarea
-    id: description
+    id: what
     attributes:
-      label: Bug Description
-      description: A clear and concise description of what happens vs. what you expected to happen.
+      label: What happened, and what you expected
     validations:
       required: true
 
   - type: textarea
     id: steps
     attributes:
-      label: Steps to Reproduce
-      description: Exact step-by-step instructions to trigger the bug on hardware.
-      value: |
-        1. Go to '...'
-        2. Press '...'
-        3. Turn encoder / play pattern '...'
-        4. Observe '...'
+      label: Steps to make it happen
+      description: Start from a known state (for example "new project, MPDJ Kit loaded into slots 1-16").
+      placeholder: |
+        1.
+        2.
+        3.
     validations:
       required: true
 
   - type: textarea
-    id: context
+    id: log
     attributes:
-      label: Additional Context / Project or Sample Files
-      description: Attach a minimal `.mt` project, `.pti` instrument, `.ptfx` plugin, or photo/video if helpful.
+      label: Log
+      description: |
+        The terminal output if you ran MPDJ over SSH, or `journalctl -u mpdj -b` if it started at power-on. After a crash, the lines starting with `MPDJ CRASH` matter most.
+      render: text
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Photos of the screen, the project or sample that triggers it, how often it happens.

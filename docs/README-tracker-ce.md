@@ -9,7 +9,7 @@ Built directly from the original Polyend firmware source code, Tracker CE opens 
 See [Releases](https://github.com/polyend/tracker-ce/releases) for the latest downloads for all devices.
 
 ### What's New:
-See [`CHANGELOG.md`](CHANGELOG.md) for the full list of new features and improvements.
+See [`CHANGELOG-tracker-ce.md`](CHANGELOG-tracker-ce.md) for the full list of new features and improvements.
 
 ---
 
