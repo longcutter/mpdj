@@ -1,3 +1,4 @@
+#include "mpdjListView.h"
 #include "FT812.h"
 
 #include "display.h"
@@ -217,6 +218,7 @@ void cParamValueList::update()
         API_BLEND_FUNC(SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
     }
 
+    bool mpdjHideBar = mpdjListView(this); // touch scrolling (2026-11-17)
     posY += 4;
 
     if (list->start == listPosition)
@@ -225,7 +227,7 @@ void cParamValueList::update()
         listAnimationStep = 0;
         highPrioRefresh = false;
 
-        if (!disableBar)
+        if (!disableBar && !mpdjHideBar)
         {
             // x_pos = posX+3;
             y_pos = posY + (barPos * h_row);
@@ -519,3 +521,5 @@ int cParamValueList::mpdjRowAt(int x, int y) const
         return -1;
     return textListPos + row;
 }
+
+void cParamValueList::mpdjScroll(int rows) { mpdjListScroll(this, rows); }
