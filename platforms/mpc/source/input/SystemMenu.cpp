@@ -82,7 +82,8 @@ void show()
     }
     snprintf(s_line[2], sizeof s_line[2], "%s", detail);
     if (s_armed == s_item)
-        snprintf(s_line[3], sizeof s_line[3], "Push again to %s", s_item == kSwitch ? "switch" : "power off");
+        snprintf(s_line[3], sizeof s_line[3], "Push %s to %s", s_item == kSwitch ? "again" : "(or power) again",
+                 s_item == kSwitch ? "switch" : "power off");
     else
         snprintf(s_line[3], sizeof s_line[3], "Encoder: choose   Push: do   Button: close");
     mtPopups.show(0, s_line[0], s_line[1], s_line[2], s_line[3], 60);
@@ -134,6 +135,20 @@ void open()
     show();
 }
 
+void powerButton()
+{
+    if (s_open && s_item == kPowerOff && s_armed == kPowerOff)
+    {
+        leave(Exit::PowerOff); // pressed again
+        return;
+    }
+    s_open = true;
+    s_item = kPowerOff;
+    s_armed = kPowerOff;
+    s_armedMs = s_now;
+    show();
+}
+
 void close()
 {
     if (!s_open)
@@ -165,7 +180,7 @@ void push()
             return;
         case kSwitch:
         case kPowerOff:
-            if (s_armed == s_item && s_now - s_armedMs < 3000)
+            if (s_armed == s_item && s_now - s_armedMs < 5000)
             {
                 leave(s_item == kSwitch ? Exit::SwitchToMpc : Exit::PowerOff);
                 return;
@@ -199,7 +214,7 @@ void poll(uint32_t nowMs)
     }
     if (!s_open)
         return;
-    if (s_armed >= 0 && nowMs - s_armedMs >= 3000)
+    if (s_armed >= 0 && nowMs - s_armedMs >= 5000)
     {
         s_armed = -1;
         show();

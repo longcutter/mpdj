@@ -86,6 +86,8 @@ class MpcInput
     bool touchToTracker(float& nx, float& ny);
     void onListDrag(float ny, uint32_t now);
     void pollFling(uint32_t now);
+    void pollPowerButton(); // KEY_POWER on /dev/input/event1 (MPDJ_POWER_DEV; 0 = off)
+    int powerFd = -2;      // -2: not opened yet
     bool listTouch = false, listDragging = false;
     float listStartX = 0, listStartY = 0, listStepY = 0;
     float flingRowsPerSec = 0, flingAcc = 0;

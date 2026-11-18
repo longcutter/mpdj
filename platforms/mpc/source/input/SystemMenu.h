@@ -17,6 +17,9 @@ void setExecutable(const char* path, char** argv);
 
 bool isOpen();
 void open();
+// the power button (2026-11-17): the menu on Power off, armed (ENCODER PUSH or the power
+// button again turns the MPC off; anything else closes it)
+void powerButton();
 void close();
 void turn(int dir);
 void push();
