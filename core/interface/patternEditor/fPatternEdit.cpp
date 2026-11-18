@@ -526,6 +526,30 @@ void cPatternEditor::refreshPattern()
     trackerPattern.mpdjSix = mpdjSixView && patternViewMode == 0;
     trackerPattern.mpdjMicVol = isMicVolView;
     display.setControlValue(patternControl, patternViewMode); // the grid follows Config's view too
+    // MPDJ (Mike 2026-11-18): column headings in their own row (Config > General "Track
+    // header" Own row); the Note column's heading says Slice on a track whose program is Beat Slice
+    // (its note picks the slice): the program of the nearest note at or above the cursor /
+    // playhead row, else the first one below it
+    trackerPattern.mpdjHeadRow = mtConfig.general.columnHeadings;
+    trackerPattern.mpdjSliceHead = 0;
+    if (trackerPattern.mpdjHeadRow == 2)
+    {
+        int len = seq->track[0].length + 1;
+        int at = trackerPattern.actualStep < len ? trackerPattern.actualStep : len - 1;
+        for (int t = 0; t < kAllTracks; t++)
+        {
+            int program = -1;
+            for (int r = at; r >= 0 && program < 0; r--)
+                if (seq->track[t].step[r].note >= 0)
+                    program = seq->track[t].step[r].instrument;
+            for (int r = at + 1; r < len && program < 0; r++)
+                if (seq->track[t].step[r].note >= 0)
+                    program = seq->track[t].step[r].instrument;
+            if (program >= 0 && isSampleInstrument(program) &&
+                mtProject.instrument[program].playMode == playModeBeatSlice)
+                trackerPattern.mpdjSliceHead |= (uint16_t)(1u << t);
+        }
+    }
 #endif
 
     //----------------------------------------------------------------------------

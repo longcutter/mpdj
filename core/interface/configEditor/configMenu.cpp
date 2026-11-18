@@ -25,7 +25,7 @@ constexpr uint8_t generalMenuGroupCount = 9;
 #elif defined(PLATFORM_MPC) // no USB group (USB storage / USB audio are Tracker+ hardware)
 constexpr uint8_t baseMenuGroupCount = MPDJ_QLINK_MODE4 ? 8 : 7; // + Display (2026-11-16), + Q-Links while mode 4 is on
 constexpr uint8_t projectMenuGroupCount = 10;
-constexpr uint8_t generalMenuGroupCount = 24; // MPC list: 24 items (+ Pad colors, Pad default color 2026-11-16) (+ Capture to 2026-11-16) (Display brightness moved to Display 2026-11-16) (no Radio region / Pads brightness since the Config clean-up; + Pattern view, 8-track column 2026-11-16); must equal the items below, extra items are silently dropped
+constexpr uint8_t generalMenuGroupCount = 25; // MPC list: 25 items (+ Track header 2026-11-18) (+ Pad colors, Pad default color 2026-11-16) (+ Capture to 2026-11-16) (Display brightness moved to Display 2026-11-16) (no Radio region / Pads brightness since the Config clean-up; + Pattern view, 8-track column 2026-11-16); must equal the items below, extra items are silently dropped
 #elif defined(PLATFORM_IMX)
 constexpr uint8_t baseMenuGroupCount = 7;
 constexpr uint8_t projectMenuGroupCount = 10;
@@ -205,6 +205,9 @@ const strItemTypeListText setupPatternView{ &mtConfig.general.patternDefaultView
 cMenuItem melPatternView(menuGeneral, "Pattern view", patternViewDesc, menuTypeItemListText, &setupPatternView);
 const strItemTypeListText setupEightColumn{ &mtConfig.general.eightViewColumn, 5, eightColumnTexts };
 cMenuItem melEightColumn(menuGeneral, "8-track column", eightColumnDesc, menuTypeItemListText, &setupEightColumn);
+// MPDJ (Mike 2026-11-18): the track header: the Tracker's name only, name + headings, or its own row
+const strItemTypeListText setupColumnHeadings{ &mtConfig.general.columnHeadings, 3, columnHeadingsTexts };
+cMenuItem melColumnHeadings(menuGeneral, "Track header", columnHeadingsDesc, menuTypeItemListText, &setupColumnHeadings);
 const strItemTypeListText setupCaptureTo{ &mtConfig.general.captureTo, 2, captureToTexts };
 cMenuItem melCaptureTo(menuGeneral, "Capture to", captureToDesc, menuTypeItemListText, &setupCaptureTo);
 const strItemTypeListTextWithAction setupMpdjBrightness{ &mtConfig.general.brightness, 10, mpdjBrightnessTexts, setDisplayBrightness };
