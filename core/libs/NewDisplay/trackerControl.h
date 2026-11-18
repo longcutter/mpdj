@@ -156,7 +156,8 @@ class cTracker : public cDisplayControl
     void selection();
     void drawRowNumbers(uint16_t* rowNumbers, bool showTrackEndLines);
     void tracksNumbers();
-    void mpdjHeaderRow(); // MPDJ: Config "Track header" Own row
+    void mpdjHeaderBand();     // MPDJ: Config "Track header" Own row: the two header rows
+    void mpdjHeaderHeadings(); // ... and the column headings in the second
 
     void notes();
     void instruments();

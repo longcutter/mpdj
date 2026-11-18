@@ -1026,11 +1026,9 @@ void cTracker::tracksNumbers()
     {
         return;
     }
-    if (tracks->mpdjHeadRow == 2 && (paramCount == 4 || paramCount == 6))
-    {
-        mpdjHeaderRow();
-        return;
-    }
+    const bool ownRow = tracks->mpdjHeadRow == 2 && (paramCount == 4 || paramCount == 6);
+    if (ownRow)
+        mpdjHeaderBand();
 
     int16_t x, y, w, h;
     w = 24;
@@ -1141,20 +1139,21 @@ void cTracker::tracksNumbers()
 
     API_END();
     API_RESTORE_CONTEXT();
+
+    if (ownRow)
+        mpdjHeaderHeadings();
 }
 
 //-------------------------------------------------------------------------------------
-// MPDJ (Mike 2026-11-18): Config > General "Track header" Own row: the grid's top row
-// becomes a header band (drawn over that row, so the pattern shows one row fewer): the track
-// name on a first line, every column's heading on a second, both in the 12 px font. The Note
-// heading says Slice on a track playing a Beat Slice program (tracks->mpdjSliceHead)
-void cTracker::mpdjHeaderRow()
+// MPDJ (Mike 2026-11-18): Config > General "Track header" Own row: the grid's top two rows
+// become the header (the pattern shows two rows fewer): the first row is the Tracker's own
+// track name, the second every column's heading (Not / Sli, Pgm, Vol, Mov, FX1, FX2). Mike:
+// no text smaller than the screen buttons' (their titles: the 14 px font, fonts[2]); the
+// headings use it (the 17 px step font made Pgm and FX1 touch in the 4-column view). "Sli"
+// on a track whose program is Beat Slice (tracks->mpdjSliceHead)
+void cTracker::mpdjHeaderBand()
 {
-    const strFont* small = &fonts[4];
-    const int top = posY, h = stepHight;
-    const int nameY = top + 6, headY = top + h - 6;
-
-    // the band, over the top row; the track lines go back on top of it
+    const int top = posY, h = 2 * stepHight;
     API_COLOR(colors[1]);
     API_LINE_WIDTH(16);
     API_BEGIN(RECTS);
@@ -1173,46 +1172,18 @@ void cTracker::mpdjHeaderRow()
     API_VERTEX2F(posX + 1, top + h - 1);
     API_VERTEX2F(width - 2, top + h - 1);
     API_END();
+}
 
-    // name boxes, as the Tracker's (colors 19, muted 12), sized for the small font
-    int letters[8];
-    API_LINE_WIDTH(16);
-    API_BEGIN(RECTS);
-    for (uint8_t i = 0; i < columnsCount && i < 8; i++)
-    {
-        int trackIdx = tracks->firstVisibleTrack + i;
-        const char* text = mpdjTrackLabel(trackIdx);
-        int n = strlen(text);
-        int w = getTextWidth((strFont*)small, text, n);
-        while (w > tracksWidth - 8 && n > 1)
-            w = getTextWidth((strFont*)small, text, --n);
-        letters[i] = n;
-        API_COLOR(tracks->inactive[trackIdx] ? colors[12] : colors[19]);
-        int x = rightOffset + i * tracksWidth + 1;
-        API_VERTEX2F(x, top + 1);
-        API_VERTEX2F(x + w + 4, top + 12);
-    }
-    API_END();
-
-    API_SAVE_CONTEXT();
-    lastFontHandle = -1;
-    s_lastCell = -1;
-    API_BEGIN(BITMAPS);
-    actualColor = colors[0];
-    lastFontColor = actualColor + 1; // forces the color into the list
-    for (uint8_t i = 0; i < columnsCount && i < 8; i++)
-    {
-        int trackIdx = tracks->firstVisibleTrack + i;
-        // String2Bitmaps moves text right by (text font - this font) widths: take it back
-        int x = rightOffset + i * tracksWidth + 3 - (fonts[1].width - small->width);
-        String2Bitmaps(x, nameY, small, (char*)mpdjTrackLabel(trackIdx), letters[i]);
-    }
+void cTracker::mpdjHeaderHeadings()
+{
+    const strFont* hf = &fonts[2]; // the screen buttons' title size
+    const int y = posY + stepHight + 12; // as the cells' text in the second row
 
     const char* heads[6];
     int headX[6], n = 0;
     if (paramCount == 6)
     {
-        static const char* const kSix[6] = { "Note", "Pgm", "Vol", "Mov", "FX1", "FX2" };
+        static const char* const kSix[6] = { "Not", "Pgm", "Vol", "Mov", "FX1", "FX2" };
         for (; n < 6; n++)
         {
             heads[n] = kSix[n];
@@ -1221,23 +1192,29 @@ void cTracker::mpdjHeaderRow()
     }
     else
     {
-        heads[0] = "Note";
+        heads[0] = "Not";
         heads[1] = "Pgm";
         heads[2] = tracks->mpdjMicVol ? "Mov" : "FX1";
         heads[3] = tracks->mpdjMicVol ? "Vol" : "FX2";
         for (; n < 4; n++)
             headX[n] = fourParamsOffset[n];
     }
+    API_SAVE_CONTEXT();
+    lastFontHandle = -1;
+    s_lastCell = -1;
+    API_BEGIN(BITMAPS);
     actualColor = colors[16];
+    lastFontColor = actualColor + 1; // forces the color into the list
     for (uint8_t i = 0; i < columnsCount && i < 8; i++)
     {
         int trackIdx = tracks->firstVisibleTrack + i;
         bool slice = trackIdx < 16 && (tracks->mpdjSliceHead >> trackIdx) & 1;
-        int base = rightOffset + i * tracksWidth - (fonts[1].width - small->width); // as the name
+        // String2Bitmaps moves text right by (step font - this font) widths: take it back
+        int base = rightOffset + i * tracksWidth - (fonts[1].width - hf->width);
         for (int k = 0; k < n; k++)
         {
-            const char* text = (k == 0 && slice) ? "Slice" : heads[k];
-            String2Bitmaps(base + headX[k], headY, small, (char*)text, strlen(text));
+            const char* text = (k == 0 && slice) ? "Sli" : heads[k];
+            String2Bitmaps(base + headX[k], y, hf, (char*)text, strlen(text));
         }
     }
     API_END();
