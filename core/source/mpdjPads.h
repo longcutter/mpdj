@@ -240,6 +240,8 @@ const char* mpdjSliceLayerToggle(int pad);
 void mpdjSliceLayerSet(bool on);
 bool mpdjSliceLayerOn();
 int mpdjSliceLayerPad(); // the source pad-map pad
+// how many pads COPY + BANK would write over that hold another program now (2026-11-17)
+int mpdjSliceLayerToBankConflicts(int layerBank, int bank);
 bool mpdjNotesOn();
 int mpdjNotesNote(int pad);
 bool mpdjNotesSource(strPadSlot* out); // false: nothing to play
