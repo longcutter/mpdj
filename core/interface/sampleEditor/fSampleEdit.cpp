@@ -1301,6 +1301,28 @@ void cSampleEditor::resetZoom()
     needRefreshSpectrum = 1;
 }
 
+// MPDJ (Mike 2026-11-22): a touch on a row of the effect list selects the list (as the
+// list's up / down keys do) and that effect (modSelectedEffect, in its +-5 steps)
+void cSampleEditor::mpdjTapEffect(int row)
+{
+    if (screenType != mainScreen || row < 0)
+        return;
+    if (selectedPlace[mainScreen] != effectButton)
+    {
+        selectedPlace[mainScreen] = effectButton;
+        refreshSpectrumPoints();
+        showFrame();
+    }
+    for (int guard = 0; guard < 64 && row != (int)selectedEffectListIdx; guard++)
+    {
+        int d = row - (int)selectedEffectListIdx;
+        uint16_t before = selectedEffectListIdx;
+        modSelectedEffect((int16_t)(d > 5 ? 5 : d < -5 ? -5 : d));
+        if (selectedEffectListIdx == before)
+            break;
+    }
+}
+
 void cSampleEditor::modSelectedEffect(int16_t val)
 {
     val = clamp<int>(val, -5, 5);

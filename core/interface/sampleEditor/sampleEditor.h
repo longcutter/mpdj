@@ -437,6 +437,7 @@ class cSampleEditor : public ModuleBase
     strSpectrumParams spectrumParams[2];
     strZoomParams zoom;
     bool mpdjFineStep = false; // MPDJ: start / end move 1/8 pixel (min 1 unit), not one pixel
+    void mpdjTapEffect(int row); // MPDJ: a touch on the effect list's row (2026-11-22)
 
     struct strSelection
     {
