@@ -701,7 +701,9 @@ void MpcInput::pollPadLights()
         }
         return;
     }
-    bool onAssign = mtInterface.isPadAssignScreenActive(); // 5d-1: the plain pad map there
+    // 5d-1: the plain pad map on Pad Assign; also on the Song screen (Mike 2026-11-22: play
+    // along with the song on the selected bank)
+    bool onAssign = mtInterface.isPadAssignScreenActive() || mtInterface.isSongScreenActive();
     bool show = setting != 0 && (mtInterface.isPatternScreenActive() || onAssign);
     float base = setting == 1 ? 0.05f : 0.10f, top = setting == 1 ? 0.40f : 1.0f;
     bool notes = mpdjNotesOn() && !onAssign, levels = mpdjLevelsOn() && !onAssign;
@@ -1809,6 +1811,30 @@ void MpcInput::onPad(uint8_t note, bool down, uint8_t velocity)
         // Track Mute (5e-1): pad N mutes / unmutes track N, whatever the bank
         if (int n = padNumber(note))
             trackMute.padDown(n - 1); // 5e-2: Latch / Momentary
+        return;
+    }
+    if (down && mtInterface.isSongScreenActive() && !mpcShift)
+    {
+        // Song screen (Mike 2026-11-22): the selected bank's pads play as on the Pattern
+        // screen's pad map (Notes mode, 16 Levels, the slice layer don't apply here), so
+        // you can play along with the song; live REC writes as there. Was: the Tracker's
+        // 4x12 grid (the first program at the grid's pitches)
+        int n = padNumber(note);
+        if (!n)
+            return;
+        int pad = padIndex(padBank, n);
+        enginePadHeld[note] = (int8_t)pad;
+        lastEngineNote = note;
+        bool notes = mpdjNotesOn(), levels = mpdjLevelsOn(), slices = mpdjSliceLayerOn();
+        mpdjNotesSet(false);
+        mpdjLevelsSet(false);
+        mpdjSliceLayerSet(false);
+        const char* msg = mpdjPadPress(pad, velocity);
+        mpdjNotesSet(notes);
+        mpdjLevelsSet(levels);
+        mpdjSliceLayerSet(slices);
+        if (msg)
+            mtPopups.show(0, msg);
         return;
     }
     if (down && mtInterface.isPadAssignScreenActive())
