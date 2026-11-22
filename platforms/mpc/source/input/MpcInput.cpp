@@ -2916,6 +2916,12 @@ bool MpcInput::tapListRow(float x, float y, int delta, bool dry)
         if (MPDJ_ROW(rowIn(projectEditor.recentListControl)))
             return dry || delta || (projectEditor.mpdjTapList(1, r), true);
     }
+    else if (mtInterface.isSampleEditorScreenActive())
+    {
+        // the effect list on the right (Mike 2026-11-22): touch selects, drag scrolls
+        if (MPDJ_ROW(rowIn(sampleEditor.effectList)))
+            return dry || delta || (sampleEditor.mpdjTapEffect(r), true);
+    }
     else if (mtInterface.isSongScreenActive())
     {
         if (dry || delta)
