@@ -20,34 +20,38 @@ namespace
 // corners: 0 = x 0 / y 0 four on the floor, 1 = x max / y 0 breakbeat,
 // 2 = x 0 / y max half-time, 3 = x max / y max broken
 // clang-format off
-const uint8_t kCorner[4][3][16] = {
+const uint8_t kCorner[4][cDrumGrid::kParts][16] = {
     { // four on the floor
         { 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 40, 0 },
         { 0, 0, 0, 0, 230, 0, 0, 0, 0, 0, 0, 0, 230, 0, 0, 30 },
         { 30, 80, 240, 80, 30, 80, 240, 80, 30, 80, 240, 80, 30, 80, 240, 90 },
+        { 0, 0, 0, 0, 0, 0, 110, 0, 0, 0, 0, 0, 0, 0, 210, 0 }, // open hat: the last off-beat
     },
     { // breakbeat
         { 255, 0, 0, 0, 0, 0, 140, 0, 0, 0, 220, 90, 0, 0, 0, 0 },
         { 0, 0, 0, 0, 255, 0, 0, 70, 0, 60, 0, 0, 255, 0, 0, 80 },
         { 200, 70, 200, 70, 200, 70, 200, 70, 200, 70, 200, 70, 200, 70, 200, 70 },
+        { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 190, 0, 0, 0, 0, 110 },
     },
     { // half-time
         { 255, 0, 0, 0, 0, 0, 0, 110, 0, 0, 150, 0, 0, 0, 0, 0 },
         { 0, 0, 0, 0, 0, 0, 0, 0, 255, 0, 0, 0, 0, 0, 0, 60 },
         { 220, 150, 150, 150, 220, 150, 150, 150, 220, 150, 150, 150, 220, 120, 120, 120 },
+        { 0, 0, 0, 0, 0, 0, 160, 0, 0, 0, 0, 0, 0, 0, 200, 0 },
     },
     { // broken
         { 255, 0, 0, 150, 0, 0, 120, 0, 0, 0, 200, 0, 0, 90, 0, 0 },
         { 0, 0, 0, 0, 200, 0, 0, 60, 0, 0, 0, 220, 0, 0, 100, 0 },
         { 40, 150, 220, 40, 40, 130, 200, 40, 40, 140, 210, 40, 40, 120, 230, 40 },
+        { 0, 0, 0, 140, 0, 0, 0, 0, 0, 0, 200, 0, 0, 0, 0, 0 },
     },
 };
 // clang-format on
-const char* const kPartNames[3] = { "Kick", "Snare", "Hat" };
-const char* const kLabelNames[cDrumGrid::ParamCount] = { "X", "Y", "Kick", "Snare", "Hat", "Chaos", "Seed", "Pads" };
+const char* const kPartNames[cDrumGrid::kParts] = { "Kick", "Snare", "Hat", "OHat" };
+const char* const kLabelNames[cDrumGrid::ParamCount] = { "X", "Y", "Kick", "Snare", "Hat", "Open hat", "Chaos", "Pads", "Seed" };
 const char* const kListNames[cDrumGrid::ParamCount] = { "X (four / break)", "Y (half-time)", "Kick density",
-                                                        "Snare density",    "Hat density",   "Chaos",
-                                                        "Seed (new)",       "Pads 1-3 of bank" };
+                                                        "Snare density",    "Hat density",   "Open hat density",
+                                                        "Chaos",            "Pads 1-4 of bank", "Seed (new)" };
 
 uint32_t nextRand(uint32_t& s)
 {
@@ -82,14 +86,14 @@ void functPlayAction()
 }
 } // namespace
 
-void cDrumGrid::generate(int x, int y, const int density[3], int chaos, uint32_t seed, int rows,
-                         int8_t out[3][128])
+void cDrumGrid::generate(int x, int y, const int density[kParts], int chaos, uint32_t seed, int rows,
+                         int8_t out[kParts][128])
 {
     uint32_t rnd = seed ? seed : 1;
     for (int r = 0; r < rows && r < 128; r++)
     {
         int step = r % 16;
-        for (int p = 0; p < 3; p++)
+        for (int p = 0; p < kParts; p++)
         {
             // bilinear blend of the four corners
             int top = kCorner[0][p][step] * (255 - x) + kCorner[1][p][step] * x;
@@ -99,8 +103,12 @@ void cDrumGrid::generate(int x, int y, const int density[3], int chaos, uint32_t
             int j = (int)(nextRand(rnd) % 201) - 100; // -100 .. 100
             s = clampInt(s + j * chaos * 128 / 10000, 0, 255);
             int threshold = 255 - density[p] * 255 / 100;
-            out[p][r] = (s > 0 && s >= threshold && density[p] > 0) ? (int8_t)(40 + s * 50 / 255) : (int8_t)-1;
+            // level: 50-100 % of the program's volume by strength (2026-11-22; was a
+            // volume of 40-90, louder than the programs' standard 50)
+            out[p][r] = (s > 0 && s >= threshold && density[p] > 0) ? (int8_t)(50 + s * 50 / 255) : (int8_t)-1;
         }
+        if (out[3][r] >= 0)
+            out[2][r] = -1; // an open hat takes the closed hat's place
     }
 }
 
@@ -116,14 +124,14 @@ void cDrumGrid::write()
     }
     // review: parts may share a track (pads 1-3 on one track): per track, a row takes the
     // first part (kick, snare, hat) that hits there, and is cleared only when none does
-    const strPadSlot* slots[3];
-    for (int p = 0; p < 3; p++)
+    const strPadSlot* slots[kParts];
+    for (int p = 0; p < kParts; p++)
     {
         slots[p] = padSlot(bank * kPadsPerBank + p);
         if (slots[p] && (slots[p]->program == kPadNoProgram || programType(slots[p]->program) == kProgramEmpty))
             slots[p] = nullptr; // no sound on that pad: its track is left alone
     }
-    for (int p = 0; p < 3; p++)
+    for (int p = 0; p < kParts; p++)
     {
         if (!slots[p])
             continue;
@@ -138,14 +146,15 @@ void cDrumGrid::write()
         {
             auto& s = pt->track[t].step[r];
             int who = -1;
-            for (int q = p; q < 3 && who < 0; q++)
+            for (int q = p; q < kParts && who < 0; q++)
                 if (slots[q] && slots[q]->track == t && preview[q][r] >= 0)
                     who = q;
             if (who >= 0)
             {
                 s.note = Sequencer::STEP_NOTE_DEFAULT;
                 s.instrument = slots[who]->program;
-                s.volume = preview[who][r];
+                int pv = sequencer.getInstrumentVelo(slots[who]->program); // the program's volume
+                s.volume = (int8_t)((pv * preview[who][r] + 50) / 100);
             }
             else
             {
@@ -287,6 +296,7 @@ void cDrumGrid::changeValue(int steps)
     case ParamKick:
     case ParamSnare:
     case ParamHat:
+    case ParamOpenHat:
         density[param - ParamKick] = clampInt(density[param - ParamKick] + 5 * dir, 0, 100);
         break;
     case ParamChaos: chaos = clampInt(chaos + 5 * dir, 0, 100); break;
@@ -306,7 +316,7 @@ void cDrumGrid::refresh()
         strPadGridData::Cell& c = gridData.cells[st];
         snprintf(c.name, sizeof c.name, "%d", st + 1);
         char hits[24] = "";
-        for (int p = 0; p < 3; p++)
+        for (int p = 0; p < kParts; p++)
             if (preview[p][st] >= 0)
             {
                 strncat(hits, hits[0] ? " " : "", sizeof hits - strlen(hits) - 1);
@@ -314,8 +324,9 @@ void cDrumGrid::refresh()
             }
         snprintf(c.program, sizeof c.program, "%s", hits);
         c.marks[0] = 0;
-        static const uint8_t kKick[3] = { 120, 30, 20 }, kSnare[3] = { 120, 100, 20 }, kHat[3] = { 40, 110, 120 };
-        const uint8_t* col = preview[0][st] >= 0 ? kKick : preview[1][st] >= 0 ? kSnare : kHat;
+        static const uint8_t kKick[3] = { 120, 30, 20 }, kSnare[3] = { 120, 100, 20 }, kHat[3] = { 40, 110, 120 },
+                             kOpen[3] = { 90, 60, 120 };
+        const uint8_t* col = preview[0][st] >= 0 ? kKick : preview[1][st] >= 0 ? kSnare : preview[3][st] >= 0 ? kOpen : kHat;
         c.color = hits[0] ? ((uint32_t)(col[0] * 2) << 16 | (uint32_t)(col[1] * 2) << 8 | (uint32_t)(col[2] * 2)) : 0;
         c.empty = !hits[0];
     }
@@ -323,12 +334,12 @@ void cDrumGrid::refresh()
 
     snprintf(paramValues[ParamX], sizeof paramValues[0], "%d%%", x * 100 / 255);
     snprintf(paramValues[ParamY], sizeof paramValues[0], "%d%%", y * 100 / 255);
-    for (int p = 0; p < 3; p++)
+    for (int p = 0; p < kParts; p++)
         snprintf(paramValues[ParamKick + p], sizeof paramValues[0], "%d%%", density[p]);
     snprintf(paramValues[ParamChaos], sizeof paramValues[0], chaos ? "%d%%" : "Off", chaos);
     snprintf(paramValues[ParamSeed], sizeof paramValues[0], "%04X", (unsigned)(seed & 0xFFFF));
     char where[48] = "";
-    for (int p = 0; p < 3; p++)
+    for (int p = 0; p < kParts; p++)
     {
         const strPadSlot* s = padSlot(bank * kPadsPerBank + p);
         char one[16];
@@ -341,7 +352,7 @@ void cDrumGrid::refresh()
     snprintf(paramValues[ParamBank], sizeof paramValues[0], "%c: %s", 'A' + bank, where);
     for (int i = 0; i < ParamCount; i++)
         snprintf(labelValues[i], sizeof labelValues[0], "%s", paramValues[i]);
-    snprintf(labelValues[ParamBank], sizeof labelValues[0], "%c1-3", 'A' + bank);
+    snprintf(labelValues[ParamBank], sizeof labelValues[0], "%c1-4", 'A' + bank);
 
     display.setControlData(grid, &gridData);
     display.refreshControl(grid);
@@ -359,7 +370,7 @@ void cDrumGrid::refresh()
     }
     snprintf(title, sizeof title, "Drum Grid");
     titleBar->setTitle(title);
-    snprintf(rightLabel, sizeof rightLabel, "Kick / Snare / Hat -> %s", where);
+    snprintf(rightLabel, sizeof rightLabel, "Pads 1-4 -> %s", where);
     titleBar->setRightLabel(rightLabel);
     titleBar->showRightLabel(true);
 }

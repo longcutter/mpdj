@@ -174,8 +174,8 @@ void turingGen()
 void drumGridGen()
 {
     s_section = "drum grid";
-    static int8_t a[3][128], b[3][128];
-    const int half[3] = { 50, 50, 50 };
+    static int8_t a[cDrumGrid::kParts][128], b[cDrumGrid::kParts][128];
+    const int half[cDrumGrid::kParts] = { 50, 50, 50, 0 };
     cDrumGrid::generate(0, 0, half, 0, 1, 16, a);
     auto steps = [](const int8_t* part) {
         uint32_t m = 0;
@@ -187,14 +187,18 @@ void drumGridGen()
     check(steps(a[0]) == 0x1111, "four on the floor: kick on 1, 5, 9, 13");
     check(steps(a[1]) == 0x1010, "snare on 5 and 13");
     check(steps(a[2]) == 0x4444, "hat on the off-beat 8ths");
-    const int none[3] = { 0, 0, 0 };
+    check(a[0][0] == 100 && a[2][2] >= 50 && a[2][2] <= 100, "levels 50-100 % of the program's volume");
+    const int withOpen[cDrumGrid::kParts] = { 50, 50, 50, 50 };
+    cDrumGrid::generate(0, 0, withOpen, 0, 1, 16, a);
+    check(steps(a[3]) == 0x4000 && steps(a[2]) == 0x0444, "open hat on the last off-beat, in the closed hat's place");
+    const int none[cDrumGrid::kParts] = { 0, 0, 0, 0 };
     cDrumGrid::generate(128, 200, none, 50, 9, 64, a);
     bool silent = true;
-    for (int p = 0; p < 3; p++)
+    for (int p = 0; p < cDrumGrid::kParts; p++)
         for (int r = 0; r < 64; r++)
             silent = silent && a[p][r] < 0;
     check(silent, "density 0: nothing");
-    const int full[3] = { 100, 70, 90 };
+    const int full[cDrumGrid::kParts] = { 100, 70, 90, 40 };
     cDrumGrid::generate(200, 90, full, 60, 77, 64, a);
     cDrumGrid::generate(200, 90, full, 60, 77, 64, b);
     check(memcmp(a, b, sizeof a) == 0, "same settings and seed = same rows");
