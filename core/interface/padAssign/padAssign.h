@@ -1,4 +1,4 @@
-// MPDJ (step 5d): the Pad Assign screen, opened with SHIFT+PROGRAM EDIT on
+// MPDJ (step 5d): the Pad Assign screen, opened with PROGRAM EDIT (SHIFT+PROGRAM EDIT until 2026-11-22) on
 // the MPC. A 4x4 grid of the current bank's pads, the selected pad's settings
 // as a list, and the same settings on the eight screen-button labels. Hitting
 // a pad selects and plays it; the bank buttons switch banks. MIT, see
