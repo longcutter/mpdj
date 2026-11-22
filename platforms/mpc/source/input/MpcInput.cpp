@@ -2024,16 +2024,25 @@ void MpcInput::stepEditParam(int steps)
             setEditColumn(kParam[p], p < 2 ? pe.isMicVolView : kMicVol[p]);
         return;
     }
-    constexpr int kLast = (int)cPatternEditor::EditFx2 + 2;
-    int pos = (int)pe.editParam + (pe.isMicVolView && pe.editParam >= cPatternEditor::EditFx1 ? 2 : 0);
+    // 4-column views (Mike 2026-11-22): the view's own two columns come first, the other
+    // view's after them: FX view Note > Program > FX1 > FX2 > Micromove > Volume, Mic/Vol
+    // view Note > Program > Micromove > Volume > FX1 > FX2. The view switches as the walk
+    // crosses over, so the order is the one of the view last shown on Note / Program
+    // (or picked with SHIFT + touch QL3 / Config: walkMicFirst)
+    using PE = cPatternEditor;
+    if (pe.editParam < PE::EditFx1 || walkMicFirst < 0)
+        walkMicFirst = pe.isMicVolView ? 1 : 0;
+    bool micFirst = walkMicFirst == 1;
+    int pos = pe.editParam < PE::EditFx1 ? (int)pe.editParam
+              : (pe.isMicVolView == micFirst ? 2 : 4) + (pe.editParam == PE::EditFx2 ? 1 : 0);
     int p = pos + steps;
-    p = p < 0 ? 0 : p > kLast ? kLast : p;
+    p = p < 0 ? 0 : p > 5 ? 5 : p;
     if (p == pos)
         return;
-    bool micVol = p > (int)cPatternEditor::EditFx2 ? true
-                  : p >= (int)cPatternEditor::EditFx1 ? false
-                                                      : pe.isMicVolView;
-    setEditColumn(p > (int)cPatternEditor::EditFx2 ? p - 2 : p, micVol);
+    if (p < 2)
+        setEditColumn(p, pe.isMicVolView);
+    else
+        setEditColumn((p & 1) ? PE::EditFx2 : PE::EditFx1, p < 4 ? micFirst : !micFirst);
 }
 
 void MpcInput::setEditColumn(int param, bool micVol)
@@ -2064,6 +2073,7 @@ void MpcInput::flipMicVolView()
     releaseCoreShift(); // not a Tracker Shift combo (Shift alone shows the mute buttons)
     uint8_t view = (uint8_t)((pe.mpdjView() + 1) % cPatternEditor::kViewCount);
     pe.mpdjSetView(view);
+    walkMicFirst = view == cPatternEditor::kViewMicVol ? 1 : 0; // QL3's order (stepEditParam)
     static const char* const kColumn[5] = { "Note", "Volume", "Micromove", "FX1", "FX2" };
     static char text[48];
     switch (view)
