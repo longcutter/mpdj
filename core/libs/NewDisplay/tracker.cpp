@@ -13,6 +13,7 @@ static void Number2HexBitmaps(int16_t x, int16_t y, uint8_t font_x, uint8_t font
 
 static constexpr uint8_t text_font = 1;
 static int16_t s_lastCell = -1;
+static int mpdjHeadX(int off, int w, const strFont* f, const char* text); // MPDJ headings
 
 #if ROW_NUM
 // uint8_t fourParamsOffset[4] =		{	4,44,73,130,	};	// stara koncepcja z numerami
@@ -1114,7 +1115,7 @@ void cTracker::tracksNumbers()
         for (int k = 0; k < 4; k++)
         {
             heads[k] = kSix[k];
-            headX[k] = sixParamsOffset[2 + k];
+            headX[k] = mpdjHeadX(sixParamsSelOffset[2 + k], sixParamsSelWidth[2 + k], font, heads[k]);
         }
         heads_n = 4;
     }
@@ -1124,8 +1125,8 @@ void cTracker::tracksNumbers()
         // (its third column is the micromove, the fourth the volume)
         heads[0] = tracks->mpdjMicVol ? "Mov" : "FX1";
         heads[1] = tracks->mpdjMicVol ? "Vol" : "FX2";
-        headX[0] = fourParamsOffset[2];
-        headX[1] = fourParamsOffset[3];
+        headX[0] = mpdjHeadX(fourParamsSelOffset[2], fourParamsSelWidth[2], font, heads[0]);
+        headX[1] = mpdjHeadX(fourParamsSelOffset[3], fourParamsSelWidth[3], font, heads[1]);
         heads_n = 2;
     }
     if (heads_n)
@@ -1151,6 +1152,12 @@ void cTracker::tracksNumbers()
 // no text smaller than the screen buttons' (their titles: the 14 px font, fonts[2]); the
 // headings use it (the 17 px step font made Pgm and FX1 touch in the 4-column view). "Sli"
 // on a track whose program is Beat Slice (tracks->mpdjSliceHead)
+// x of a heading centered over a column whose cursor box starts at off and is w wide
+static int mpdjHeadX(int off, int w, const strFont* f, const char* text)
+{
+    return off + (w - (int)getTextWidth((strFont*)f, text, strlen(text))) / 2;
+}
+
 void cTracker::mpdjHeaderBand()
 {
     const int top = posY, h = 2 * stepHight;
@@ -1179,6 +1186,7 @@ void cTracker::mpdjHeaderHeadings()
     const strFont* hf = &fonts[2]; // the screen buttons' title size
     const int y = posY + stepHight + 12; // as the cells' text in the second row
 
+    // each heading centered over its column (the cursor box's span; Mike 2026-11-22)
     const char* heads[6];
     int headX[6], n = 0;
     if (paramCount == 6)
@@ -1187,7 +1195,7 @@ void cTracker::mpdjHeaderHeadings()
         for (; n < 6; n++)
         {
             heads[n] = kSix[n];
-            headX[n] = sixParamsOffset[n];
+            headX[n] = mpdjHeadX(sixParamsSelOffset[n], sixParamsSelWidth[n], hf, heads[n]);
         }
     }
     else
@@ -1197,7 +1205,7 @@ void cTracker::mpdjHeaderHeadings()
         heads[2] = tracks->mpdjMicVol ? "Mov" : "FX1";
         heads[3] = tracks->mpdjMicVol ? "Vol" : "FX2";
         for (; n < 4; n++)
-            headX[n] = fourParamsOffset[n];
+            headX[n] = mpdjHeadX(fourParamsSelOffset[n], fourParamsSelWidth[n], hf, heads[n]);
     }
     API_SAVE_CONTEXT();
     lastFontHandle = -1;
@@ -1214,7 +1222,10 @@ void cTracker::mpdjHeaderHeadings()
         for (int k = 0; k < n; k++)
         {
             const char* text = (k == 0 && slice) ? "Sli" : heads[k];
-            String2Bitmaps(base + headX[k], y, hf, (char*)text, strlen(text));
+            int x = (k == 0 && slice) ? mpdjHeadX(paramCount == 6 ? sixParamsSelOffset[0] : fourParamsSelOffset[0],
+                                                  paramCount == 6 ? sixParamsSelWidth[0] : fourParamsSelWidth[0], hf, text)
+                                      : headX[k];
+            String2Bitmaps(base + x, y, hf, (char*)text, strlen(text));
         }
     }
     API_END();
