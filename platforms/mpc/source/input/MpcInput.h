@@ -114,6 +114,7 @@ class MpcInput
     void quickControlTurn(int knob, int steps);
     void songJumpArea(int steps);
     void stepEditParam(int steps);
+    int8_t walkMicFirst = -1; // 4-column views: QL3 walks Micromove / Volume before FX1 / FX2
     void setEditColumn(int param, bool micVol);
     void flipMicVolView();
     void padStepEntry(int pad, uint8_t velocity);
