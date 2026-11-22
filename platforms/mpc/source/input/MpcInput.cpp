@@ -32,6 +32,7 @@
 #include "sampleImporter/sampleImporter.h"
 #include "configEditor/configEditor.h"
 #include "sampleEditor/sampleEditor.h"
+#include "instrumentEditor/instrumentEditor.h"
 #include "samplePlayback/samplePlayback.h"
 #include "songEditor/songEditor.h"
 
@@ -1193,10 +1194,27 @@ void MpcInput::onButton(uint8_t note, bool down)
         case Act::Forward:
             if (note == kNoteShift)
                 mpcShift = true;
-            if (note == kNoteProgramEdit && mpcShift)
+            if (note == kNoteProgramEdit)
             {
-                // SHIFT+PROGRAM EDIT: Pad Assign, or back to the screen before (5d-1)
-                releaseCoreShift();
+                // PROGRAM EDIT (Mike 2026-11-22: Pad Assign first, it's used most): from
+                // any other screen Pad Assign; again = Program Edit (the Tracker's
+                // instrument editor, Params page); again = its envelope page (the
+                // Tracker's own second press); again = Pad Assign. SHIFT+PROGRAM EDIT =
+                // straight to Program Edit, as the plain button did before (5d-1 had
+                // Pad Assign on SHIFT)
+                bool onEditor = mtInterface.isInstrumentParamsScreenActive();
+                if (mpcShift)
+                {
+                    releaseCoreShift();
+                    hold = onEditor ? -1 : m->trackerButton;
+                    break;
+                }
+                if (mtInterface.isPadAssignScreenActive() ||
+                    (onEditor && instrumentEditor.mode == mtInstEditModeParams))
+                {
+                    hold = m->trackerButton; // Pad Assign -> Program Edit, Params -> envelopes
+                    break;
+                }
                 mtInterface.mpdjTogglePadAssign();
                 if (mtInterface.isPadAssignScreenActive())
                     padAssign.showBank(padBank);
