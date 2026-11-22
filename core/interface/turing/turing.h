@@ -42,6 +42,7 @@ class cTuring : public ModuleBase
     void toggleBit(int bit); // a pad (1 = bit 0) or a touch on the grid: flip that bit and write
     int bitAt(float x, float y) const;
     void refresh();
+    void keyChanged() { write(); refresh(); } // MPDJ: the project's scale / root changed (16 LEVELS + encoder)
 
     static constexpr int kGridX = 6, kGridY = 34, kGridW = 470, kGridH = 382;
 

@@ -1102,7 +1102,8 @@ void MpcInput::onButton(uint8_t note, bool down)
         if (note == kNote16Levels && levelsHeld)
         {
             levelsHeld = false;
-            if (!levelsTurned)
+            // on the generator screens 16 LEVELS is only the key gesture's modifier
+            if (!levelsTurned && !mtInterface.isGeneratorScreenActive())
                 toggleLevels();
         }
         if (note == kNoteNoteRepeat && repeatHeld)
@@ -2211,11 +2212,15 @@ void MpcInput::onRelative(uint8_t cc, uint8_t value)
         }
         if (turnHeldPadColor(steps))
             return; // a pad held on the pad map: its color (5c-2)
-        if (levelsHeld && mtInterface.isPatternScreenActive())
+        if (levelsHeld && (mtInterface.isPatternScreenActive() || mtInterface.isTuringScreenActive()))
         {
             // 16 LEVELS held on the Pattern screen (any pad mode): the project
-            // scale; + SHIFT: the root, i.e. the key (5b-8b, Mike 2026-11-14)
+            // scale; + SHIFT: the root, i.e. the key (5b-8b, Mike 2026-11-14).
+            // Also on the Turing screen (Mike 2026-11-22), which writes its notes
+            // in the project's key: the track is rewritten in the new key
             turnNotesScale(steps);
+            if (mtInterface.isTuringScreenActive())
+                turing.keyChanged();
             return;
         }
         if (!pointScreenZoom(steps))
