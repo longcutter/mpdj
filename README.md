@@ -11,6 +11,7 @@
 
 <p align="center">
   <a href="#status">Status</a> ·
+  <a href="#roadmap">Roadmap</a> ·
   <a href="#requirements">Requirements</a> ·
   <a href="#build">Build</a> ·
   <a href="#install-and-run">Install</a> ·
@@ -53,11 +54,45 @@ Early and in active development. On an MPC One+ it currently:
 - has its own screens for Pad Assign and Track Mute, MPC-style slicing (manual, auto, evenly, by beats) with a slice layer on the pads, Loop Sync, kits (load and save a bank's sounds and pad settings), global swing and a six-column Pattern view
 - maps the MPC's controls: transport and mode buttons with LEDs, the four Q-Links (navigation and value modes, per-screen knobs on waveform screens), the main encoder and the touchscreen
 
-Planned: open-source synth engines, insert effects, recording while the pattern plays, external resampling through pedals, USB audio to a computer, starting at power-on, and "sideloads" (separate programs started from MPDJ).
+What's next: see the [Roadmap](#roadmap).
 
 MPDJ saves projects in its own format. Tracker and Tracker+ projects can be opened (a one-way import: samples go to program slots 1-48, MIDI instruments to 49-64), but projects saved by MPDJ don't open on a Tracker.
 
 Polyend's factory synth engines are closed binaries for the Tracker's chip and are not part of MPDJ.
+
+## Roadmap
+
+MPDJ is built in small versions, each tested on the MPC before it's released. The first goal is simple: make a whole track on the MPC, start to finish, without a computer.
+
+**v0.1: a whole track on the MPC**
+- Rendering and export that work: Song as a stereo WAV, Song stems, patterns, Bounce
+- Play guitar or a synth through the MPC's inputs over the pattern, and record a take while the pattern plays (one loop by default; the take lands on its own track, in time)
+- A cleaner Q-Link layout: QL1 always moves left and right, QL2 up and down, QL3 / QL4 their fine-step twins
+- Delete files from the SD card on the MPC itself
+- Fixes from testing (skip-back trim, PROGRAM EDIT pages, Turing preview before writing, STOP as a panic button)
+- The first tagged release with a ready-built binary
+
+**v1: smoother day to day**
+- Pads behave the same on every screen
+- Touch that selects without jumping around; more lists and sliders by touch
+- Turing Machine and Drum Grid redesigned around a Write switch
+- More recording tools: a recording strip, loop takes
+
+**v2: new sequencing and sound tools**
+- Step speed: play a step at ¼, ½, 1, 2 or 4 times speed, forward, reversed or either, or let the dice pick
+- FX Chance (another effect applies some of the time) and an Echo step effect
+- Reverb and more effects in the Sample Editor
+
+**v3: synths**
+- Open-source synth engines as a new kind of program, MIDI out and USB keyboards
+
+**v4: chords and effects**
+- Chord mode on the pads
+- Insert effects and SP-404-style performance effects: tape, glitch, granular
+
+**Later:** amp models for guitar, printing through external pedals, USB audio to a computer, sideloads (separate programs started from MPDJ), generative sequencers, visualizers and color schemes.
+
+The order can change as testing shows what matters most. Ideas are welcome in [Discussions](../../discussions).
 
 ## Requirements
 
