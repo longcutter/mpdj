@@ -2498,51 +2498,73 @@ void MpcInput::pollQLinks()
     }
 }
 
-// ---------------------------------------------------------------- per-screen maps (step 2b)
-// Mike, 2026-11-11: on Sample Playback (1-shot and loop play modes) and the
-// Sample Editor's main screen, Q-Link mode 1 is a point map instead of
-// navigation. Since 2026-11-12 the order follows Mike's Q-Link labels:
-// Q-Link 1 = Start, 2 = End, 3 = Loop start, 4 = Loop end (the editor has no
-// loop points: 1 = Start, 2 = End); granular: 1 = Position, 2 = Length;
-// wavetable: 1 = Position, 2 = Window size. QL3 / QL4 where they aren't loop
-// points: the slow twins of QL1 / QL2 (1-shot, editor: Start / End at the
-// finest step; wavetable: Position one window per message, Window size at the
-// value speed); granular: 3 = Shape, 4 = Loop. The speed of the turn picks
-// the step: messages more than pointFineMs apart move 1/8 of a screen pixel at
-// the current zoom (at least one point unit, 1/65536 of the sample, the finest
-// the Tracker stores; Mike couldn't see the original one-unit step), quicker
-// ones one pixel, very quick ones (under pointFastMs) four pixels. Touching
-// a point's knob selects the point and centres the view on it (MPC app style).
-// The main encoder zooms (unless a finger holds a label, or the play mode list
-// / effect list is the selected item, which the encoder keeps scrolling).
+// ---------------------------------------------------------------- waveform screens (Q-Link rethink, MVP 0a)
+// Mike, 2026-11-27 (planning session, Option A): on the waveform screens the
+// Q-Links follow the same rule as everywhere: QL1 = horizontal coarse, QL2 =
+// vertical coarse, QL3 = horizontal fine, QL4 = vertical fine. Every point on a
+// waveform moves horizontally, so:
+//   QL1 = move the selected point (speed-scaled: slow = 1/8 screen pixel at the
+//         current zoom, normal = 1 pixel, fast = 4 pixels)
+//   QL2 = pick the point (walks the screen's points left to right; its label
+//         gets the frame and the view follows it when it's off screen)
+//   QL3 = move the selected point at the finest step
+//   QL4 = zoom (as the main encoder)
+// Touching QL1 / QL3 selects the point's label and centres the view on it;
+// touching QL2 / QL4 does nothing. Touching a point's label on the screen
+// selects that point too. The pick is remembered per screen for the session,
+// starting on the first point (Start).
+// Points per screen:
+//   1-shot, Sample Editor: Start, End
+//   loop modes: Start, Loop start, Loop end, End; with Loop Sync on Loop end
+//     becomes the Loop Sync length (Loop End follows Loop Start)
+//   granular: Position, Length, Shape, Loop (Shape / Loop step through lists)
+//   wavetable: Position, Window size
+//   slice page (5g): slice 1 .. slice N, then End (samplePlayback.mpdjSlicePick)
 // Modes 2-3 keep working on these screens as before.
 namespace
 {
-// How a point-map knob turns its value:
-//   Scaled = by turn speed (fine / coarse / fast, see pointScreenTurn)
-//   Fine   = always the finest step, one per message (QL3 / QL4 "slow" twins
-//            of QL1 / QL2, for zoomed-in work; Mike 2026-11-12)
-//   Plain  = one step per message (short lists: window size)
-//   Slow   = a short list at the screen-button value speed (several messages
-//            per step: granular Shape and Loop)
-//   Slower = half that speed (wavetable window size on QL4; Mike 2026-11-12)
-enum class Knob : uint8_t { Scaled, Fine, Plain, Slow, Slower };
+// How a point turns:
+//   Scaled = by turn speed (fine / coarse / fast, see turnPoint)
+//   Fine   = always the finest step, one per message
+//   Plain  = one step per message (short lists: wavetable window size)
+//   Slow   = a short list at the screen-button value speed (granular Shape, Loop)
+//   Slower = half that speed
+//   Sync   = the Loop Sync length (samplePlayback.mpdjLoopSyncTurn), value speed
+//   SyncSlow = the same at half speed
+enum class Knob : uint8_t { Scaled, Fine, Plain, Slow, Slower, Sync, SyncSlow };
+
+enum PointScreen : uint8_t { kPsOneShot, kPsLoop, kPsGranular, kPsWavetable, kPsEditor, kPsSlices, kPsCount };
+
+struct Point
+{
+    int button = -1;          // the Tracker screen button (label) of the point
+    uint16_t* value = nullptr; // the point itself (nullptr: a list value, no view to follow)
+    Knob coarse = Knob::Scaled, fine = Knob::Fine; // QL1, QL3
+};
 
 struct PointMap
 {
-    int button[4] = { -1, -1, -1, -1 }; // Tracker screen button per knob, -1 = none
-    uint16_t* value[4] = {};            // the point each knob moves
-    Knob kind[4] = { Knob::Scaled, Knob::Scaled, Knob::Scaled, Knob::Scaled };
-    int zoomButton = -1;                // -1 = the screen has no zoom (encoder turns the value)
+    PointScreen screen = kPsOneShot;
+    Point point[4];
+    int count = 0;
+    int zoomButton = -1;                // -1 = no Zoom label (directZoom / slices zoom without one)
     bool* fine = nullptr;               // the screen's mpdjFineStep flag (nullptr: none)
-    strZoomParams* zoom = nullptr;
+    strZoomParams* zoom = nullptr;      // nullptr: no zoom on this screen
     uint8_t* refreshSpectrum = nullptr;
     uint8_t* refreshPoints = nullptr;
     bool listSelected = false;          // play mode / effect list is the selected item
     uint32_t sampleLength = 0;          // frames, for the zoom steps
     bool slices = false;                // MPDJ (5g): Slice / Beat Slice: samplePlayback.mpdjSlice* do the work
     bool directZoom = false;            // 5g-6: zoom without a Zoom label (loop modes: label 6 = Loop Sync)
-    bool loopSyncKnob = false;          // 5g-6: QL4 steps the Loop Sync length (without selecting its label)
+
+    void add(int button, uint16_t* value, Knob coarse = Knob::Scaled, Knob fine = Knob::Fine)
+    {
+        Point& p = point[count++];
+        p.button = button;
+        p.value = value;
+        p.coarse = coarse;
+        p.fine = fine;
+    }
 };
 
 bool pointMap(PointMap& m)
@@ -2553,84 +2575,57 @@ bool pointMap(PointMap& m)
         strInstrument* ins = sp.editorInstrument;
         if (!ins || !ins->isActive)
             return false;
+        m.listSelected = sp.selectedPlace == 6;
         if (sp.loadedInstrumentType == mtSampleTypeWavetable)
         {
-            m.button[0] = interfaceButton1; // Position (window)
-            m.button[1] = interfaceButton2; // Window size: a few sizes, one per message
-            m.kind[1] = Knob::Plain;
-            m.button[2] = interfaceButton1; // slow twins: one window per message
-            m.kind[2] = Knob::Fine;
-            m.button[3] = interfaceButton2;
-            m.kind[3] = Knob::Slower;
-            m.listSelected = sp.selectedPlace == 6;
+            m.screen = kPsWavetable;
+            m.add(interfaceButton1, nullptr, Knob::Scaled, Knob::Fine);  // Position (window); fine = one window per message
+            m.add(interfaceButton2, nullptr, Knob::Plain, Knob::Slower); // Window size: a few sizes
             return true;
         }
         if (sp.loadedInstrumentType != mtSampleTypeWaveFile)
             return false;
-        // Mike's Q-Link labels (2026-11-12): QL1 = start, QL2 = end, QL3 = loop / chop
-        // start, QL4 = loop / chop end. Granular and wavetable put their window on
-        // QL1 (where) and QL2 (how much); their other settings stay on Q-Link mode 2.
         if (ins->playMode == playModeGranular)
         {
-            m.button[0] = interfaceButton1; // Position
-            m.value[0] = &ins->granular.currentPosition;
-            m.button[1] = interfaceButton2; // Length
-            m.value[1] = &ins->granular.grainLength;
-            m.button[2] = interfaceButton3; // Shape
-            m.kind[2] = Knob::Slow;
-            m.button[3] = interfaceButton4; // Loop
-            m.kind[3] = Knob::Slow;
-            m.listSelected = sp.selectedPlace == 6;
+            m.screen = kPsGranular;
+            m.add(interfaceButton1, &ins->granular.currentPosition); // Position
+            m.add(interfaceButton2, &ins->granular.grainLength);     // Length
+            m.add(interfaceButton3, nullptr, Knob::Slow, Knob::Slower); // Shape
+            m.add(interfaceButton4, nullptr, Knob::Slow, Knob::Slower); // Loop
             return true; // no zoom on this screen
         }
         bool loop = ins->playMode == playModeLoopForward || ins->playMode == playModeLoopBackward ||
                     ins->playMode == playModePingpong;
         if (sp.mpdjSliceUi())
         {
-            // 5g: QL1 = slice 1's start, QL2 = End, QL3 / QL4 = the selected slice's start / end
+            m.screen = kPsSlices;
             m.slices = true;
             m.zoom = &sp.zoom;
             m.refreshSpectrum = &sp.refreshSpectrum;
             m.refreshPoints = &sp.refreshSlicePoints;
-            m.listSelected = sp.selectedPlace == 6;
             m.sampleLength = ins->sample.length;
             return true;
         }
         if (!loop && ins->playMode != playModeSingleShot)
             return false;
-        m.button[0] = interfaceButton1;
-        m.value[0] = &ins->startPoint;
-        m.button[1] = interfaceButton4;
-        m.value[1] = &ins->endPoint;
+        m.screen = loop ? kPsLoop : kPsOneShot;
+        m.add(interfaceButton1, &ins->startPoint);
         if (loop)
         {
-            m.button[2] = interfaceButton2;
-            m.value[2] = &ins->loopPoint1;
-            m.button[3] = interfaceButton3;
-            m.value[3] = &ins->loopPoint2;
-            m.directZoom = true; // 5g-6: label 6 is Loop Sync
+            m.add(interfaceButton2, &ins->loopPoint1);
             if (mtProject.programs.slot[mtProject.values.lastUsedInstrument].loopSync)
-            {
-                // Loop Sync on: QL4 steps the length (Loop End follows Loop Start)
-                m.loopSyncKnob = true;
-            }
+                m.add(interfaceButton3, &ins->loopPoint2, Knob::Sync, Knob::SyncSlow); // Loop Sync on: the length
+            else
+                m.add(interfaceButton3, &ins->loopPoint2);
+            m.directZoom = true; // 5g-6: label 6 is Loop Sync
         }
         else
-        {
-            // 1-shot: QL3 / QL4 = Start / End at the finest step
-            m.button[2] = m.button[0];
-            m.value[2] = m.value[0];
-            m.kind[2] = Knob::Fine;
-            m.button[3] = m.button[1];
-            m.value[3] = m.value[1];
-            m.kind[3] = Knob::Fine;
-        }
-        m.zoomButton = interfaceButton5;
+            m.zoomButton = interfaceButton5;
+        m.add(interfaceButton4, &ins->endPoint);
         m.fine = &sp.mpdjFineStep;
         m.zoom = &sp.zoom;
         m.refreshSpectrum = &sp.refreshSpectrum;
         m.refreshPoints = &sp.refreshPoints;
-        m.listSelected = sp.selectedPlace == 6;
         m.sampleLength = ins->sample.length;
         return true;
     }
@@ -2640,16 +2635,9 @@ bool pointMap(PointMap& m)
         // currentEffect is null while start() is showing a popup instead of the screen
         if (se.screenType != cSampleEditor::mainScreen || !se.currentEffect || !se.editorInstrument->isActive)
             return false;
-        m.button[0] = interfaceButton0;
-        m.value[0] = &se.selection.startPoint;
-        m.button[1] = interfaceButton1;
-        m.value[1] = &se.selection.endPoint;
-        m.button[2] = interfaceButton0; // QL3 / QL4 = Start / End at the finest step
-        m.value[2] = m.value[0];
-        m.kind[2] = Knob::Fine;
-        m.button[3] = interfaceButton1;
-        m.value[3] = m.value[1];
-        m.kind[3] = Knob::Fine;
+        m.screen = kPsEditor;
+        m.add(interfaceButton0, &se.selection.startPoint);
+        m.add(interfaceButton1, &se.selection.endPoint);
         m.zoomButton = interfaceButton2;
         m.fine = &se.mpdjFineStep;
         m.zoom = &se.zoom;
@@ -2661,52 +2649,82 @@ bool pointMap(PointMap& m)
     }
     return false;
 }
+
+// Bring a point into view when it's outside the shown part of the waveform
+void followPoint(PointMap& m, const Point& p, bool centre)
+{
+    if (!m.zoom || !p.value)
+        return;
+    int32_t v = *p.value;
+    if (!centre && v >= m.zoom->zoomStart && v <= m.zoom->zoomEnd)
+        return;
+    m.zoom->zoomPosition = *p.value;
+    m.zoom->lastChangedPoint = 0;
+    *m.refreshSpectrum = 1;
+    *m.refreshPoints = 1;
+}
 } // namespace
 
-bool MpcInput::pointScreenTurn(int knob, int steps)
+int& MpcInput::pointPickFor(int screen)
 {
+    static int pick[kPsCount] = {};
+    return pick[screen < 0 || screen >= kPsCount ? 0 : screen];
+}
+
+// A finger on a point's label selects that point for QL1 / QL3 (Mike 2026-11-27)
+void MpcInput::pointLabelTouched(int button)
+{
+    if (qlinkMode != 1 && qlinkMode != 4)
+        return;
     PointMap m;
-    if (!pointMap(m))
-        return false;
-    if (m.slices)
-    {
-        // same speeds as the point knobs, counted in 1/8 screen pixels:
-        // slow = 1/8 px (at least one point unit), normal = 1 px, fast = 4 px
-        uint32_t now = platform.getTimer()->millis();
-        uint32_t dt = now - pointMsgMs[knob];
-        pointMsgMs[knob] = now;
-        qlinkTurnMs = now;
-        int32_t eighths = dt >= pointFineMs ? steps : (dt < pointFastMs ? steps * 32 : steps * 8);
-        samplePlayback.mpdjSliceTurn(knob, eighths);
-        if (trace)
-            printf("input: slice knob %d %+d (%u ms) -> %u\n", knob + 1, (int)eighths, (unsigned)dt,
-                   samplePlayback.mpdjSliceKnobPoint(knob));
-        return true;
-    }
-    if (m.loopSyncKnob && knob == 3)
-    {
-        steps = divideQLink(knob, steps, 3); // a short list, at the screen-button value speed
-        if (steps)
-            samplePlayback.mpdjLoopSyncTurn(steps);
-        qlinkTurnMs = platform.getTimer()->millis();
-        return true;
-    }
-    if (m.button[knob] < 0)
-        return true; // no point on this knob here (1-shot, editor): do nothing
+    if (!pointMap(m) || m.slices)
+        return; // the slice page reads its labels itself (selectedPlace)
+    for (int i = 0; i < m.count; i++)
+        if (m.point[i].button == button)
+        {
+            pointPickFor(m.screen) = i;
+            return;
+        }
+}
+
+// The point QL1 / QL3 move: the remembered pick, clamped to this screen's list
+static int pickedPoint(const PointMap& m, int& pick)
+{
+    if (pick < 0)
+        pick = 0;
+    if (pick >= m.count)
+        pick = m.count - 1;
+    return pick;
+}
+
+void MpcInput::turnPoint(const void* map, int knob, int steps, bool fineKnob)
+{
+    const PointMap& m = *static_cast<const PointMap*>(map);
+    const Point& p = m.point[pickedPoint(m, pointPickFor(m.screen))];
+    Knob kind = fineKnob ? p.fine : p.coarse;
     uint32_t now = platform.getTimer()->millis();
     uint32_t dt = now - pointMsgMs[knob];
     pointMsgMs[knob] = now;
-
-    Knob kind = m.kind[knob];
+    qlinkTurnMs = now;
+    if (kind == Knob::Sync || kind == Knob::SyncSlow)
+    {
+        // Loop Sync on: Loop End follows Loop Start; the knob steps the length (5g-6)
+        steps = divideQLink(knob, steps, kind == Knob::Sync ? 3 : 4);
+        if (steps)
+        {
+            holdScreenButton(p.button); // the Loop End label shows where it lands
+            samplePlayback.mpdjLoopSyncTurn(steps);
+        }
+        return;
+    }
     if (kind == Knob::Slow || kind == Knob::Slower)
     {
         // screen-button value speed (kQLinkDiv[3]), or half of it (kQLinkDiv[4] = twice the messages)
         steps = divideQLink(knob, steps, kind == Knob::Slow ? 3 : 4);
         if (!steps)
-            return true;
+            return;
     }
-    holdScreenButton(m.button[knob]);
-    qlinkTurnMs = now;
+    holdScreenButton(p.button);
     if (kind == Knob::Plain || kind == Knob::Slow || kind == Knob::Slower)
         turnValue(steps); // a short list of values: one per message
     else if (kind == Knob::Fine || dt >= pointFineMs)
@@ -2722,10 +2740,81 @@ bool MpcInput::pointScreenTurn(int knob, int steps)
     else
         turnValue(dt < pointFastMs ? steps * 8 : steps * 2); // screens counting in their own units
     if (trace)
-        printf("input: point knob %d %+d (%s, %u ms) -> %u\n", knob + 1, steps,
+        printf("input: point %d knob %d %+d (%s, %u ms) -> %u\n", pointPickFor(m.screen) + 1, knob + 1, steps,
                kind == Knob::Plain ? "plain" : kind == Knob::Slow ? "slow" : kind == Knob::Slower ? "slower" : kind == Knob::Fine ? "fine knob"
                : dt >= pointFineMs ? "fine" : dt < pointFastMs ? "fast" : "coarse",
-               (unsigned)dt, m.value[knob] ? *m.value[knob] : 0u);
+               (unsigned)dt, p.value ? *p.value : 0u);
+}
+
+bool MpcInput::pointScreenTurn(int knob, int steps)
+{
+    PointMap m;
+    if (!pointMap(m))
+        return false;
+    if (m.slices)
+    {
+        if (knob == 1)
+        {
+            steps = divideQLink(knob, steps);
+            if (steps)
+                samplePlayback.mpdjSlicePick(steps);
+            if (trace && steps)
+                printf("input: slice pick %+d -> slice %d%s\n", steps, samplePlayback.editorInstrument->selectedSlice + 1,
+                       samplePlayback.selectedPlace == 2 ? " end" : "");
+            return true;
+        }
+        if (knob == 3)
+        {
+            steps = divideQLink(knob, steps, 3);
+            if (steps)
+                pointZoom(m.sampleLength, m.zoom, steps, true, -1);
+            return true;
+        }
+        // same speeds as the point knobs, counted in 1/8 screen pixels:
+        // slow = 1/8 px (at least one point unit), normal = 1 px, fast = 4 px; QL3 always 1/8 px
+        uint32_t now = platform.getTimer()->millis();
+        uint32_t dt = now - pointMsgMs[knob];
+        pointMsgMs[knob] = now;
+        qlinkTurnMs = now;
+        int32_t eighths = (knob == 2 || dt >= pointFineMs) ? steps : (dt < pointFastMs ? steps * 32 : steps * 8);
+        samplePlayback.mpdjSliceTurnPicked(eighths);
+        if (trace)
+            printf("input: slice knob %d %+d (%u ms) -> slice %d\n", knob + 1, (int)eighths, (unsigned)dt,
+                   samplePlayback.editorInstrument->selectedSlice + 1);
+        return true;
+    }
+    if (m.count == 0)
+        return true;
+    switch (knob)
+    {
+        case 0: turnPoint(&m, knob, steps, false); break;
+        case 2: turnPoint(&m, knob, steps, true); break;
+        case 1:
+        {
+            steps = divideQLink(knob, steps);
+            if (!steps)
+                break;
+            int& pick = pointPickFor(m.screen);
+            int from = pickedPoint(m, pick);
+            pick = from + steps;
+            pickedPoint(m, pick);
+            const Point& p = m.point[pick];
+            holdScreenButton(p.button); // frames its label, as touching the label does
+            qlinkTurnMs = platform.getTimer()->millis();
+            followPoint(m, p, false);
+            if (trace)
+                printf("input: point pick %d -> %d\n", from + 1, pick + 1);
+            break;
+        }
+        default:
+            if (m.zoom)
+            {
+                steps = divideQLink(knob, steps, 3); // one zoom click per screen-button value step
+                if (steps)
+                    pointZoom(m.sampleLength, m.zoom, steps, m.directZoom, m.zoomButton);
+            }
+            break; // granular / wavetable: no zoom
+    }
     return true;
 }
 
@@ -2734,32 +2823,64 @@ bool MpcInput::pointScreenTouch(int knob, bool down)
     PointMap m;
     if (!pointMap(m))
         return false;
+    if (knob == 1 || knob == 3)
+    {
+        qlinkTouched[knob] = false; // QL2 / QL4: touch does nothing
+        return true;
+    }
     if (m.slices)
     {
         qlinkTouched[knob] = down;
         if (down)
-            samplePlayback.mpdjSliceTouchKnob(knob); // selects the point and centres the view
+            samplePlayback.mpdjSliceTouchPicked(); // frames the point's label and centres the view
         return true;
     }
-    qlinkTouched[knob] = down && m.button[knob] >= 0;
-    if (m.button[knob] < 0)
+    if (m.count == 0)
         return true;
+    const Point& p = m.point[pickedPoint(m, pointPickFor(m.screen))];
+    qlinkTouched[knob] = down;
     if (!down)
     {
-        if (qlinkHeld == m.button[knob])
+        if (qlinkHeld == p.button)
             releaseQLinkButton();
         return true;
     }
-    holdScreenButton(m.button[knob]); // selects the point, as touching its label does
-    if (!m.zoom || !m.value[knob])
-        return true; // no waveform view to centre (granular length, wavetable)
-    // Centre the view on the point; the spectrum is redrawn around zoomPosition
-    // (a no-op at zoom 1, where the whole sample is in view).
-    m.zoom->zoomPosition = *m.value[knob];
-    m.zoom->lastChangedPoint = 0;
-    *m.refreshSpectrum = 1;
-    *m.refreshPoints = 1;
+    holdScreenButton(p.button); // selects the point, as touching its label does
+    followPoint(m, p, true);
     return true;
+}
+
+// Zoom the waveform by encoder clicks (or QL4 steps). The Tracker zooms in linear
+// steps of the samples-per-pixel resolution ((max - min) / 100 per click,
+// GP.spectrumChangeZoom), so the first clicks barely change the view (Mike: too
+// slow). Each click is a fixed ratio instead: x1.25, full view to the deepest
+// zoom in ~20.
+void MpcInput::pointZoom(uint32_t sampleLength, strZoomParams* zoom, int steps, bool direct, int zoomButton)
+{
+    if (!direct)
+        holdScreenButton(zoomButton);
+    qlinkTurnMs = platform.getTimer()->millis();
+    int value = steps;
+    if (sampleLength >= 600)
+    {
+        int32_t maxRes = sampleLength / 600, minRes = sampleLength / 65535 + 1;
+        int32_t step = (maxRes - minRes) / 100;
+        if (step < 1)
+            step = 1;
+        int32_t res = zoom->zoomResolution;
+        if (res < minRes || res > maxRes || zoom->zoomValue <= 1.0f)
+            res = zoom->zoomResolution = maxRes; // the editor starts with it unset (0)
+        int32_t target = (int32_t)lrintf(res * powf(0.8f, (float)steps)); // steps > 0 = zoom in
+        value = (int)lrintf((float)(res - target) / step);
+        if (value == 0)
+            value = steps > 0 ? 1 : -1;
+    }
+    if (direct)
+        samplePlayback.mpdjSliceZoom(value); // no Zoom label on the slice page (5g) or in the loop modes (5g-6)
+    else
+        turnValue(value);
+    if (trace)
+        printf("input: zoom %+d clicks -> %+d steps, %.2fx\n", steps, value, zoom->zoomValue);
 }
 
 bool MpcInput::pointScreenZoom(int steps)
@@ -2767,7 +2888,7 @@ bool MpcInput::pointScreenZoom(int steps)
     if ((qlinkMode != 1 && qlinkMode != 4) || touchedButton >= 0)
         return false; // a finger on a label: the encoder turns that label's value
     PointMap m;
-    if (!pointMap(m) || m.listSelected || (m.zoomButton < 0 && !m.slices))
+    if (!pointMap(m) || m.listSelected || !m.zoom)
         return false;
     if (m.directZoom && samplePlayback.selectedPlace == 5)
         return false; // 5g-6: Loop Sync selected: the encoder turns it
@@ -2779,34 +2900,7 @@ bool MpcInput::pointScreenZoom(int steps)
         if (p == 0 || p == 3 || p == 4 || p == 7)
             return false;
     }
-    if (!m.slices && !m.directZoom)
-        holdScreenButton(m.zoomButton);
-    qlinkTurnMs = platform.getTimer()->millis();
-    // The Tracker zooms in linear steps of the samples-per-pixel resolution
-    // ((max - min) / 100 per click, GP.spectrumChangeZoom), so the first clicks
-    // barely change the view (Mike: too slow). Turn each click into a fixed
-    // ratio instead: x1.25 per click, full view to the deepest zoom in ~20.
-    int value = steps;
-    if (m.sampleLength >= 600)
-    {
-        int32_t maxRes = m.sampleLength / 600, minRes = m.sampleLength / 65535 + 1;
-        int32_t step = (maxRes - minRes) / 100;
-        if (step < 1)
-            step = 1;
-        int32_t res = m.zoom->zoomResolution;
-        if (res < minRes || res > maxRes || m.zoom->zoomValue <= 1.0f)
-            res = m.zoom->zoomResolution = maxRes; // the editor starts with it unset (0)
-        int32_t target = (int32_t)lrintf(res * powf(0.8f, (float)steps)); // steps > 0 = zoom in
-        value = (int)lrintf((float)(res - target) / step);
-        if (value == 0)
-            value = steps > 0 ? 1 : -1;
-    }
-    if (m.slices || m.directZoom)
-        samplePlayback.mpdjSliceZoom(value); // no Zoom label on the slice page (5g) or in the loop modes (5g-6)
-    else
-        turnValue(value);
-    if (trace)
-        printf("input: zoom %+d clicks -> %+d steps, %.2fx\n", steps, value, m.zoom->zoomValue);
+    pointZoom(m.sampleLength, m.zoom, steps, m.slices || m.directZoom, m.zoomButton);
     return true;
 }
 
@@ -3520,6 +3614,7 @@ void MpcInput::onTouchFrame()
     if (target >= 0)
     {
         touchedButton = target;
+        pointLabelTouched(target); // waveform screens: the label's point is the one QL1 / QL3 move
         buttons->press(target);
     }
 }

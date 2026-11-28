@@ -3758,6 +3758,60 @@ void cSamplePlayback::mpdjSliceTouchKnob(int knob)
     refreshSlicePoints = 1;
 }
 
+// Q-Link rethink (Mike 2026-11-27, Option A): QL2 walks the slice page's points
+// left to right: slice 1's start .. slice N's start, then End. A slice's start =
+// that slice selected with the Start label framed (selectedPlace 1); End = the
+// last slice selected with the End label framed (2). Picking selects the slice
+// (its pad lights as a tap would) without playing it; QL1 / QL3 then move the
+// framed point (mpdjSliceTurnPicked). With End framed on an earlier slice (a
+// touch on the End label), that end counts as the next slice's start.
+void cSamplePlayback::mpdjSlicePick(int steps)
+{
+    if (!mpdjSliceUi() || mpdjPopupOpen || steps == 0)
+        return;
+    strInstrument* ins = editorInstrument;
+    int n = ins->sliceNumber;
+    if (n == 0)
+        return;
+    int sel = ins->selectedSlice;
+    int p = (selectedPlace == 2 ? sel + 1 : sel) + steps;
+    if (p < 0)
+        p = 0;
+    if (p > n)
+        p = n;
+    if (p == n)
+    {
+        mpdjSliceSelect(n - 1);
+        selectedPlace = 2;
+    }
+    else
+    {
+        mpdjSliceSelect(p);
+        selectedPlace = 1;
+    }
+    activateLabelsBorder();
+    mpdjFollowPoint(this, mpdjSliceKnobPoint(selectedPlace == 2 ? 3 : 2));
+    refreshSlicePoints = 1;
+}
+
+void cSamplePlayback::mpdjSliceTurnPicked(int32_t eighths)
+{
+    mpdjSliceTurn(selectedPlace == 2 ? 3 : 2, eighths); // knob 2 = the selected slice's start, 3 = its end
+}
+
+void cSamplePlayback::mpdjSliceTouchPicked()
+{
+    if (!mpdjSliceUi() || mpdjPopupOpen)
+        return;
+    if (selectedPlace != 1 && selectedPlace != 2)
+        selectedPlace = 1;
+    activateLabelsBorder();
+    zoom.zoomPosition = mpdjSliceKnobPoint(selectedPlace == 2 ? 3 : 2);
+    zoom.lastChangedPoint = 0;
+    refreshSpectrum = 1;
+    refreshSlicePoints = 1;
+}
+
 void cSamplePlayback::mpdjSliceZoom(int16_t value)
 {
     changeZoom(value);

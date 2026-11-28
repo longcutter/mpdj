@@ -145,6 +145,11 @@ class MpcInput
     bool pointScreenTurn(int knob, int steps);
     bool pointScreenTouch(int knob, bool down);
     bool pointScreenZoom(int steps);
+    // Q-Link rethink (MVP 0a): QL1 / QL3 move the picked point, QL2 picks it, QL4 zooms
+    void turnPoint(const void* pointMap, int knob, int steps, bool fineKnob);
+    void pointZoom(uint32_t sampleLength, struct strZoomParams* zoom, int steps, bool direct, int zoomButton);
+    static int& pointPickFor(int screen);
+    void pointLabelTouched(int button);
     uint32_t pointMsgMs[4] = {};
 
     // ---- tap the pattern grid (build step 3): a tap moves the cursor to the

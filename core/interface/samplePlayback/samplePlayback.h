@@ -235,6 +235,10 @@ class cSamplePlayback : public ModuleBase
     bool mpdjSliceButton(uint8_t n, uint8_t state);
     bool mpdjSliceEncoder(int16_t value);
     uint16_t mpdjSliceKnobPoint(int knob) const;
+    // Q-Link rethink (MVP 0a): QL2 picks slice 1 .. N, then End; QL1 / QL3 move the picked point
+    void mpdjSlicePick(int steps);
+    void mpdjSliceTurnPicked(int32_t eighths);
+    void mpdjSliceTouchPicked();
 #endif
 
     //----------------------------------
