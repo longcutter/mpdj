@@ -15,7 +15,7 @@
 class Overlay
 {
   public:
-    void setBoxGroup(int group) { boxGroup.store(group); } // -1 none, 0 = labels 1-4, 1 = 5-8
+    void setBoxGroup(int group) { boxGroup.store(group); } // -1 none, 0 = labels 1-4, 1 = 5-8, 2 + n = label n
     void setPopupLabel(int idx) { popupLabel.store(idx); } // -1 none, 0..7
     int getBoxGroup() const { return boxGroup.load(); }
     int getPopupLabel() const { return popupLabel.load(); }

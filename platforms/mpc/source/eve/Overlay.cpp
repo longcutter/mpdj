@@ -113,4 +113,13 @@ void Overlay::draw(const eve::Target& t) const
         Rect r{ in.x0 - th, in.y0 - th, in.x1 + th, in.y1 + th };
         frame(t, r, th, kRed);
     }
+    else if (group >= 2 && group < 10)
+    {
+        // one label (the mixer pages' channel, Q-Link rethink 0b)
+        int n = group - 2;
+        Rect in = toTarget(t, n * kLabelW + kLabelInset - 1, kLabelTop - 1, (n + 1) * kLabelW - kLabelInset + 1,
+                           kLabelBottom + 1);
+        Rect r{ in.x0 - th, in.y0 - th, in.x1 + th, in.y1 + th };
+        frame(t, r, th, kRed);
+    }
 }

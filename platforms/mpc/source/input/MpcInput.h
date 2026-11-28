@@ -136,7 +136,11 @@ class MpcInput
     void pollQLinks();
     bool qlinkScreenMode(); // modes 2-3 and the screen has value buttons
     void updateQLinkBox();
-    int boxGroup = -1;      // red box shown: 0 = labels 1-4, 1 = 5-8, -1 none
+    int boxGroup = -1;      // red box shown: 0 = labels 1-4, 1 = 5-8, 2 + n = label n alone, -1 none
+    // Q-Link rethink 0b: value screens (1 values, 2 Track Mixer, 3 Global Mixer, 4 Performance)
+    int valueScreen();
+    bool valueScreenTurn(int knob, int steps);
+    int mixerChannel = 0;   // the mixer pages' channel for QL2 / QL4 (0-7)
 
     // ---- per-screen Q-Link maps (build step 2b): Sample Playback and the Sample
     // Editor's main screen take over mode 1: one knob per point, turned slowly =

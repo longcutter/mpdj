@@ -33,6 +33,7 @@
 #include "configEditor/configEditor.h"
 #include "sampleEditor/sampleEditor.h"
 #include "instrumentEditor/instrumentEditor.h"
+#include "masterParams/masterParams.h"
 #include "samplePlayback/samplePlayback.h"
 #include "songEditor/songEditor.h"
 
@@ -2288,6 +2289,8 @@ void MpcInput::onRelative(uint8_t cc, uint8_t value)
             stepFxType(steps);
         return;
     }
+    if (valueScreenTurn(knob, steps))
+        return; // Q-Link rethink 0b: value, mixer and Performance screens
     steps = divideQLink(knob, steps);
     if (!steps)
         return;
@@ -2319,6 +2322,91 @@ void MpcInput::onRelative(uint8_t cc, uint8_t value)
                 turnValue(steps);
             break;
     }
+}
+
+// ---------------------------------------------------------------- value screens (Q-Link rethink, MVP 0b)
+// Mike, 2026-11-27: QL1 = horizontal, QL2 = vertical, QL3 = horizontal fine,
+// QL4 = vertical fine. On screens of parameters (the Master pages, Program
+// Parameters / Effects / Envelopes / Automation, the Sample Recorder) QL1 picks
+// the parameter (the screen's Left / Right) and QL2 turns its value, as a bar
+// moves up and down; QL4 turns it in fine steps; QL3 does nothing. The Tracker
+// screens don't say which values are short lists, so "coarse" is by speed: a
+// slow QL2 turn moves one step per screen-button value step, a fast one five;
+// QL4 always one, at half that speed.
+// The mixer pages (Track Mixer 1-8 / 9-16, Global Mixer) have no Left / Right:
+// a channel is edited while its screen button is held. QL1 picks the channel
+// (a red box around its label), QL2 / QL4 hold that button and turn its level;
+// the turn sets the screen's "ignore the release" flag, so the release doesn't
+// mute it. Performance: QL1 track, QL2 FX row, QL4 value as before; QL3 off.
+int MpcInput::valueScreen()
+{
+    if (mtInterface.isMasterScreenActive())
+    {
+        if (masterParams.keyboardManager.getState())
+            return 0; // naming a track: as before
+        if (masterParams.displayType == cMasterParams::displayMode::mixer)
+            return 2;
+        if (masterParams.displayType == cMasterParams::displayMode::mixerDelayReverb)
+            return 3;
+        return 1;
+    }
+    if (mtInterface.isInstrumentParamsScreenActive() || mtInterface.isSampleRecorderScreenActive())
+        return 1;
+    if (mtInterface.isPerformanceModeScreenActive())
+        return 4;
+    return 0;
+}
+
+bool MpcInput::valueScreenTurn(int knob, int steps)
+{
+    int kind = valueScreen();
+    if (kind == 0)
+        return false;
+    if (knob == 2)
+        return true; // QL3: nothing horizontal and fine on these screens
+    if (kind == 4)
+        return false; // Performance: QL1 / QL2 / QL4 as before
+    uint32_t now = platform.getTimer()->millis();
+    if (kind == 2 || kind == 3)
+    {
+        int count = kind == 2 ? 8 : 4; // Global Mixer: Delay, Reverb, Dry mix, Line in
+        if (mixerChannel >= count)
+            mixerChannel = count - 1;
+        if (knob == 0)
+        {
+            steps = divideQLink(knob, steps);
+            if (!steps)
+                return true;
+            mixerChannel += steps;
+            if (mixerChannel < 0)
+                mixerChannel = 0;
+            if (mixerChannel >= count)
+                mixerChannel = count - 1;
+            if (qlinkHeld >= 0)
+                releaseQLinkButton();
+            updateQLinkBox();
+            if (trace)
+                printf("input: mixer channel %d\n", mixerChannel + 1);
+            return true;
+        }
+    }
+    else if (knob == 0)
+        return false; // the screen's Left / Right picks the parameter
+    int div = knob == 1 ? 3 : 4; // QL2 at the value speed, QL4 at half of it
+    uint32_t dt = now - pointMsgMs[knob];
+    pointMsgMs[knob] = now;
+    steps = divideQLink(knob, steps, div);
+    if (!steps)
+        return true;
+    if (knob == 1 && dt < pointFastMs * 2)
+        steps *= 5; // a fast QL2 turn: coarse
+    if (kind == 2 || kind == 3)
+        holdScreenButton(interfaceButton0 + mixerChannel);
+    qlinkTurnMs = now;
+    turnValue(steps);
+    if (trace)
+        printf("input: value knob %d %+d (%u ms)\n", knob + 1, steps, (unsigned)dt);
+    return true;
 }
 
 // ---------------------------------------------------------------- Q-Link modes
@@ -2356,6 +2444,17 @@ bool MpcInput::qlinkScreenMode()
 void MpcInput::updateQLinkBox()
 {
     int group = qlinkScreenMode() ? qlinkMode - 2 : -1;
+    if (group < 0 && (qlinkMode == 1 || qlinkMode == 4))
+    {
+        int kind = valueScreen();
+        if (kind == 2 || kind == 3)
+        {
+            int count = kind == 2 ? 8 : 4;
+            if (mixerChannel >= count)
+                mixerChannel = count - 1;
+            group = 2 + mixerChannel; // 0b: one label, the channel QL2 / QL4 turn
+        }
+    }
     if (group == boxGroup || !disp)
         return;
     boxGroup = group;
