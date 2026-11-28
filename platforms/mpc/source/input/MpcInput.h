@@ -140,6 +140,7 @@ class MpcInput
     // Q-Link rethink 0b: value screens (1 values, 2 Track Mixer, 3 Global Mixer, 4 Performance)
     int valueScreen();
     bool valueScreenTurn(int knob, int steps);
+    bool gridScreenTurn(int knob, int steps); // 0c: Pad Assign, Turing, Drum Grid, Track Mute
     int mixerChannel = 0;   // the mixer pages' channel for QL2 / QL4 (0-7)
 
     // ---- per-screen Q-Link maps (build step 2b): Sample Playback and the Sample

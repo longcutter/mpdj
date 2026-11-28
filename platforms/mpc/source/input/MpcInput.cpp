@@ -2291,6 +2291,8 @@ void MpcInput::onRelative(uint8_t cc, uint8_t value)
     }
     if (valueScreenTurn(knob, steps))
         return; // Q-Link rethink 0b: value, mixer and Performance screens
+    if (gridScreenTurn(knob, steps))
+        return; // Q-Link rethink 0c: Pad Assign, generators, Track Mute
     steps = divideQLink(knob, steps);
     if (!steps)
         return;
@@ -2305,9 +2307,7 @@ void MpcInput::onRelative(uint8_t cc, uint8_t value)
             break;
         }
         case 2:
-            if (mtInterface.isPadAssignScreenActive())
-                padAssign.moveParam(steps); // the setting (5d-1)
-            else if (mtInterface.isPatternScreenActive() && patternEditor.fillState == 0 &&
+            if (mtInterface.isPatternScreenActive() && patternEditor.fillState == 0 &&
                 patternEditor.selectedPlace < 0)
                 stepEditParam(steps);
             else if (song)
@@ -2406,6 +2406,51 @@ bool MpcInput::valueScreenTurn(int knob, int steps)
     turnValue(steps);
     if (trace)
         printf("input: value knob %d %+d (%u ms)\n", knob + 1, steps, (unsigned)dt);
+    return true;
+}
+
+// ---------------------------------------------------------------- grid screens (Q-Link rethink, MVP 0c)
+// Mike, 2026-11-27. Pad Assign: QL1 = previous / next pad in the bank (selected,
+// not played: pads and touch still pick a pad directly), QL2 = the setting list
+// on the right (down = the next setting), QL4 = its value, QL3 off. Turing
+// Machine and Drum Grid: QL2 = the setting list, QL4 = its value, QL1 / QL3 off
+// (nothing on these screens moves left and right; the main encoder is unchanged).
+// Track Mute: pads and touch only, all four knobs off.
+bool MpcInput::gridScreenTurn(int knob, int steps)
+{
+    bool assign = mtInterface.isPadAssignScreenActive();
+    bool generator = mtInterface.isTuringScreenActive() || mtInterface.isDrumGridScreenActive();
+    if (mtInterface.isTrackMuteScreenActive())
+        return true;
+    if (!assign && !generator)
+        return false;
+    if (knob == 2 || (knob == 0 && generator))
+        return true;
+    if (knob == 3)
+    {
+        steps = divideQLink(knob, steps);
+        if (steps)
+            turnValue(steps); // the screen's value (5d-2; generators: changeValue)
+        return true;
+    }
+    steps = divideQLink(knob, steps);
+    if (!steps)
+        return true;
+    if (knob == 0)
+    {
+        int sel = padAssign.selectedPad(), bank = sel / 16, n = sel % 16 + steps;
+        padAssign.selectPad(bank * 16 + (n < 0 ? 0 : n > 15 ? 15 : n));
+        if (trace)
+        {
+            char name[8];
+            padName(padAssign.selectedPad(), name);
+            printf("input: pad assign pad %s\n", name);
+        }
+    }
+    else if (assign)
+        padAssign.moveParam(steps);
+    else
+        tapButton(steps > 0 ? interfaceButtonRight : interfaceButtonLeft, abs(steps)); // the generator's next setting
     return true;
 }
 
